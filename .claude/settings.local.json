@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer:*)",
+      "Bash(node --version:*)",
+      "Bash(docker --version:*)",
+      "Bash(docker info:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(php --version:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose exec:*)",
+      "Bash(chmod:*)",
+      "Bash(curl:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(docker compose:*)",
+      "Skill(frontend-design)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(git checkout:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do stat C:/Users/jpitt_6932a9v/code/Housarr/frontend/src/pages/DashboardPage.tsx)",
+      "Bash(done)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git add:*)"
+    ]
+  }
+}

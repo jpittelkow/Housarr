@@ -1,0 +1,52 @@
+# =============================================================================
+# Housarr Backend Docker Ignore
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Dependencies (installed in container)
+vendor/
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Testing
+tests/
+phpunit.xml
+.phpunit*
+.phpunit.cache/
+coverage/
+
+# Storage (mounted as volume)
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/app/public/*
+
+# Keep .gitkeep files
+!storage/**/.gitkeep
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+CHANGELOG.md
+docs/

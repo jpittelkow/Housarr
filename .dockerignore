@@ -1,0 +1,62 @@
+# =============================================================================
+# Housarr Docker Ignore
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Documentation
+README.md
+CHANGELOG.md
+docs/
+
+# Docker (don't recursively include)
+docker-compose*.yml
+Dockerfile*
+
+# Environment files (secrets!)
+.env
+.env.*
+!.env.example
+
+# Testing
+tests/
+phpunit.xml
+.phpunit*
+coverage/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (frontend built separately)
+frontend/node_modules/
+frontend/.npm/
+frontend/dist/
+
+# Backend specific
+backend/vendor/
+backend/node_modules/
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/.phpunit.cache/
