@@ -21,7 +21,15 @@ class File extends Model
         'original_name',
         'mime_type',
         'size',
+        'is_featured',
     ];
+
+    protected $casts = [
+        'is_featured' => 'boolean',
+        'size' => 'integer',
+    ];
+
+    protected $appends = ['url'];
 
     public function household(): BelongsTo
     {

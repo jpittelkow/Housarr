@@ -12,7 +12,7 @@ class HouseholdController extends Controller
     public function show(Request $request): JsonResponse
     {
         return response()->json([
-            'household' => new HouseholdResource($request->user()->household),
+            'household' => new HouseholdResource($request->user()->household->load(['images', 'featuredImage'])),
         ]);
     }
 
@@ -30,7 +30,7 @@ class HouseholdController extends Controller
         $household->update($validated);
 
         return response()->json([
-            'household' => new HouseholdResource($household),
+            'household' => new HouseholdResource($household->load(['images', 'featuredImage'])),
         ]);
     }
 }

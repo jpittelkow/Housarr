@@ -28,6 +28,8 @@ class ItemResource extends JsonResource
             'maintenance_logs' => MaintenanceLogResource::collection($this->whenLoaded('maintenanceLogs')),
             'reminders' => ReminderResource::collection($this->whenLoaded('reminders')),
             'files' => FileResource::collection($this->whenLoaded('files')),
+            'images' => FileResource::collection($this->whenLoaded('images')),
+            'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString(),
         ];

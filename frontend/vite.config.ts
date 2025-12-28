@@ -16,6 +16,13 @@ export default defineConfig({
       '/api': {
         target: 'http://host.docker.internal:8000',
         changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+        secure: false,
+      },
+      '/sanctum': {
+        target: 'http://host.docker.internal:8000',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
         secure: false,
       },
     },

@@ -15,7 +15,7 @@ class VendorController extends Controller
     public function index(Request $request): JsonResponse
     {
         $vendors = Vendor::where('household_id', $request->user()->household_id)
-            ->with('category')
+            ->with(['category', 'logo'])
             ->orderBy('name')
             ->get();
 
@@ -32,7 +32,7 @@ class VendorController extends Controller
         ]);
 
         return response()->json([
-            'vendor' => new VendorResource($vendor->load('category')),
+            'vendor' => new VendorResource($vendor->load(['category', 'logo'])),
         ], 201);
     }
 
@@ -41,7 +41,7 @@ class VendorController extends Controller
         Gate::authorize('view', $vendor);
 
         return response()->json([
-            'vendor' => new VendorResource($vendor->load(['category', 'items', 'maintenanceLogs'])),
+            'vendor' => new VendorResource($vendor->load(['category', 'items', 'maintenanceLogs', 'images', 'logo'])),
         ]);
     }
 

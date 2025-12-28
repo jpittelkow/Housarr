@@ -45,6 +45,7 @@ export {
   Image,
   Link,
   Tag,
+  Database,
   AlertCircle,
   AlertTriangle,
   Info,
@@ -75,6 +76,7 @@ export {
   Shield,
   Car,
   Layers,
+  HardDrive,
 } from './Icon'
 export { Button, type ButtonProps } from './Button'
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card'

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { items, categories, locations, vendors } from '@/services/api'
+import { items, categories, locations, vendors, parts, maintenanceLogs } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
+import { ImageUpload } from '@/components/ui/ImageUpload'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import {
   Icon,
@@ -21,9 +22,11 @@ import {
   Bell,
   Trash2,
   Pencil,
+  Plus,
+  Image,
 } from '@/components/ui'
 import toast from 'react-hot-toast'
-import type { Item } from '@/types'
+import type { Item, Part, MaintenanceLog } from '@/types'
 
 function DetailSkeleton() {
   return (
@@ -74,6 +77,29 @@ export default function ItemDetailPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editData, setEditData] = useState<Partial<Item>>({})
 
+  // Parts state
+  const [isPartModalOpen, setIsPartModalOpen] = useState(false)
+  const [editingPart, setEditingPart] = useState<Part | null>(null)
+  const [partFormData, setPartFormData] = useState({
+    name: '',
+    part_number: '',
+    type: 'replacement' as 'replacement' | 'consumable',
+    purchase_url: '',
+    price: '',
+    notes: '',
+  })
+
+  // Maintenance logs state
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false)
+  const [editingLog, setEditingLog] = useState<MaintenanceLog | null>(null)
+  const [logFormData, setLogFormData] = useState({
+    type: 'service' as 'service' | 'repair' | 'replacement' | 'inspection',
+    date: new Date().toISOString().split('T')[0],
+    vendor_id: '',
+    cost: '',
+    notes: '',
+  })
+
   const { data, isLoading } = useQuery({
     queryKey: ['items', id],
     queryFn: () => items.get(Number(id)),
@@ -119,6 +145,165 @@ export default function ItemDetailPage() {
       toast.error('Failed to update item')
     },
   })
+
+  // Parts mutations
+  const createPartMutation = useMutation({
+    mutationFn: (data: Partial<Part> & { item_id: number }) => parts.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      setIsPartModalOpen(false)
+      resetPartForm()
+      toast.success('Part added successfully')
+    },
+    onError: () => toast.error('Failed to add part'),
+  })
+
+  const updatePartMutation = useMutation({
+    mutationFn: ({ partId, data }: { partId: number; data: Partial<Part> }) => parts.update(partId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      setIsPartModalOpen(false)
+      setEditingPart(null)
+      resetPartForm()
+      toast.success('Part updated successfully')
+    },
+    onError: () => toast.error('Failed to update part'),
+  })
+
+  const deletePartMutation = useMutation({
+    mutationFn: (partId: number) => parts.delete(partId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      toast.success('Part deleted successfully')
+    },
+    onError: () => toast.error('Failed to delete part'),
+  })
+
+  // Maintenance log mutations
+  const createLogMutation = useMutation({
+    mutationFn: (data: Partial<MaintenanceLog> & { item_id: number }) => maintenanceLogs.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      setIsLogModalOpen(false)
+      resetLogForm()
+      toast.success('Maintenance log added successfully')
+    },
+    onError: () => toast.error('Failed to add maintenance log'),
+  })
+
+  const updateLogMutation = useMutation({
+    mutationFn: ({ logId, data }: { logId: number; data: Partial<MaintenanceLog> }) => maintenanceLogs.update(logId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      setIsLogModalOpen(false)
+      setEditingLog(null)
+      resetLogForm()
+      toast.success('Maintenance log updated successfully')
+    },
+    onError: () => toast.error('Failed to update maintenance log'),
+  })
+
+  const deleteLogMutation = useMutation({
+    mutationFn: (logId: number) => maintenanceLogs.delete(logId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      toast.success('Maintenance log deleted successfully')
+    },
+    onError: () => toast.error('Failed to delete maintenance log'),
+  })
+
+  // Helper functions
+  const resetPartForm = () => {
+    setPartFormData({
+      name: '',
+      part_number: '',
+      type: 'replacement',
+      purchase_url: '',
+      price: '',
+      notes: '',
+    })
+  }
+
+  const resetLogForm = () => {
+    setLogFormData({
+      type: 'service',
+      date: new Date().toISOString().split('T')[0],
+      vendor_id: '',
+      cost: '',
+      notes: '',
+    })
+  }
+
+  const openPartModal = (type: 'replacement' | 'consumable', part?: Part) => {
+    if (part) {
+      setEditingPart(part)
+      setPartFormData({
+        name: part.name,
+        part_number: part.part_number || '',
+        type: part.type,
+        purchase_url: part.purchase_url || '',
+        price: part.price?.toString() || '',
+        notes: part.notes || '',
+      })
+    } else {
+      setEditingPart(null)
+      resetPartForm()
+      setPartFormData(prev => ({ ...prev, type }))
+    }
+    setIsPartModalOpen(true)
+  }
+
+  const openLogModal = (log?: MaintenanceLog) => {
+    if (log) {
+      setEditingLog(log)
+      setLogFormData({
+        type: log.type,
+        date: log.date,
+        vendor_id: log.vendor_id?.toString() || '',
+        cost: log.cost?.toString() || '',
+        notes: log.notes || '',
+      })
+    } else {
+      setEditingLog(null)
+      resetLogForm()
+    }
+    setIsLogModalOpen(true)
+  }
+
+  const handlePartSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const data = {
+      name: partFormData.name,
+      part_number: partFormData.part_number || null,
+      type: partFormData.type,
+      purchase_url: partFormData.purchase_url || null,
+      price: partFormData.price ? parseFloat(partFormData.price) : null,
+      notes: partFormData.notes || null,
+    }
+
+    if (editingPart) {
+      updatePartMutation.mutate({ partId: editingPart.id, data })
+    } else {
+      createPartMutation.mutate({ ...data, item_id: Number(id) })
+    }
+  }
+
+  const handleLogSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const data = {
+      type: logFormData.type,
+      date: logFormData.date,
+      vendor_id: logFormData.vendor_id ? parseInt(logFormData.vendor_id) : null,
+      cost: logFormData.cost ? parseFloat(logFormData.cost) : null,
+      notes: logFormData.notes || null,
+    }
+
+    if (editingLog) {
+      updateLogMutation.mutate({ logId: editingLog.id, data })
+    } else {
+      createLogMutation.mutate({ ...data, item_id: Number(id) })
+    }
+  }
 
   const openEditModal = (item: Item) => {
     setEditData({
@@ -294,13 +479,35 @@ export default function ItemDetailPage() {
         </Card>
       </div>
 
+      {/* Images */}
+      <Card>
+        <CardHeader className="border-b border-gray-200">
+          <CardTitle className="flex items-center gap-2">
+            <Icon icon={Image} size="sm" className="text-gray-400" /> Images
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <ImageUpload
+            fileableType="item"
+            fileableId={item.id}
+            existingImages={item.images || []}
+            featuredImage={item.featured_image}
+            invalidateQueries={[['items', id!]]}
+            label="Upload item images"
+          />
+        </CardContent>
+      </Card>
+
       {/* Parts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader className="border-b border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
             <CardTitle className="flex items-center gap-2">
               <Icon icon={Wrench} size="sm" className="text-gray-400" /> Replacement Parts
             </CardTitle>
+            <Button variant="secondary" size="sm" onClick={() => openPartModal('replacement')}>
+              <Icon icon={Plus} size="xs" /> Add
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             {replacementParts.length > 0 ? (
@@ -313,20 +520,42 @@ export default function ItemDetailPage() {
                         <p className="text-sm text-gray-500">#{part.part_number}</p>
                       )}
                     </div>
-                    <div className="text-right">
-                      {part.price && (
-                        <p className="font-medium text-gray-900">{formatCurrency(part.price)}</p>
-                      )}
-                      {part.purchase_url && (
-                        <a
-                          href={part.purchase_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        {part.price && (
+                          <p className="font-medium text-gray-900">{formatCurrency(part.price)}</p>
+                        )}
+                        {part.purchase_url && (
+                          <a
+                            href={part.purchase_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                          >
+                            Buy
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openPartModal('replacement', part)}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                          title="Edit part"
                         >
-                          Buy
-                        </a>
-                      )}
+                          <Icon icon={Pencil} size="xs" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this part?')) {
+                              deletePartMutation.mutate(part.id)
+                            }
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete part"
+                        >
+                          <Icon icon={Trash2} size="xs" />
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -340,10 +569,13 @@ export default function ItemDetailPage() {
         </Card>
 
         <Card>
-          <CardHeader className="border-b border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
             <CardTitle className="flex items-center gap-2">
               <Icon icon={Package} size="sm" className="text-gray-400" /> Consumable Parts
             </CardTitle>
+            <Button variant="secondary" size="sm" onClick={() => openPartModal('consumable')}>
+              <Icon icon={Plus} size="xs" /> Add
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             {consumableParts.length > 0 ? (
@@ -356,20 +588,42 @@ export default function ItemDetailPage() {
                         <p className="text-sm text-gray-500">#{part.part_number}</p>
                       )}
                     </div>
-                    <div className="text-right">
-                      {part.price && (
-                        <p className="font-medium text-gray-900">{formatCurrency(part.price)}</p>
-                      )}
-                      {part.purchase_url && (
-                        <a
-                          href={part.purchase_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        {part.price && (
+                          <p className="font-medium text-gray-900">{formatCurrency(part.price)}</p>
+                        )}
+                        {part.purchase_url && (
+                          <a
+                            href={part.purchase_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                          >
+                            Buy
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openPartModal('consumable', part)}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                          title="Edit part"
                         >
-                          Buy
-                        </a>
-                      )}
+                          <Icon icon={Pencil} size="xs" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this part?')) {
+                              deletePartMutation.mutate(part.id)
+                            }
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete part"
+                        >
+                          <Icon icon={Trash2} size="xs" />
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -385,15 +639,18 @@ export default function ItemDetailPage() {
 
       {/* Maintenance History */}
       <Card>
-        <CardHeader className="border-b border-gray-200">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
           <CardTitle>Maintenance History</CardTitle>
+          <Button variant="secondary" size="sm" onClick={() => openLogModal()}>
+            <Icon icon={Plus} size="xs" /> Add Log
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           {item.maintenanceLogs && item.maintenanceLogs.length > 0 ? (
             <ul className="divide-y divide-gray-200">
               {item.maintenanceLogs.map((log) => (
                 <li key={log.id} className="flex items-start justify-between px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <Badge
                         variant={
@@ -414,9 +671,31 @@ export default function ItemDetailPage() {
                       <p className="mt-1 text-sm text-gray-500">By: {log.vendor.name}</p>
                     )}
                   </div>
-                  {log.cost && (
-                    <span className="font-medium text-gray-900">{formatCurrency(log.cost)}</span>
-                  )}
+                  <div className="flex items-center gap-3 ml-4">
+                    {log.cost && (
+                      <span className="font-medium text-gray-900">{formatCurrency(log.cost)}</span>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openLogModal(log)}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        title="Edit log"
+                      >
+                        <Icon icon={Pencil} size="xs" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this maintenance log?')) {
+                            deleteLogMutation.mutate(log.id)
+                          }
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete log"
+                      >
+                        <Icon icon={Trash2} size="xs" />
+                      </button>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -513,6 +792,165 @@ export default function ItemDetailPage() {
             </Button>
             <Button type="submit" isLoading={updateMutation.isPending}>
               Save Changes
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Part Modal */}
+      <Modal
+        isOpen={isPartModalOpen}
+        onClose={() => {
+          setIsPartModalOpen(false)
+          setEditingPart(null)
+          resetPartForm()
+        }}
+        title={editingPart ? 'Edit Part' : 'Add Part'}
+      >
+        <form onSubmit={handlePartSubmit} className="p-6 space-y-4">
+          <Input
+            label="Name"
+            value={partFormData.name}
+            onChange={(e) => setPartFormData({ ...partFormData, name: e.target.value })}
+            required
+          />
+
+          <Input
+            label="Part Number"
+            value={partFormData.part_number}
+            onChange={(e) => setPartFormData({ ...partFormData, part_number: e.target.value })}
+          />
+
+          <Select
+            label="Type"
+            options={[
+              { value: 'replacement', label: 'Replacement Part' },
+              { value: 'consumable', label: 'Consumable Part' },
+            ]}
+            value={partFormData.type}
+            onChange={(e) => setPartFormData({ ...partFormData, type: e.target.value as 'replacement' | 'consumable' })}
+          />
+
+          <Input
+            label="Purchase URL"
+            type="url"
+            value={partFormData.purchase_url}
+            onChange={(e) => setPartFormData({ ...partFormData, purchase_url: e.target.value })}
+            placeholder="https://..."
+          />
+
+          <Input
+            label="Price"
+            type="number"
+            step="0.01"
+            min="0"
+            value={partFormData.price}
+            onChange={(e) => setPartFormData({ ...partFormData, price: e.target.value })}
+          />
+
+          <Textarea
+            label="Notes"
+            value={partFormData.notes}
+            onChange={(e) => setPartFormData({ ...partFormData, notes: e.target.value })}
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsPartModalOpen(false)
+                setEditingPart(null)
+                resetPartForm()
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              isLoading={createPartMutation.isPending || updatePartMutation.isPending}
+            >
+              {editingPart ? 'Save Changes' : 'Add Part'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Maintenance Log Modal */}
+      <Modal
+        isOpen={isLogModalOpen}
+        onClose={() => {
+          setIsLogModalOpen(false)
+          setEditingLog(null)
+          resetLogForm()
+        }}
+        title={editingLog ? 'Edit Maintenance Log' : 'Add Maintenance Log'}
+      >
+        <form onSubmit={handleLogSubmit} className="p-6 space-y-4">
+          <Select
+            label="Type"
+            options={[
+              { value: 'service', label: 'Service' },
+              { value: 'repair', label: 'Repair' },
+              { value: 'replacement', label: 'Replacement' },
+              { value: 'inspection', label: 'Inspection' },
+            ]}
+            value={logFormData.type}
+            onChange={(e) => setLogFormData({ ...logFormData, type: e.target.value as 'service' | 'repair' | 'replacement' | 'inspection' })}
+          />
+
+          <Input
+            label="Date"
+            type="date"
+            value={logFormData.date}
+            onChange={(e) => setLogFormData({ ...logFormData, date: e.target.value })}
+            required
+          />
+
+          <Select
+            label="Vendor"
+            options={[
+              { value: '', label: 'Select a vendor (optional)' },
+              ...allVendors.map((v) => ({ value: v.id, label: v.name })),
+            ]}
+            value={logFormData.vendor_id}
+            onChange={(e) => setLogFormData({ ...logFormData, vendor_id: e.target.value })}
+          />
+
+          <Input
+            label="Cost"
+            type="number"
+            step="0.01"
+            min="0"
+            value={logFormData.cost}
+            onChange={(e) => setLogFormData({ ...logFormData, cost: e.target.value })}
+          />
+
+          <Textarea
+            label="Notes"
+            value={logFormData.notes}
+            onChange={(e) => setLogFormData({ ...logFormData, notes: e.target.value })}
+            rows={3}
+          />
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsLogModalOpen(false)
+                setEditingLog(null)
+                resetLogForm()
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              isLoading={createLogMutation.isPending || updateLogMutation.isPending}
+            >
+              {editingLog ? 'Save Changes' : 'Add Log'}
             </Button>
           </div>
         </form>

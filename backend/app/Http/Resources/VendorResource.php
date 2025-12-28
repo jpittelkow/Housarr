@@ -19,6 +19,8 @@ class VendorResource extends JsonResource
             'address' => $this->address,
             'notes' => $this->notes,
             'category' => new CategoryResource($this->whenLoaded('category')),
+            'images' => FileResource::collection($this->whenLoaded('images')),
+            'logo' => new FileResource($this->whenLoaded('logo')),
             'created_at' => $this->created_at->toISOString(),
         ];
     }

@@ -12,6 +12,8 @@ class HouseholdResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'images' => FileResource::collection($this->whenLoaded('images')),
+            'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
             'created_at' => $this->created_at->toISOString(),
         ];
     }

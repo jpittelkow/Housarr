@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FileController;
 use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\ItemController;
@@ -9,7 +11,9 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MaintenanceLogController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PartController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReminderController;
+use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VendorController;
@@ -27,6 +31,14 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/user', [AuthController::class, 'user']);
     Route::post('/auth/invite', [AuthController::class, 'invite']);
+
+    // Profile (self-service)
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // Household
     Route::get('/household', [HouseholdController::class, 'show']);
@@ -75,9 +87,23 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/mark-read', [NotificationController::class, 'markRead']);
 
+    // Settings
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::patch('/settings', [SettingController::class, 'update']);
+    Route::get('/settings/storage', [SettingController::class, 'checkStorage']);
+    Route::get('/settings/email', [SettingController::class, 'checkEmail']);
+    Route::get('/settings/ai', [SettingController::class, 'checkAI']);
+
     // Files (with stricter rate limiting for uploads)
     Route::middleware('throttle:30,1')->group(function () {
         Route::post('/files', [FileController::class, 'store']);
     });
+    Route::post('/files/{file}/featured', [FileController::class, 'setFeatured']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
+
+    // Backup/Restore (admin only, rate limited)
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::get('/backup/export', [BackupController::class, 'export']);
+        Route::post('/backup/import', [BackupController::class, 'import']);
+    });
 });

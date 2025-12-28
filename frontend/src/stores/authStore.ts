@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  setUser: (user: User) => void
   login: (email: string, password: string) => Promise<void>
   register: (data: {
     name: string
@@ -23,15 +24,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
+  setUser: (user: User) => set({ user }),
+
   login: async (email: string, password: string) => {
+    await auth.csrf()
     const response = await auth.login({ email, password })
-    localStorage.setItem('token', response.token)
     set({ user: response.user, isAuthenticated: true })
   },
 
   register: async (data) => {
+    await auth.csrf()
     const response = await auth.register(data)
-    localStorage.setItem('token', response.token)
     set({ user: response.user, isAuthenticated: true })
   },
 
@@ -39,23 +42,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await auth.logout()
     } finally {
-      localStorage.removeItem('token')
       set({ user: null, isAuthenticated: false })
     }
   },
 
   checkAuth: async () => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      set({ isLoading: false })
-      return
-    }
-
     try {
       const response = await auth.getUser()
       set({ user: response.user, isAuthenticated: true, isLoading: false })
     } catch {
-      localStorage.removeItem('token')
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },

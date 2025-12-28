@@ -12,6 +12,8 @@ import type {
   Todo,
   Notification,
   AuthResponse,
+  FileRecord,
+  FileableType,
 } from '@/types'
 
 const api = axios.create({
@@ -20,29 +22,46 @@ const api = axios.create({
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
-})
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  withCredentials: true,
 })
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Only redirect to login if not already on login/register page
+    // This prevents infinite redirect loops
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+      const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
+      if (!isAuthPage) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
 )
 
+// Dashboard
+export const dashboard = {
+  get: async (): Promise<{
+    items_count: number
+    upcoming_reminders: Reminder[]
+    upcoming_reminders_count: number
+    overdue_reminders: Reminder[]
+    overdue_reminders_count: number
+    incomplete_todos: Todo[]
+    incomplete_todos_count: number
+  }> => {
+    const response = await api.get('/dashboard')
+    return response.data
+  },
+}
+
 // Auth
 export const auth = {
+  csrf: async (): Promise<void> => {
+    await axios.get('/sanctum/csrf-cookie', { withCredentials: true })
+  },
+
   register: async (data: {
     name: string
     email: string
@@ -353,6 +372,156 @@ export const notifications = {
 
   markRead: async (ids?: number[]): Promise<void> => {
     await api.post('/notifications/mark-read', { ids })
+  },
+}
+
+// Files
+export const files = {
+  upload: async (
+    file: File,
+    fileableType: FileableType,
+    fileableId: number,
+    isFeatured?: boolean
+  ): Promise<{ file: FileRecord }> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('fileable_type', fileableType)
+    formData.append('fileable_id', fileableId.toString())
+    if (isFeatured !== undefined) {
+      formData.append('is_featured', isFeatured ? '1' : '0')
+    }
+    const response = await api.post('/files', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  setFeatured: async (id: number): Promise<{ file: FileRecord }> => {
+    const response = await api.post(`/files/${id}/featured`)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/files/${id}`)
+  },
+}
+
+// Backup
+export const backup = {
+  export: async (): Promise<Blob> => {
+    const response = await api.get('/backup/export', { responseType: 'blob' })
+    return response.data
+  },
+
+  import: async (file: File): Promise<{ message: string; stats: Record<string, number> }> => {
+    const formData = new FormData()
+    formData.append('backup', file)
+    const response = await api.post('/backup/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+}
+
+// Profile
+export const profile = {
+  get: async (): Promise<{ user: User }> => {
+    const response = await api.get('/profile')
+    return response.data
+  },
+
+  update: async (data: { name?: string; email?: string }): Promise<{ user: User }> => {
+    const response = await api.patch('/profile', data)
+    return response.data
+  },
+
+  updatePassword: async (data: {
+    current_password: string
+    password: string
+    password_confirmation: string
+  }): Promise<{ message: string }> => {
+    const response = await api.put('/profile/password', data)
+    return response.data
+  },
+}
+
+// Settings
+export interface StorageSettings {
+  storage_driver?: 'local' | 's3'
+  aws_access_key_id?: string
+  aws_secret_access_key?: string
+  aws_default_region?: string
+  aws_bucket?: string
+  aws_endpoint?: string
+}
+
+export interface EmailSettings {
+  mail_driver?: 'smtp' | 'mailgun' | 'sendgrid' | 'ses' | 'cloudflare' | 'log'
+  mail_host?: string
+  mail_port?: number | string
+  mail_username?: string
+  mail_password?: string
+  mail_encryption?: 'tls' | 'ssl' | 'null'
+  mail_from_address?: string
+  mail_from_name?: string
+  // Mailgun
+  mailgun_domain?: string
+  mailgun_secret?: string
+  mailgun_endpoint?: string
+  // SendGrid
+  sendgrid_api_key?: string
+  // SES
+  ses_key?: string
+  ses_secret?: string
+  ses_region?: string
+  // Cloudflare
+  cloudflare_api_token?: string
+  cloudflare_account_id?: string
+}
+
+export interface AISettings {
+  ai_provider?: 'none' | 'claude' | 'openai' | 'gemini' | 'local'
+  ai_model?: string
+  // Claude (Anthropic)
+  anthropic_api_key?: string
+  // OpenAI
+  openai_api_key?: string
+  openai_base_url?: string
+  // Gemini (Google)
+  gemini_api_key?: string
+  gemini_base_url?: string
+  // Local (Ollama, LM Studio, etc.)
+  local_base_url?: string
+  local_model?: string
+  local_api_key?: string
+}
+
+export type AllSettings = StorageSettings & EmailSettings & AISettings
+
+export const settings = {
+  get: async (): Promise<{ settings: Record<string, string | null> }> => {
+    const response = await api.get('/settings')
+    return response.data
+  },
+
+  update: async (data: AllSettings): Promise<{ message: string }> => {
+    const response = await api.patch('/settings', { settings: data })
+    return response.data
+  },
+
+  checkStorage: async (): Promise<{ driver: string; configured: boolean }> => {
+    const response = await api.get('/settings/storage')
+    return response.data
+  },
+
+  checkEmail: async (): Promise<{ driver: string; configured: boolean }> => {
+    const response = await api.get('/settings/email')
+    return response.data
+  },
+
+  checkAI: async (): Promise<{ provider: string; configured: boolean }> => {
+    const response = await api.get('/settings/ai')
+    return response.data
   },
 }
 

@@ -8,11 +8,14 @@ export interface User {
   created_at: string
   updated_at: string
   household?: Household
+  avatar?: FileRecord
 }
 
 export interface Household {
   id: number
   name: string
+  images?: FileRecord[]
+  featured_image?: FileRecord
   created_at: string
   updated_at: string
 }
@@ -39,6 +42,8 @@ export interface Vendor {
   address: string | null
   notes: string | null
   category?: Category
+  images?: FileRecord[]
+  logo?: FileRecord
   created_at: string
   updated_at: string
 }
@@ -49,6 +54,8 @@ export interface Location {
   name: string
   icon: string | null
   items_count?: number
+  images?: FileRecord[]
+  featured_image?: FileRecord
   created_at: string
   updated_at: string
 }
@@ -73,6 +80,8 @@ export interface Item {
   maintenanceLogs?: MaintenanceLog[]
   reminders?: Reminder[]
   files?: FileRecord[]
+  images?: FileRecord[]
+  featured_image?: FileRecord
   created_at: string
   updated_at: string
 }
@@ -86,6 +95,8 @@ export interface Part {
   purchase_url: string | null
   price: number | null
   notes: string | null
+  images?: FileRecord[]
+  featured_image?: FileRecord
   created_at: string
   updated_at: string
 }
@@ -159,14 +170,16 @@ export interface FileRecord {
   original_name: string
   mime_type: string | null
   size: number | null
-  url?: string
+  is_featured: boolean
+  url: string
   created_at: string
   updated_at: string
 }
 
+export type FileableType = 'item' | 'maintenance_log' | 'part' | 'vendor' | 'location' | 'household' | 'user'
+
 export interface AuthResponse {
   user: User
-  token: string
 }
 
 export interface ApiResponse<T> {

@@ -11,9 +11,11 @@ RUN apk add --no-cache \
     libxml2 \
     icu-libs \
     git \
-    curl
+    curl \
+    sqlite \
+    postgresql-libs
 
-# Install PHP extensions
+# Install PHP extensions (MySQL, PostgreSQL, SQLite)
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
     libpng-dev \
@@ -22,8 +24,12 @@ RUN apk add --no-cache --virtual .build-deps \
     libxml2-dev \
     icu-dev \
     linux-headers \
+    sqlite-dev \
+    postgresql-dev \
     && docker-php-ext-install -j$(nproc) \
         pdo_mysql \
+        pdo_pgsql \
+        pdo_sqlite \
         mbstring \
         exif \
         pcntl \
@@ -50,6 +56,10 @@ COPY php.ini /usr/local/etc/php/conf.d/99-custom.ini
 # Configure supervisord
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Set working directory
 WORKDIR /var/www/html
 
@@ -59,4 +69,5 @@ RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cac
 
 EXPOSE 80
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

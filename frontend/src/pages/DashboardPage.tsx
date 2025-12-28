@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { reminders, todos, items } from '@/services/api'
+import { dashboard } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -26,30 +26,16 @@ export default function DashboardPage() {
     return "Good evening"
   }
 
-  const { data: remindersData, isLoading: remindersLoading } = useQuery({
-    queryKey: ['reminders', 'upcoming'],
-    queryFn: () => reminders.list({ upcoming: 7, status: 'pending' }),
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => dashboard.get(),
   })
 
-  const { data: overdueData } = useQuery({
-    queryKey: ['reminders', 'overdue'],
-    queryFn: () => reminders.list({ overdue: true }),
-  })
-
-  const { data: todosData, isLoading: todosLoading } = useQuery({
-    queryKey: ['todos', 'incomplete'],
-    queryFn: () => todos.list({ incomplete: true }),
-  })
-
-  const { data: itemsData } = useQuery({
-    queryKey: ['items'],
-    queryFn: () => items.list(),
-  })
-
-  const upcomingReminders = remindersData?.reminders || []
-  const overdueReminders = overdueData?.reminders || []
-  const incompleteTodos = todosData?.todos || []
-  const allItems = itemsData?.items || []
+  const itemsCount = dashboardData?.items_count ?? 0
+  const upcomingReminders = dashboardData?.upcoming_reminders ?? []
+  const overdueReminders = dashboardData?.overdue_reminders ?? []
+  const incompleteTodos = dashboardData?.incomplete_todos ?? []
+  const incompleteTodosCount = dashboardData?.incomplete_todos_count ?? 0
 
   return (
     <div className="space-y-8">
@@ -77,7 +63,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{allItems.length}</p>
+              <p className="text-display-xs font-semibold text-gray-900">{itemsCount}</p>
               <p className="text-sm text-gray-500 mt-1">Total items</p>
             </div>
           </CardContent>
@@ -132,7 +118,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{incompleteTodos.length}</p>
+              <p className="text-display-xs font-semibold text-gray-900">{incompleteTodosCount}</p>
               <p className="text-sm text-gray-500 mt-1">Open todos</p>
             </div>
           </CardContent>
@@ -157,7 +143,7 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="p-0">
-            {remindersLoading ? (
+            {isLoading ? (
               <div className="p-6">
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -234,7 +220,7 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="p-0">
-            {todosLoading ? (
+            {isLoading ? (
               <div className="p-6">
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (

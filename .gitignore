@@ -7,6 +7,31 @@
 *.swp
 *.swo
 
+# Claude Code local settings
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
+
+# User data
+data/
+
+# Database files
+*.sqlite
+*.sqlite3
+
+# Laravel
+backend/storage/*.key
+backend/vendor/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*

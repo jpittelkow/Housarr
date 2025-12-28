@@ -1,17 +1,31 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Layout from '@/components/Layout'
-import LoginPage from '@/pages/LoginPage'
-import RegisterPage from '@/pages/RegisterPage'
-import DashboardPage from '@/pages/DashboardPage'
-import ItemsPage from '@/pages/ItemsPage'
-import ItemDetailPage from '@/pages/ItemDetailPage'
-import VendorsPage from '@/pages/VendorsPage'
-import RemindersPage from '@/pages/RemindersPage'
-import TodosPage from '@/pages/TodosPage'
-import SettingsPage from '@/pages/SettingsPage'
+
+// Lazy load pages for code splitting
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const RegisterPage = lazy(() => import('@/pages/RegisterPage'))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const ItemsPage = lazy(() => import('@/pages/ItemsPage'))
+const ItemDetailPage = lazy(() => import('@/pages/ItemDetailPage'))
+const VendorsPage = lazy(() => import('@/pages/VendorsPage'))
+const RemindersPage = lazy(() => import('@/pages/RemindersPage'))
+const TodosPage = lazy(() => import('@/pages/TodosPage'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
+
+// Loading fallback component
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+      </div>
+    </div>
+  )
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore()
@@ -54,26 +68,29 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<DashboardPage />} />
-          <Route path="items" element={<ItemsPage />} />
-          <Route path="items/:id" element={<ItemDetailPage />} />
-          <Route path="vendors" element={<VendorsPage />} />
-          <Route path="reminders" element={<RemindersPage />} />
-          <Route path="todos" element={<TodosPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
+            <Route path="items" element={<Suspense fallback={<PageLoader />}><ItemsPage /></Suspense>} />
+            <Route path="items/:id" element={<Suspense fallback={<PageLoader />}><ItemDetailPage /></Suspense>} />
+            <Route path="vendors" element={<Suspense fallback={<PageLoader />}><VendorsPage /></Suspense>} />
+            <Route path="reminders" element={<Suspense fallback={<PageLoader />}><RemindersPage /></Suspense>} />
+            <Route path="todos" element={<Suspense fallback={<PageLoader />}><TodosPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
+            <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
+          </Route>
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   )
 }

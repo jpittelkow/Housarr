@@ -7,6 +7,7 @@ use App\Http\Resources\LocationResource;
 use App\Models\Location;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class LocationController extends Controller
 {
@@ -14,6 +15,7 @@ class LocationController extends Controller
     {
         $locations = Location::where('household_id', $request->user()->household_id)
             ->withCount('items')
+            ->with('featuredImage')
             ->orderBy('name')
             ->get();
 
@@ -41,20 +43,16 @@ class LocationController extends Controller
 
     public function show(Request $request, Location $location): JsonResponse
     {
-        if ($location->household_id !== $request->user()->household_id) {
-            abort(403);
-        }
+        Gate::authorize('view', $location);
 
         return response()->json([
-            'location' => new LocationResource($location->loadCount('items')),
+            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage'])),
         ]);
     }
 
     public function update(Request $request, Location $location): JsonResponse
     {
-        if ($location->household_id !== $request->user()->household_id) {
-            abort(403);
-        }
+        Gate::authorize('update', $location);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -64,14 +62,18 @@ class LocationController extends Controller
         $location->update($validated);
 
         return response()->json([
-            'location' => new LocationResource($location->loadCount('items')),
+            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage'])),
         ]);
     }
 
     public function destroy(Request $request, Location $location): JsonResponse
     {
-        if ($location->household_id !== $request->user()->household_id) {
-            abort(403);
+        Gate::authorize('delete', $location);
+
+        if ($location->items()->exists()) {
+            return response()->json([
+                'message' => 'Cannot delete location with associated items. Please reassign or delete the items first.',
+            ], 422);
         }
 
         $location->delete();

@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ImageUpload } from '@/components/ui/ImageUpload'
 import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2 } from '@/components/ui'
 import toast from 'react-hot-toast'
 import type { Vendor } from '@/types'
@@ -132,11 +133,24 @@ export default function VendorsPage() {
             <Card key={vendor.id} hover>
               <CardContent className="py-5">
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{vendor.name}</h3>
-                    {vendor.company && (
-                      <p className="text-sm text-gray-500">{vendor.company}</p>
+                  <div className="flex items-center gap-3">
+                    {vendor.logo ? (
+                      <img
+                        src={vendor.logo.url}
+                        alt={vendor.name}
+                        className="w-10 h-10 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                        <Icon icon={Users} size="sm" className="text-gray-400" />
+                      </div>
                     )}
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{vendor.name}</h3>
+                      {vendor.company && (
+                        <p className="text-sm text-gray-500">{vendor.company}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {vendor.category && (
@@ -350,6 +364,20 @@ export default function VendorsPage() {
             value={editingVendor?.address || ''}
             onChange={(e) => setEditingVendor(prev => prev ? { ...prev, address: e.target.value } : null)}
           />
+
+          {editingVendor && (
+            <div className="pt-4 border-t border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Logo & Images</label>
+              <ImageUpload
+                fileableType="vendor"
+                fileableId={editingVendor.id}
+                existingImages={editingVendor.images || []}
+                featuredImage={editingVendor.logo}
+                invalidateQueries={[['vendors']]}
+                label="Upload vendor logo or images"
+              />
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <Button type="button" variant="secondary" onClick={() => setEditingVendor(null)}>

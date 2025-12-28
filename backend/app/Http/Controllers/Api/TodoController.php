@@ -15,6 +15,10 @@ class TodoController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+        ]);
+
         $query = Todo::where('household_id', $request->user()->household_id)
             ->with(['item', 'user']);
 
@@ -32,10 +36,12 @@ class TodoController extends Controller
             $query->where('user_id', $request->integer('user_id'));
         }
 
+        $limit = $validated['limit'] ?? 200;
         $todos = $query
             ->orderByRaw('completed_at IS NOT NULL')
-            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
+            ->orderByRaw("CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END")
             ->orderBy('due_date')
+            ->limit($limit)
             ->get();
 
         return response()->json([

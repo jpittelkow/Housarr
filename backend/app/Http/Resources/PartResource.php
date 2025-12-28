@@ -18,6 +18,8 @@ class PartResource extends JsonResource
             'purchase_url' => $this->purchase_url,
             'price' => $this->price ? (float) $this->price : null,
             'notes' => $this->notes,
+            'images' => FileResource::collection($this->whenLoaded('images')),
+            'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
             'created_at' => $this->created_at->toISOString(),
         ];
     }

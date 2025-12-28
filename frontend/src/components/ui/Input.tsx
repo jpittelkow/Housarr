@@ -4,11 +4,12 @@ import { cn } from '@/lib/utils'
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string | boolean
+  hint?: string
   icon?: React.ReactNode
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type = 'text', label, error, icon, ...props }, ref) => {
+  ({ className, type = 'text', label, error, hint, icon, ...props }, ref) => {
     const hasError = Boolean(error)
 
     return (
@@ -45,6 +46,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         </div>
         {typeof error === 'string' && error && (
           <p className="mt-1.5 text-sm text-error-600">{error}</p>
+        )}
+        {hint && !error && (
+          <p className="mt-1.5 text-sm text-gray-500">{hint}</p>
         )}
       </div>
     )

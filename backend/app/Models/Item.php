@@ -88,6 +88,19 @@ class Item extends Model
         return $this->morphMany(File::class, 'fileable');
     }
 
+    public function images(): MorphMany
+    {
+        return $this->morphMany(File::class, 'fileable')
+            ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    }
+
+    public function featuredImage()
+    {
+        return $this->morphOne(File::class, 'fileable')
+            ->where('is_featured', true)
+            ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    }
+
     /**
      * Search scope for items
      */

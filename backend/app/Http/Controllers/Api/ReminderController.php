@@ -19,6 +19,7 @@ class ReminderController extends Controller
             'status' => ['nullable', 'string', 'in:pending,snoozed,completed,dismissed'],
             'overdue' => ['nullable', 'boolean'],
             'upcoming' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 
         $query = Reminder::where('household_id', $request->user()->household_id)
@@ -36,7 +37,8 @@ class ReminderController extends Controller
             $query->upcoming((int) $validated['upcoming']);
         }
 
-        $reminders = $query->orderBy('due_date')->get();
+        $limit = $validated['limit'] ?? 200;
+        $reminders = $query->orderBy('due_date')->limit($limit)->get();
 
         return response()->json([
             'reminders' => ReminderResource::collection($reminders),

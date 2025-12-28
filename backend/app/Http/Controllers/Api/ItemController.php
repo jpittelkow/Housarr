@@ -24,10 +24,11 @@ class ItemController extends Controller
                 $query->where('household_id', $householdId)->orWhereNull('household_id');
             })],
             'search' => ['nullable', 'string', 'max:255'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 
         $query = Item::where('household_id', $householdId)
-            ->with(['category', 'vendor', 'location']);
+            ->with(['category', 'vendor', 'location', 'featuredImage']);
 
         if (!empty($validated['category_id'])) {
             $query->where('category_id', $validated['category_id']);
@@ -37,7 +38,8 @@ class ItemController extends Controller
             $query->search($validated['search']);
         }
 
-        $items = $query->orderBy('name')->get();
+        $limit = $validated['limit'] ?? 200;
+        $items = $query->orderBy('name')->limit($limit)->get();
 
         return response()->json([
             'items' => ItemResource::collection($items),
@@ -54,7 +56,7 @@ class ItemController extends Controller
         ]);
 
         return response()->json([
-            'item' => new ItemResource($item->load(['category', 'vendor', 'location'])),
+            'item' => new ItemResource($item->load(['category', 'vendor', 'location', 'featuredImage'])),
         ], 201);
     }
 
@@ -68,9 +70,13 @@ class ItemController extends Controller
                 'vendor',
                 'location',
                 'parts',
+                'parts.images',
+                'parts.featuredImage',
                 'maintenanceLogs' => fn($q) => $q->orderBy('date', 'desc'),
                 'reminders' => fn($q) => $q->where('status', 'pending'),
                 'files',
+                'images',
+                'featuredImage',
             ])),
         ]);
     }

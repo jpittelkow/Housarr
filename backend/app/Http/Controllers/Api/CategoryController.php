@@ -41,6 +41,10 @@ class CategoryController extends Controller
 
     public function show(Category $category): JsonResponse
     {
+        if ($category->household_id !== null && $category->household_id !== auth()->user()->household_id) {
+            abort(404);
+        }
+
         return response()->json([
             'category' => new CategoryResource($category),
         ]);

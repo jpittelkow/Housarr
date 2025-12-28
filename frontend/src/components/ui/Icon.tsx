@@ -90,6 +90,7 @@ export {
   Image,
   Link,
   Tag,
+  Database,
 
   // Status
   AlertCircle,
@@ -126,4 +127,5 @@ export {
   Shield,
   Car,
   Layers,
+  HardDrive,
 } from 'lucide-react'

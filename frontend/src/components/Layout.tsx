@@ -1,6 +1,8 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { categories, locations, profile } from '@/services/api'
 import { cn } from '@/lib/utils'
 import {
   Icon,
@@ -31,6 +33,58 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const queryClient = useQueryClient()
+
+  // Fetch user profile with avatar
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: profile.get,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+
+  const userAvatar = profileData?.user?.avatar
+
+  // Prefetch common data that's used across multiple pages
+  useEffect(() => {
+    queryClient.prefetchQuery({
+      queryKey: ['categories'],
+      queryFn: () => categories.list(),
+      staleTime: 1000 * 60 * 10, // 10 minutes
+    })
+    queryClient.prefetchQuery({
+      queryKey: ['locations'],
+      queryFn: () => locations.list(),
+      staleTime: 1000 * 60 * 10, // 10 minutes
+    })
+  }, [queryClient])
+
+  // Preload all page chunks in the background after initial render
+  useEffect(() => {
+    const preloadPages = () => {
+      // Use requestIdleCallback to preload during browser idle time
+      const preload = (importFn: () => Promise<unknown>) => {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => importFn(), { timeout: 3000 })
+        } else {
+          setTimeout(() => importFn(), 100)
+        }
+      }
+
+      // Preload all pages
+      preload(() => import('@/pages/DashboardPage'))
+      preload(() => import('@/pages/ItemsPage'))
+      preload(() => import('@/pages/ItemDetailPage'))
+      preload(() => import('@/pages/VendorsPage'))
+      preload(() => import('@/pages/RemindersPage'))
+      preload(() => import('@/pages/TodosPage'))
+      preload(() => import('@/pages/SettingsPage'))
+      preload(() => import('@/pages/ProfilePage'))
+    }
+
+    // Start preloading after a short delay to not block initial render
+    const timer = setTimeout(preloadPages, 1000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -117,16 +171,32 @@ export default function Layout() {
         {/* Footer section */}
         <div className="border-t border-gray-200 p-4">
           {/* User account */}
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-600">
-                {user?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-700 truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-            </div>
+          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => {
+                setSidebarOpen(false)
+                navigate('/profile')
+              }}
+              className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            >
+              {userAvatar ? (
+                <img
+                  src={userAvatar.url}
+                  alt={user?.name || 'User'}
+                  className="w-9 h-9 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+                  <span className="text-sm font-medium text-gray-600">
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-700 truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              </div>
+            </button>
             <button
               onClick={handleLogout}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"

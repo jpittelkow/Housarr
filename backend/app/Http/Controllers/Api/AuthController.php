@@ -11,6 +11,7 @@ use App\Models\Household;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -21,7 +22,7 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        $result = DB::transaction(function () use ($validated) {
+        $user = DB::transaction(function () use ($validated) {
             $household = Household::create([
                 'name' => $validated['household_name'],
             ]);
@@ -37,11 +38,11 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = $result->createToken('auth-token')->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
-            'user' => new UserResource($result->load('household')),
-            'token' => $token,
+            'user' => new UserResource($user->load('household')),
         ], 201);
     }
 
@@ -57,9 +58,7 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $user = User::where('email', $validated['email'])->first();
-
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (!Auth::attempt($validated)) {
             RateLimiter::hit($key, 60);
             return response()->json([
                 'message' => 'Invalid credentials',
@@ -67,17 +66,19 @@ class AuthController extends Controller
         }
 
         RateLimiter::clear($key);
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $request->session()->regenerate();
+        $user = $request->user();
 
         return response()->json([
             'user' => new UserResource($user->load('household')),
-            'token' => $token,
         ]);
     }
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'message' => 'Logged out successfully',

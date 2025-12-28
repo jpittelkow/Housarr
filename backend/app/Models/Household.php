@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Household extends Model
 {
@@ -44,8 +46,26 @@ class Household extends Model
         return $this->hasMany(Todo::class);
     }
 
-    public function files(): HasMany
+    public function allFiles(): HasMany
     {
         return $this->hasMany(File::class);
+    }
+
+    public function files(): MorphMany
+    {
+        return $this->morphMany(File::class, 'fileable');
+    }
+
+    public function images(): MorphMany
+    {
+        return $this->morphMany(File::class, 'fileable')
+            ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    }
+
+    public function featuredImage(): MorphOne
+    {
+        return $this->morphOne(File::class, 'fileable')
+            ->where('is_featured', true)
+            ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
     }
 }

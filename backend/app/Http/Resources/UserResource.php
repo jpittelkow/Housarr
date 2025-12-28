@@ -16,6 +16,7 @@ class UserResource extends JsonResource
             'role' => $this->role,
             'email_verified_at' => $this->email_verified_at?->toISOString(),
             'household' => new HouseholdResource($this->whenLoaded('household')),
+            'avatar' => new FileResource($this->whenLoaded('avatar')),
             'created_at' => $this->created_at->toISOString(),
         ];
     }

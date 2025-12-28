@@ -14,6 +14,8 @@ class LocationResource extends JsonResource
             'name' => $this->name,
             'icon' => $this->icon,
             'items_count' => $this->whenCounted('items'),
+            'images' => FileResource::collection($this->whenLoaded('images')),
+            'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
         ];
     }
 }
