@@ -128,4 +128,11 @@ export {
   Car,
   Layers,
   HardDrive,
+
+  // Layout
+  LayoutGrid,
+  List,
+
+  // AI
+  Sparkles,
 } from 'lucide-react'

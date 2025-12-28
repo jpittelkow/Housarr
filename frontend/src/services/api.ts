@@ -205,6 +205,14 @@ export const vendors = {
   },
 }
 
+// AI Analysis Result
+export interface AnalysisResult {
+  make: string
+  model: string
+  type: string
+  confidence: number
+}
+
 // Items
 export const items = {
   list: async (params?: { category_id?: number; search?: string }): Promise<{ items: Item[] }> => {
@@ -235,6 +243,15 @@ export const items = {
     const formData = new FormData()
     formData.append('manual', file)
     const response = await api.post(`/items/${id}/manual`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  analyzeImage: async (file: File): Promise<{ results: AnalysisResult[] }> => {
+    const formData = new FormData()
+    formData.append('image', file)
+    const response = await api.post('/items/analyze-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data

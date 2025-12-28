@@ -8,6 +8,7 @@ use App\Http\Requests\Api\UpdateItemRequest;
 use App\Http\Resources\FileResource;
 use App\Http\Resources\ItemResource;
 use App\Models\Item;
+use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -128,5 +129,73 @@ class ItemController extends Controller
         return response()->json([
             'file' => new FileResource($fileRecord),
         ], 201);
+    }
+
+    public function analyzeImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:10240'],
+        ]);
+
+        $householdId = $request->user()->household_id;
+        $aiService = AIService::forHousehold($householdId);
+
+        if (!$aiService->isAvailable()) {
+            return response()->json([
+                'message' => 'AI is not configured. Please configure an AI provider in Settings.',
+            ], 422);
+        }
+
+        $file = $request->file('image');
+        $base64Image = base64_encode(file_get_contents($file->getRealPath()));
+        $mimeType = $file->getMimeType();
+
+        $prompt = <<<'PROMPT'
+Analyze this image of a home appliance, equipment, or product.
+Identify the following:
+1. Make/Manufacturer (e.g., Carrier, GE, Samsung, Whirlpool)
+2. Model number (look for model plates, labels, or distinctive features)
+3. Product type/category (e.g., Air Conditioner, Refrigerator, Water Heater, Washer, Furnace)
+
+Return up to 10 possible matches ranked by confidence.
+You MUST return ONLY a valid JSON array with no additional text, markdown, or explanation.
+
+Format:
+[
+  { "make": "Brand Name", "model": "Model Number", "type": "Product Type", "confidence": 0.95 },
+  { "make": "Brand Name", "model": "Alternative Model", "type": "Product Type", "confidence": 0.80 }
+]
+
+If you cannot identify the product, return an empty array: []
+PROMPT;
+
+        $results = $aiService->analyzeImage($base64Image, $mimeType, $prompt);
+
+        if ($results === null) {
+            return response()->json([
+                'message' => 'Failed to analyze image. Please try again.',
+                'results' => [],
+            ], 422);
+        }
+
+        // Normalize and validate results
+        $normalizedResults = [];
+        foreach ($results as $result) {
+            if (isset($result['make']) || isset($result['model']) || isset($result['type'])) {
+                $normalizedResults[] = [
+                    'make' => $result['make'] ?? '',
+                    'model' => $result['model'] ?? '',
+                    'type' => $result['type'] ?? '',
+                    'confidence' => (float) ($result['confidence'] ?? 0.5),
+                ];
+            }
+        }
+
+        // Sort by confidence
+        usort($normalizedResults, fn($a, $b) => $b['confidence'] <=> $a['confidence']);
+
+        return response()->json([
+            'results' => $normalizedResults,
+        ]);
     }
 }

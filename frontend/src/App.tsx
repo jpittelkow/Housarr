@@ -10,11 +10,13 @@ const RegisterPage = lazy(() => import('@/pages/RegisterPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const ItemsPage = lazy(() => import('@/pages/ItemsPage'))
 const ItemDetailPage = lazy(() => import('@/pages/ItemDetailPage'))
+const SmartAddPage = lazy(() => import('@/pages/SmartAddPage'))
 const VendorsPage = lazy(() => import('@/pages/VendorsPage'))
 const RemindersPage = lazy(() => import('@/pages/RemindersPage'))
 const TodosPage = lazy(() => import('@/pages/TodosPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
+const HelpPage = lazy(() => import('@/pages/HelpPage'))
 
 // Loading fallback component
 function PageLoader() {
@@ -83,11 +85,13 @@ function App() {
             <Route index element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
             <Route path="items" element={<Suspense fallback={<PageLoader />}><ItemsPage /></Suspense>} />
             <Route path="items/:id" element={<Suspense fallback={<PageLoader />}><ItemDetailPage /></Suspense>} />
+            <Route path="smart-add" element={<Suspense fallback={<PageLoader />}><SmartAddPage /></Suspense>} />
             <Route path="vendors" element={<Suspense fallback={<PageLoader />}><VendorsPage /></Suspense>} />
             <Route path="reminders" element={<Suspense fallback={<PageLoader />}><RemindersPage /></Suspense>} />
             <Route path="todos" element={<Suspense fallback={<PageLoader />}><TodosPage /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
             <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
+            <Route path="help" element={<Suspense fallback={<PageLoader />}><HelpPage /></Suspense>} />
           </Route>
         </Routes>
       </Suspense>

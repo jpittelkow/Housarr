@@ -16,16 +16,20 @@ import {
   Menu,
   X,
   ChevronRight,
+  HelpCircle,
+  Sparkles,
 } from '@/components/ui'
 import type { LucideIcon } from 'lucide-react'
 
 const navigation: { name: string; href: string; icon: LucideIcon }[] = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Items', href: '/items', icon: Package },
+  { name: 'Smart Add', href: '/smart-add', icon: Sparkles },
   { name: 'Vendors', href: '/vendors', icon: Users },
   { name: 'Reminders', href: '/reminders', icon: Bell },
   { name: 'Todos', href: '/todos', icon: CheckSquare },
   { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Help', href: '/help', icon: HelpCircle },
 ]
 
 export default function Layout() {
@@ -74,11 +78,13 @@ export default function Layout() {
       preload(() => import('@/pages/DashboardPage'))
       preload(() => import('@/pages/ItemsPage'))
       preload(() => import('@/pages/ItemDetailPage'))
+      preload(() => import('@/pages/SmartAddPage'))
       preload(() => import('@/pages/VendorsPage'))
       preload(() => import('@/pages/RemindersPage'))
       preload(() => import('@/pages/TodosPage'))
       preload(() => import('@/pages/SettingsPage'))
       preload(() => import('@/pages/ProfilePage'))
+      preload(() => import('@/pages/HelpPage'))
     }
 
     // Start preloading after a short delay to not block initial render

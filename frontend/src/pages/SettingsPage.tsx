@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
-import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image } from '@/components/ui'
+import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import toast from 'react-hot-toast'
 
@@ -324,7 +324,12 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-3xl">
       {/* Page Header - Untitled UI style */}
       <div className="pb-5 border-b border-gray-200">
-        <h1 className="text-display-sm font-semibold text-gray-900">Settings</h1>
+        <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+          Settings
+          <HelpTooltip position="right">
+            Configure your household, manage categories and locations, invite users, and set up backups.
+          </HelpTooltip>
+        </h1>
         <p className="text-text-md text-gray-500 mt-1">Manage your household settings</p>
       </div>
 

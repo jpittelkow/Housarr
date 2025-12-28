@@ -10,25 +10,25 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatDate } from '@/lib/utils'
-import { Icon, Plus, Search, Package, MapPin, Calendar } from '@/components/ui'
+import { Icon, Plus, Search, Package, MapPin, Calendar, HelpTooltip } from '@/components/ui'
 import toast from 'react-hot-toast'
 import type { Item } from '@/types'
 
 function ItemSkeleton() {
   return (
     <Card>
-      <CardContent className="py-5">
+      <div className="aspect-[4/3] bg-gray-100 animate-pulse rounded-t-xl" />
+      <CardContent className="py-4">
         <div className="animate-pulse">
-          <div className="flex items-start justify-between mb-3">
-            <div className="space-y-2">
-              <div className="h-5 bg-gray-200 rounded w-32" />
-              <div className="h-4 bg-gray-100 rounded w-24" />
+          <div className="flex items-start justify-between mb-2">
+            <div className="space-y-2 flex-1">
+              <div className="h-5 bg-gray-200 rounded w-3/4" />
+              <div className="h-4 bg-gray-100 rounded w-1/2" />
             </div>
-            <div className="h-6 bg-gray-100 rounded-full w-16" />
           </div>
-          <div className="space-y-2 mt-4">
-            <div className="h-4 bg-gray-100 rounded w-28" />
-            <div className="h-4 bg-gray-100 rounded w-36" />
+          <div className="flex items-center gap-2 mt-3">
+            <div className="h-5 bg-gray-100 rounded-full w-16" />
+            <div className="h-4 bg-gray-100 rounded w-20" />
           </div>
         </div>
       </CardContent>
@@ -89,7 +89,12 @@ export default function ItemsPage() {
       {/* Page Header - Untitled UI style */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900">Items</h1>
+          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+            Items
+            <HelpTooltip position="right">
+              Track everything in your home: appliances, furniture, electronics, and more. Add photos, receipts, and warranty info.
+            </HelpTooltip>
+          </h1>
           <p className="text-text-md text-gray-500 mt-1">Manage your home appliances and systems</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
@@ -98,31 +103,32 @@ export default function ItemsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Icon icon={Search} size="xs" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        <div className="w-full sm:flex-1">
           <Input
             placeholder="Search items..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
+            icon={<Icon icon={Search} size="xs" />}
           />
         </div>
-        <Select
-          options={[
-            { value: '', label: 'All Categories' },
-            ...allCategories.map((c) => ({ value: c.id, label: c.name })),
-          ]}
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="w-full sm:w-48"
-        />
+        <div className="w-full sm:w-auto">
+          <Select
+            options={[
+              { value: '', label: 'All Categories' },
+              ...allCategories.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="sm:w-48"
+          />
+        </div>
       </div>
 
       {/* Items Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <ItemSkeleton key={i} />
           ))}
         </div>
@@ -138,40 +144,60 @@ export default function ItemsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {allItems.map((item) => (
             <Link key={item.id} to={`/items/${item.id}`}>
-              <Card hover className="h-full">
-                <CardContent className="py-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                      {(item.make || item.model) && (
-                        <p className="text-sm text-gray-500">
-                          {[item.make, item.model].filter(Boolean).join(' ')}
-                        </p>
-                      )}
+              <Card hover className="h-full overflow-hidden group">
+                {/* Image Section */}
+                <div className="aspect-[4/3] relative bg-gray-100 overflow-hidden">
+                  {item.featured_image ? (
+                    <img
+                      src={item.featured_image.url}
+                      alt={item.name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                      <Icon icon={Package} size="xl" className="text-gray-300" />
                     </div>
-                    {item.category && (
+                  )}
+                  {/* Category Badge Overlay */}
+                  {item.category && (
+                    <div className="absolute top-3 left-3">
                       <Badge
-                        style={{ backgroundColor: `${item.category.color}20`, color: item.category.color ?? undefined }}
+                        size="sm"
+                        style={{
+                          backgroundColor: item.category.color ? `${item.category.color}` : undefined,
+                          color: '#fff',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        }}
                       >
                         {item.category.name}
                       </Badge>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </div>
 
-                  <div className="space-y-2 text-sm text-gray-500">
+                {/* Content Section */}
+                <CardContent className="py-4">
+                  <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
+                  {(item.make || item.model) && (
+                    <p className="text-sm text-gray-500 mb-3 line-clamp-1">
+                      {[item.make, item.model].filter(Boolean).join(' ')}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
                     {(item.location_obj || item.location) && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Icon icon={MapPin} size="xs" className="text-gray-400" />
-                        {item.location_obj?.name || item.location}
+                        <span className="truncate max-w-[100px]">{item.location_obj?.name || item.location}</span>
                       </div>
                     )}
                     {item.install_date && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Icon icon={Calendar} size="xs" className="text-gray-400" />
-                        Installed {formatDate(item.install_date)}
+                        <span>{formatDate(item.install_date)}</span>
                       </div>
                     )}
                   </div>

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
-import { Icon, Plus, Bell, Check, Clock, Calendar, Pencil, Trash2 } from '@/components/ui'
+import { Icon, Plus, Bell, Check, Clock, Calendar, Pencil, Trash2, HelpTooltip } from '@/components/ui'
 import toast from 'react-hot-toast'
 import type { Reminder } from '@/types'
 
@@ -253,7 +253,12 @@ export default function RemindersPage() {
       {/* Page Header - Untitled UI style */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900">Reminders</h1>
+          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+            Reminders
+            <HelpTooltip position="right">
+              Set up recurring or one-time reminders for maintenance tasks. Link them to items and get notified when they're due.
+            </HelpTooltip>
+          </h1>
           <p className="text-text-md text-gray-500 mt-1">Keep track of maintenance schedules</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>

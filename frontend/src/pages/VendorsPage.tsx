@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2 } from '@/components/ui'
+import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip } from '@/components/ui'
 import toast from 'react-hot-toast'
 import type { Vendor } from '@/types'
 
@@ -101,7 +101,12 @@ export default function VendorsPage() {
       {/* Page Header - Untitled UI style */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900">Vendors</h1>
+          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+            Vendors
+            <HelpTooltip position="right">
+              Keep track of contractors, repair services, and suppliers. Store contact info, specialties, and link vendors to items.
+            </HelpTooltip>
+          </h1>
           <p className="text-text-md text-gray-500 mt-1">Your address book for service providers</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>

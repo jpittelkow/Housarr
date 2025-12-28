@@ -59,6 +59,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::apiResource('vendors', VendorController::class);
 
     // Items
+    Route::post('/items/analyze-image', [ItemController::class, 'analyzeImage']);
     Route::apiResource('items', ItemController::class);
     Route::post('/items/{item}/manual', [ItemController::class, 'uploadManual']);
 

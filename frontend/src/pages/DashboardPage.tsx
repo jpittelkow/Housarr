@@ -11,7 +11,8 @@ import {
   Package,
   AlertTriangle,
   Calendar,
-  Circle
+  Circle,
+  HelpTooltip,
 } from '@/components/ui'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDate } from '@/lib/utils'
@@ -64,7 +65,12 @@ export default function DashboardPage() {
             </div>
             <div className="mt-4">
               <p className="text-display-xs font-semibold text-gray-900">{itemsCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Total items</p>
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                Total items
+                <HelpTooltip position="bottom">
+                  The total number of items you're tracking in your household inventory.
+                </HelpTooltip>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -84,7 +90,12 @@ export default function DashboardPage() {
             </div>
             <div className="mt-4">
               <p className="text-display-xs font-semibold text-gray-900">{upcomingReminders.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Upcoming reminders</p>
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                Upcoming reminders
+                <HelpTooltip position="bottom">
+                  Maintenance reminders due within the next 30 days.
+                </HelpTooltip>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -104,7 +115,12 @@ export default function DashboardPage() {
             </div>
             <div className="mt-4">
               <p className="text-display-xs font-semibold text-gray-900">{overdueReminders.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Overdue</p>
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                Overdue
+                <HelpTooltip position="bottom">
+                  Reminders that have passed their due date and need attention.
+                </HelpTooltip>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -119,7 +135,12 @@ export default function DashboardPage() {
             </div>
             <div className="mt-4">
               <p className="text-display-xs font-semibold text-gray-900">{incompleteTodosCount}</p>
-              <p className="text-sm text-gray-500 mt-1">Open todos</p>
+              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                Open todos
+                <HelpTooltip position="bottom">
+                  Tasks that haven't been completed yet.
+                </HelpTooltip>
+              </p>
             </div>
           </CardContent>
         </Card>

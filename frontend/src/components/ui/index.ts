@@ -77,6 +77,9 @@ export {
   Car,
   Layers,
   HardDrive,
+  LayoutGrid,
+  List,
+  Sparkles,
 } from './Icon'
 export { Button, type ButtonProps } from './Button'
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card'
@@ -90,3 +93,4 @@ export { Skeleton, SkeletonText, SkeletonCard, SkeletonTable, SkeletonList } fro
 export { Tabs, TabList, Tab, TabPanel } from './Tabs'
 export { Textarea, type TextareaProps } from './Textarea'
 export { Toggle } from './Toggle'
+export { Tooltip, HelpTooltip } from './Tooltip'

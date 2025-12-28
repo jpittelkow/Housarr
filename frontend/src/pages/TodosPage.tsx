@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { Icon, Plus, CheckSquare, Circle, CheckCircle, Pencil, Trash2 } from '@/components/ui'
+import { Icon, Plus, CheckSquare, Circle, CheckCircle, Pencil, Trash2, HelpTooltip } from '@/components/ui'
 import toast from 'react-hot-toast'
 import type { Todo } from '@/types'
 
@@ -225,7 +225,12 @@ export default function TodosPage() {
       {/* Page Header - Untitled UI style */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900">Todos</h1>
+          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+            Todos
+            <HelpTooltip position="right">
+              Manage your household task list. Set priorities, link to items, and track completion.
+            </HelpTooltip>
+          </h1>
           <p className="text-text-md text-gray-500 mt-1">Your household task list</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
