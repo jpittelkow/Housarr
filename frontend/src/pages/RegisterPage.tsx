@@ -31,7 +31,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col justify-center bg-gray-50 dark:bg-gray-950 px-4 py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <div className="flex justify-center">
@@ -39,20 +39,20 @@ export default function RegisterPage() {
             <div className="w-10 h-10 rounded-xl bg-primary-600 flex items-center justify-center">
               <Icon icon={Home} size="md" className="text-white" />
             </div>
-            <span className="text-2xl font-bold text-gray-900">Housarr</span>
+            <span className="text-2xl font-bold text-gray-900 dark:text-gray-50">Housarr</span>
           </div>
         </div>
 
         {/* Header */}
         <div className="mt-6 text-center">
-          <h1 className="text-display-sm font-semibold text-gray-900">Create your account</h1>
-          <p className="mt-2 text-text-md text-gray-500">Set up your household to get started</p>
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50">Create your account</h1>
+          <p className="mt-2 text-text-md text-gray-500 dark:text-gray-400">Set up your household to get started</p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Card */}
-        <div className="bg-white py-8 px-6 shadow-sm border border-gray-200 rounded-xl sm:px-10">
+        <div className="bg-white dark:bg-gray-900 py-8 px-6 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl sm:px-10">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <Input
               label="Household name"
@@ -104,11 +104,11 @@ export default function RegisterPage() {
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           Already have an account?{' '}
           <Link
             to="/login"
-            className="font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+            className="font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
           >
             Sign in
           </Link>

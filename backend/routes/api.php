@@ -39,6 +39,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/prefetch', [DashboardController::class, 'prefetch']);
 
     // Household
     Route::get('/household', [HouseholdController::class, 'show']);
@@ -62,10 +63,18 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/items/analyze-image', [ItemController::class, 'analyzeImage']);
     Route::apiResource('items', ItemController::class);
     Route::post('/items/{item}/manual', [ItemController::class, 'uploadManual']);
+    Route::post('/items/{item}/download-manual', [ItemController::class, 'downloadManual']);
+    Route::post('/items/{item}/search-manual-urls', [ItemController::class, 'searchManualUrls']);
+    Route::post('/items/{item}/download-manual-url', [ItemController::class, 'downloadManualFromUrl']);
+    Route::post('/items/{item}/ai-suggestions', [ItemController::class, 'getAISuggestions']);
+    Route::get('/items/{item}/ai-config', [ItemController::class, 'checkAIConfig']);
+    Route::post('/items/{item}/ai-query', [ItemController::class, 'queryAISuggestions']);
+    Route::post('/items/{item}/suggest-parts', [ItemController::class, 'suggestParts']);
 
     // Parts
     Route::get('/items/{item}/parts', [PartController::class, 'index']);
     Route::post('/parts', [PartController::class, 'store']);
+    Route::post('/parts/batch', [PartController::class, 'storeBatch']);
     Route::patch('/parts/{part}', [PartController::class, 'update']);
     Route::delete('/parts/{part}', [PartController::class, 'destroy']);
 
@@ -94,6 +103,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/settings/storage', [SettingController::class, 'checkStorage']);
     Route::get('/settings/email', [SettingController::class, 'checkEmail']);
     Route::get('/settings/ai', [SettingController::class, 'checkAI']);
+    Route::post('/settings/ai/test', [SettingController::class, 'testAI']);
 
     // Files (with stricter rate limiting for uploads)
     Route::middleware('throttle:30,1')->group(function () {

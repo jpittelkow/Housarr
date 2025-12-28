@@ -20,15 +20,15 @@ function TodoSkeleton() {
     <Card>
       <CardContent className="py-3">
         <div className="animate-pulse flex items-center gap-3">
-          <div className="h-6 w-6 bg-gray-200 rounded-full flex-shrink-0" />
+          <div className="h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0" />
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
-              <div className="h-5 bg-gray-200 rounded w-48" />
-              <div className="h-5 bg-gray-100 rounded-full w-14" />
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-48" />
+              <div className="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-14" />
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-4 bg-gray-100 rounded w-24" />
-              <div className="h-4 bg-gray-100 rounded w-20" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-24" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20" />
             </div>
           </div>
         </div>
@@ -56,9 +56,11 @@ export default function TodosPage() {
       ),
   })
 
+  // Use minimal endpoint for dropdown - only fetches id and name
   const { data: itemsData } = useQuery({
-    queryKey: ['items'],
-    queryFn: () => items.list(),
+    queryKey: ['items-minimal'],
+    queryFn: () => items.listMinimal(),
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   })
 
   const createMutation = useMutation({
@@ -163,7 +165,7 @@ export default function TodosPage() {
                     <span
                       className={cn(
                         'font-medium',
-                        todo.completed_at ? 'text-gray-400 line-through' : 'text-gray-900'
+                        todo.completed_at ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-50'
                       )}
                     >
                       {todo.title}
@@ -181,7 +183,7 @@ export default function TodosPage() {
                       {todo.priority}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                  <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                     {todo.item && <span>{todo.item.name}</span>}
                     {todo.due_date && <span>Due {formatDate(todo.due_date)}</span>}
                     {todo.user && <span>Assigned to {todo.user.name}</span>}
@@ -223,15 +225,15 @@ export default function TodosPage() {
   return (
     <div className="space-y-6">
       {/* Page Header - Untitled UI style */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
             Todos
             <HelpTooltip position="right">
               Manage your household task list. Set priorities, link to items, and track completion.
             </HelpTooltip>
           </h1>
-          <p className="text-text-md text-gray-500 mt-1">Your household task list</p>
+          <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">Your household task list</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
           <Icon icon={Plus} size="xs" /> Add Todo

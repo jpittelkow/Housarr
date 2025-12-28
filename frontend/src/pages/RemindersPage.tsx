@@ -21,18 +21,18 @@ function ReminderSkeleton() {
         <div className="animate-pulse flex items-start justify-between">
           <div className="flex-1 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="h-5 bg-gray-200 rounded w-40" />
-              <div className="h-5 bg-gray-100 rounded-full w-16" />
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-40" />
+              <div className="h-5 bg-gray-100 dark:bg-gray-800 rounded-full w-16" />
             </div>
-            <div className="h-4 bg-gray-100 rounded w-64" />
+            <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-64" />
             <div className="flex items-center gap-4">
-              <div className="h-4 bg-gray-100 rounded w-24" />
-              <div className="h-4 bg-gray-100 rounded w-20" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-24" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20" />
             </div>
           </div>
           <div className="flex gap-2">
-            <div className="h-9 bg-gray-100 rounded w-20" />
-            <div className="h-9 bg-gray-100 rounded w-24" />
+            <div className="h-9 bg-gray-100 dark:bg-gray-800 rounded w-20" />
+            <div className="h-9 bg-gray-100 dark:bg-gray-800 rounded w-24" />
           </div>
         </div>
       </CardContent>
@@ -52,9 +52,11 @@ export default function RemindersPage() {
     queryFn: () => reminders.list(filter === 'pending' ? { status: 'pending' } : {}),
   })
 
+  // Use minimal endpoint for dropdown - only fetches id and name
   const { data: itemsData } = useQuery({
-    queryKey: ['items'],
-    queryFn: () => items.list(),
+    queryKey: ['items-minimal'],
+    queryFn: () => items.listMinimal(),
+    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   })
 
   const createMutation = useMutation({
@@ -149,32 +151,32 @@ export default function RemindersPage() {
           const isOverdue = new Date(reminder.due_date) < new Date() && reminder.status === 'pending'
 
           return (
-            <Card key={reminder.id} className={isOverdue ? 'border-error-300' : ''}>
+            <Card key={reminder.id} className={isOverdue ? 'border-error-300 dark:border-error-800' : ''}>
               <CardContent className="py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0">
                     <div className={`h-10 w-10 rounded-full flex-shrink-0 flex items-center justify-center ${
                       reminder.status === 'completed'
-                        ? 'bg-success-100'
+                        ? 'bg-success-100 dark:bg-success-900/30'
                         : isOverdue
-                        ? 'bg-error-100'
-                        : 'bg-warning-100'
+                        ? 'bg-error-100 dark:bg-error-900/30'
+                        : 'bg-warning-100 dark:bg-warning-900/30'
                     }`}>
                       <Icon
                         icon={Calendar}
                         size="sm"
                         className={
                           reminder.status === 'completed'
-                            ? 'text-success-600'
+                            ? 'text-success-600 dark:text-success-400'
                             : isOverdue
-                            ? 'text-error-600'
-                            : 'text-warning-600'
+                            ? 'text-error-600 dark:text-error-400'
+                            : 'text-warning-600 dark:text-warning-400'
                         }
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-medium text-gray-900">{reminder.title}</h3>
+                        <h3 className="font-medium text-gray-900 dark:text-gray-50">{reminder.title}</h3>
                         <Badge
                           variant={
                             reminder.status === 'completed'
@@ -189,9 +191,9 @@ export default function RemindersPage() {
                         </Badge>
                       </div>
                       {reminder.description && (
-                        <p className="text-sm text-gray-500 mt-1 truncate">{reminder.description}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{reminder.description}</p>
                       )}
-                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                         <span>{formatDate(reminder.due_date)}</span>
                         {reminder.item && <span>• {reminder.item.name}</span>}
                         {reminder.repeat_interval && (
@@ -251,15 +253,15 @@ export default function RemindersPage() {
   return (
     <div className="space-y-6">
       {/* Page Header - Untitled UI style */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
             Reminders
             <HelpTooltip position="right">
               Set up recurring or one-time reminders for maintenance tasks. Link them to items and get notified when they're due.
             </HelpTooltip>
           </h1>
-          <p className="text-text-md text-gray-500 mt-1">Keep track of maintenance schedules</p>
+          <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">Keep track of maintenance schedules</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
           <Icon icon={Plus} size="xs" /> Add Reminder

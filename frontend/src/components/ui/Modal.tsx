@@ -82,7 +82,7 @@ export function Modal({ isOpen, onClose, title, description, children, size = 'm
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-gray-900/50 animate-fade-in"
+        className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -92,29 +92,29 @@ export function Modal({ isOpen, onClose, title, description, children, size = 'm
         ref={modalRef}
         tabIndex={-1}
         className={cn(
-          'relative bg-white rounded-xl shadow-xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col',
+          'relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col',
           'animate-scale-in',
           sizes[size]
         )}
       >
         {(title || description) && (
-          <div className="px-6 py-5 border-b border-gray-200">
+          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-start justify-between gap-4">
               <div>
                 {title && (
-                  <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
+                  <h2 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-50">
                     {title}
                   </h2>
                 )}
                 {description && (
-                  <p id="modal-description" className="mt-1 text-sm text-gray-500">
+                  <p id="modal-description" className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {description}
                   </p>
                 )}
               </div>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 p-1 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 aria-label="Close modal"
               >
                 <Icon icon={X} size="sm" aria-hidden="true" />
@@ -135,7 +135,7 @@ interface ModalFooterProps {
 
 export function ModalFooter({ children, className }: ModalFooterProps) {
   return (
-    <div className={cn('px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3', className)}>
+    <div className={cn('px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-3', className)}>
       {children}
     </div>
   )

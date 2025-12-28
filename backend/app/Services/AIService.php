@@ -10,12 +10,28 @@ class AIService
     protected ?int $householdId;
     protected string $provider;
     protected ?string $model;
+    protected array $settings;
 
     public function __construct(?int $householdId = null)
     {
         $this->householdId = $householdId;
-        $this->provider = Setting::get('ai_provider', $householdId, 'none');
-        $this->model = Setting::get('ai_model', $householdId);
+
+        // Load all AI-related settings in a single query
+        $this->settings = Setting::getMany([
+            'ai_provider',
+            'ai_model',
+            'anthropic_api_key',
+            'openai_api_key',
+            'openai_base_url',
+            'gemini_api_key',
+            'gemini_base_url',
+            'local_base_url',
+            'local_model',
+            'local_api_key',
+        ], $householdId);
+
+        $this->provider = $this->settings['ai_provider'] ?? 'none';
+        $this->model = $this->settings['ai_model'];
     }
 
     /**
@@ -36,10 +52,10 @@ class AIService
         }
 
         return match ($this->provider) {
-            'claude' => !empty(Setting::get('anthropic_api_key', $this->householdId)),
-            'openai' => !empty(Setting::get('openai_api_key', $this->householdId)),
-            'gemini' => !empty(Setting::get('gemini_api_key', $this->householdId)),
-            'local' => !empty(Setting::get('local_base_url', $this->householdId)),
+            'claude' => !empty($this->settings['anthropic_api_key']),
+            'openai' => !empty($this->settings['openai_api_key']),
+            'gemini' => !empty($this->settings['gemini_api_key']),
+            'local' => !empty($this->settings['local_base_url']),
             default => false,
         };
     }
@@ -69,7 +85,7 @@ class AIService
             'claude' => 'claude-sonnet-4-20250514',
             'openai' => 'gpt-4o',
             'gemini' => 'gemini-1.5-pro',
-            'local' => Setting::get('local_model', $this->householdId, 'llama3'),
+            'local' => $this->settings['local_model'] ?? 'llama3',
             default => null,
         };
     }
@@ -79,16 +95,25 @@ class AIService
      */
     public function complete(string $prompt, array $options = []): ?string
     {
+        $result = $this->completeWithError($prompt, $options);
+        return $result['response'];
+    }
+
+    /**
+     * Send a completion request and return both response and any error.
+     */
+    public function completeWithError(string $prompt, array $options = []): array
+    {
         if (!$this->isAvailable()) {
-            return null;
+            return ['response' => null, 'error' => 'AI provider is not configured'];
         }
 
         return match ($this->provider) {
-            'claude' => $this->completeClaude($prompt, $options),
-            'openai' => $this->completeOpenAI($prompt, $options),
-            'gemini' => $this->completeGemini($prompt, $options),
-            'local' => $this->completeLocal($prompt, $options),
-            default => null,
+            'claude' => $this->completeClaudeWithError($prompt, $options),
+            'openai' => $this->completeOpenAIWithError($prompt, $options),
+            'gemini' => $this->completeGeminiWithError($prompt, $options),
+            'local' => $this->completeLocalWithError($prompt, $options),
+            default => ['response' => null, 'error' => 'Unknown AI provider'],
         };
     }
 
@@ -160,7 +185,7 @@ class AIService
      */
     protected function analyzeImageClaude(string $base64Image, string $mimeType, string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('anthropic_api_key', $this->householdId);
+        $apiKey = $this->settings['anthropic_api_key'];
         // Use a vision-capable model
         $model = $options['model'] ?? 'claude-sonnet-4-20250514';
 
@@ -169,7 +194,7 @@ class AIService
                 'x-api-key' => $apiKey,
                 'anthropic-version' => '2023-06-01',
                 'Content-Type' => 'application/json',
-            ])->post('https://api.anthropic.com/v1/messages', [
+            ])->timeout(60)->post('https://api.anthropic.com/v1/messages', [
                 'model' => $model,
                 'max_tokens' => $options['max_tokens'] ?? 2048,
                 'messages' => [
@@ -209,8 +234,8 @@ class AIService
      */
     protected function analyzeImageOpenAI(string $base64Image, string $mimeType, string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('openai_api_key', $this->householdId);
-        $baseUrl = Setting::get('openai_base_url', $this->householdId, 'https://api.openai.com/v1');
+        $apiKey = $this->settings['openai_api_key'];
+        $baseUrl = $this->settings['openai_base_url'] ?? 'https://api.openai.com/v1';
         // Use a vision-capable model
         $model = $options['model'] ?? 'gpt-4o';
 
@@ -218,7 +243,7 @@ class AIService
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type' => 'application/json',
-            ])->post("{$baseUrl}/chat/completions", [
+            ])->timeout(60)->post("{$baseUrl}/chat/completions", [
                 'model' => $model,
                 'max_tokens' => $options['max_tokens'] ?? 2048,
                 'messages' => [
@@ -256,15 +281,15 @@ class AIService
      */
     protected function analyzeImageGemini(string $base64Image, string $mimeType, string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('gemini_api_key', $this->householdId);
-        $baseUrl = Setting::get('gemini_base_url', $this->householdId, 'https://generativelanguage.googleapis.com/v1beta');
+        $apiKey = $this->settings['gemini_api_key'];
+        $baseUrl = $this->settings['gemini_base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta';
         // Use a vision-capable model
         $model = $options['model'] ?? 'gemini-1.5-pro';
 
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->post("{$baseUrl}/models/{$model}:generateContent?key={$apiKey}", [
+            ])->timeout(60)->post("{$baseUrl}/models/{$model}:generateContent?key={$apiKey}", [
                 'contents' => [
                     [
                         'parts' => [
@@ -299,9 +324,9 @@ class AIService
      */
     protected function analyzeImageLocal(string $base64Image, string $mimeType, string $prompt, array $options = []): ?string
     {
-        $baseUrl = Setting::get('local_base_url', $this->householdId);
-        $apiKey = Setting::get('local_api_key', $this->householdId);
-        $model = $options['model'] ?? Setting::get('local_model', $this->householdId, 'llava');
+        $baseUrl = $this->settings['local_base_url'];
+        $apiKey = $this->settings['local_api_key'];
+        $model = $options['model'] ?? $this->settings['local_model'] ?? 'llava';
 
         // Detect if it's Ollama or OpenAI-compatible API
         $isOllama = str_contains($baseUrl, '11434');
@@ -315,6 +340,7 @@ class AIService
             if ($isOllama) {
                 // Ollama API format with images
                 $response = Http::withHeaders($headers)
+                    ->timeout(120)
                     ->post("{$baseUrl}/api/generate", [
                         'model' => $model,
                         'prompt' => $prompt,
@@ -329,6 +355,7 @@ class AIService
             } else {
                 // OpenAI-compatible API format
                 $response = Http::withHeaders($headers)
+                    ->timeout(60)
                     ->post("{$baseUrl}/v1/chat/completions", [
                         'model' => $model,
                         'max_tokens' => $options['max_tokens'] ?? 2048,
@@ -368,7 +395,15 @@ class AIService
      */
     protected function completeClaude(string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('anthropic_api_key', $this->householdId);
+        return $this->completeClaudeWithError($prompt, $options)['response'];
+    }
+
+    /**
+     * Complete using Claude with error reporting.
+     */
+    protected function completeClaudeWithError(string $prompt, array $options = []): array
+    {
+        $apiKey = $this->settings['anthropic_api_key'];
         $model = $options['model'] ?? $this->getModel();
 
         try {
@@ -376,7 +411,7 @@ class AIService
                 'x-api-key' => $apiKey,
                 'anthropic-version' => '2023-06-01',
                 'Content-Type' => 'application/json',
-            ])->post('https://api.anthropic.com/v1/messages', [
+            ])->timeout(30)->post('https://api.anthropic.com/v1/messages', [
                 'model' => $model,
                 'max_tokens' => $options['max_tokens'] ?? 1024,
                 'messages' => [
@@ -386,13 +421,16 @@ class AIService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['content'][0]['text'] ?? null;
+                return ['response' => $data['content'][0]['text'] ?? null, 'error' => null];
             }
+
+            $error = $response->json();
+            $errorMsg = $error['error']['message'] ?? "API error: HTTP {$response->status()}";
+            return ['response' => null, 'error' => "Claude: $errorMsg"];
         } catch (\Exception $e) {
             report($e);
+            return ['response' => null, 'error' => "Claude: {$e->getMessage()}"];
         }
-
-        return null;
     }
 
     /**
@@ -400,15 +438,25 @@ class AIService
      */
     protected function completeOpenAI(string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('openai_api_key', $this->householdId);
-        $baseUrl = Setting::get('openai_base_url', $this->householdId, 'https://api.openai.com/v1');
+        return $this->completeOpenAIWithError($prompt, $options)['response'];
+    }
+
+    /**
+     * Complete using OpenAI with error reporting.
+     */
+    protected function completeOpenAIWithError(string $prompt, array $options = []): array
+    {
+        $apiKey = $this->settings['openai_api_key'];
+        $baseUrl = $this->settings['openai_base_url'] ?? 'https://api.openai.com/v1';
+        // Remove trailing slash if present
+        $baseUrl = rtrim($baseUrl, '/');
         $model = $options['model'] ?? $this->getModel();
 
         try {
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type' => 'application/json',
-            ])->post("{$baseUrl}/chat/completions", [
+            ])->timeout(30)->post("{$baseUrl}/chat/completions", [
                 'model' => $model,
                 'max_tokens' => $options['max_tokens'] ?? 1024,
                 'messages' => [
@@ -418,13 +466,16 @@ class AIService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['choices'][0]['message']['content'] ?? null;
+                return ['response' => $data['choices'][0]['message']['content'] ?? null, 'error' => null];
             }
+
+            $error = $response->json();
+            $errorMsg = $error['error']['message'] ?? "API error: HTTP {$response->status()}";
+            return ['response' => null, 'error' => "OpenAI: $errorMsg"];
         } catch (\Exception $e) {
             report($e);
+            return ['response' => null, 'error' => "OpenAI: {$e->getMessage()}"];
         }
-
-        return null;
     }
 
     /**
@@ -432,14 +483,22 @@ class AIService
      */
     protected function completeGemini(string $prompt, array $options = []): ?string
     {
-        $apiKey = Setting::get('gemini_api_key', $this->householdId);
-        $baseUrl = Setting::get('gemini_base_url', $this->householdId, 'https://generativelanguage.googleapis.com/v1beta');
+        return $this->completeGeminiWithError($prompt, $options)['response'];
+    }
+
+    /**
+     * Complete using Google Gemini with error reporting.
+     */
+    protected function completeGeminiWithError(string $prompt, array $options = []): array
+    {
+        $apiKey = $this->settings['gemini_api_key'];
+        $baseUrl = $this->settings['gemini_base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta';
         $model = $options['model'] ?? $this->getModel();
 
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->post("{$baseUrl}/models/{$model}:generateContent?key={$apiKey}", [
+            ])->timeout(30)->post("{$baseUrl}/models/{$model}:generateContent?key={$apiKey}", [
                 'contents' => [
                     ['parts' => [['text' => $prompt]]],
                 ],
@@ -450,13 +509,16 @@ class AIService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                return ['response' => $data['candidates'][0]['content']['parts'][0]['text'] ?? null, 'error' => null];
             }
+
+            $error = $response->json();
+            $errorMsg = $error['error']['message'] ?? "API error: HTTP {$response->status()}";
+            return ['response' => null, 'error' => "Gemini: $errorMsg"];
         } catch (\Exception $e) {
             report($e);
+            return ['response' => null, 'error' => "Gemini: {$e->getMessage()}"];
         }
-
-        return null;
     }
 
     /**
@@ -464,8 +526,16 @@ class AIService
      */
     protected function completeLocal(string $prompt, array $options = []): ?string
     {
-        $baseUrl = Setting::get('local_base_url', $this->householdId);
-        $apiKey = Setting::get('local_api_key', $this->householdId);
+        return $this->completeLocalWithError($prompt, $options)['response'];
+    }
+
+    /**
+     * Complete using a local model with error reporting.
+     */
+    protected function completeLocalWithError(string $prompt, array $options = []): array
+    {
+        $baseUrl = $this->settings['local_base_url'];
+        $apiKey = $this->settings['local_api_key'];
         $model = $options['model'] ?? $this->getModel();
 
         // Detect if it's Ollama or OpenAI-compatible API
@@ -480,6 +550,7 @@ class AIService
             if ($isOllama) {
                 // Ollama API format
                 $response = Http::withHeaders($headers)
+                    ->timeout(60)
                     ->post("{$baseUrl}/api/generate", [
                         'model' => $model,
                         'prompt' => $prompt,
@@ -488,11 +559,12 @@ class AIService
 
                 if ($response->successful()) {
                     $data = $response->json();
-                    return $data['response'] ?? null;
+                    return ['response' => $data['response'] ?? null, 'error' => null];
                 }
             } else {
                 // OpenAI-compatible API format (LM Studio, vLLM, etc.)
                 $response = Http::withHeaders($headers)
+                    ->timeout(30)
                     ->post("{$baseUrl}/v1/chat/completions", [
                         'model' => $model,
                         'max_tokens' => $options['max_tokens'] ?? 1024,
@@ -503,13 +575,16 @@ class AIService
 
                 if ($response->successful()) {
                     $data = $response->json();
-                    return $data['choices'][0]['message']['content'] ?? null;
+                    return ['response' => $data['choices'][0]['message']['content'] ?? null, 'error' => null];
                 }
             }
+
+            $error = $response->json();
+            $errorMsg = $error['error']['message'] ?? $error['error'] ?? "API error: HTTP {$response->status()}";
+            return ['response' => null, 'error' => "Local: $errorMsg"];
         } catch (\Exception $e) {
             report($e);
+            return ['response' => null, 'error' => "Local: {$e->getMessage()}"];
         }
-
-        return null;
     }
 }

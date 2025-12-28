@@ -24,6 +24,9 @@ class Item extends Model
         'install_date',
         'location',
         'notes',
+        'warranty_years',
+        'maintenance_interval_months',
+        'typical_lifespan_years',
     ];
 
     protected function casts(): array

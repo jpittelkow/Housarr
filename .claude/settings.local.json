@@ -26,7 +26,21 @@
       "Bash(do stat C:/Users/jpitt_6932a9v/code/Housarr/frontend/src/pages/DashboardPage.tsx)",
       "Bash(done)",
       "mcp__ide__getDiagnostics",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git restore:*)",
+      "Bash(git push:*)",
+      "Bash(php -l:*)",
+      "Bash(npm run build:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker exec:*)",
+      "WebSearch",
+      "WebFetch(domain:appliance-data.com)",
+      "WebFetch(domain:skulytics.io)",
+      "WebFetch(domain:appliance.io)",
+      "Bash(docker ps:*)",
+      "Bash(git reset:*)"
     ]
   }
 }

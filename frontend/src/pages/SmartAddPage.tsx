@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { items, categories, locations, files, settings } from '@/services/api'
+import { items, categories, locations, files } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -9,17 +9,16 @@ import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
-import { EmptyState } from '@/components/ui/EmptyState'
 import {
   Icon,
   Sparkles,
   Upload,
   AlertCircle,
-  Settings,
   ChevronDown,
   ChevronUp,
   Check,
   RefreshCw,
+  Search,
 } from '@/components/ui'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
@@ -43,13 +42,16 @@ export default function SmartAddPage() {
   const [analysisState, setAnalysisState] = useState<AnalysisState>('idle')
   const [uploadedImage, setUploadedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<AnalysisResult[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [showAllResults, setShowAllResults] = useState(false)
   const [attachPhoto, setAttachPhoto] = useState(true)
+  const [searchManual, setSearchManual] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [formData, setFormData] = useState<Partial<Item>>({})
   const [isDragging, setIsDragging] = useState(false)
+  const [isSearchingManual, setIsSearchingManual] = useState(false)
 
   // Queries
   const { data: categoriesData } = useQuery({
@@ -62,14 +64,8 @@ export default function SmartAddPage() {
     queryFn: () => locations.list(),
   })
 
-  const { data: aiStatus } = useQuery({
-    queryKey: ['settings', 'ai'],
-    queryFn: () => settings.checkAI(),
-  })
-
   const allCategories = categoriesData?.categories || []
   const allLocations = locationsData?.locations || []
-  const isAIConfigured = aiStatus?.configured ?? false
 
   // Find best matching category based on AI-suggested type
   const findMatchingCategory = (suggestedType: string): Category | undefined => {
@@ -84,13 +80,14 @@ export default function SmartAddPage() {
 
   // Analyze image mutation
   const analyzeMutation = useMutation({
-    mutationFn: (file: File) => items.analyzeImage(file),
+    mutationFn: ({ file, query }: { file?: File; query?: string }) =>
+      items.analyzeImage(file, query, allCategories.map(c => c.name)),
     onSuccess: (data) => {
       if (data.results && data.results.length > 0) {
         setResults(data.results)
         setAnalysisState('results')
       } else {
-        setErrorMessage('No products detected in the image. Try a clearer photo.')
+        setErrorMessage('Could not identify the product. Try a different search or clearer photo.')
         setAnalysisState('error')
       }
     },
@@ -112,6 +109,23 @@ export default function SmartAddPage() {
           await files.upload(uploadedImage, 'item', newItem.id, true)
         } catch {
           toast.error('Item created but failed to attach photo')
+        }
+      }
+
+      // Search for manual if checkbox is checked
+      if (searchManual && formData.make && formData.model && newItem?.id) {
+        setIsSearchingManual(true)
+        try {
+          const manualResult = await items.downloadManual(newItem.id, formData.make, formData.model)
+          if (manualResult.success) {
+            toast.success('Manual found and attached!')
+          } else {
+            toast('No manual found online', { icon: '📄' })
+          }
+        } catch {
+          // Silent fail - manual search is best effort
+        } finally {
+          setIsSearchingManual(false)
         }
       }
 
@@ -145,12 +159,29 @@ export default function SmartAddPage() {
       setErrorMessage(null)
       setShowAllResults(false)
 
-      // Start analysis
+      // Start analysis immediately if image is dropped/selected
       setAnalysisState('analyzing')
-      analyzeMutation.mutate(file)
+      analyzeMutation.mutate({ file, query: searchQuery })
     },
-    [analyzeMutation]
+    [analyzeMutation, searchQuery]
   )
+
+  // Handle manual search trigger
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!searchQuery && !uploadedImage) {
+      toast.error('Please enter a search term or upload a photo')
+      return
+    }
+
+    setResults([])
+    setSelectedIndex(null)
+    setFormData({})
+    setErrorMessage(null)
+    setShowAllResults(false)
+    setAnalysisState('analyzing')
+    analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
+  }
 
   // Handle drag events
   const handleDragOver = (e: React.DragEvent) => {
@@ -212,6 +243,7 @@ export default function SmartAddPage() {
     setAnalysisState('idle')
     setUploadedImage(null)
     setImagePreview(null)
+    setSearchQuery('')
     setResults([])
     setSelectedIndex(null)
     setFormData({})
@@ -221,94 +253,98 @@ export default function SmartAddPage() {
 
   // Retry analysis
   const handleRetry = () => {
-    if (uploadedImage) {
-      setErrorMessage(null)
-      setAnalysisState('analyzing')
-      analyzeMutation.mutate(uploadedImage)
-    }
+    setErrorMessage(null)
+    setAnalysisState('analyzing')
+    analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
   }
 
   const displayedResults = showAllResults ? results : results.slice(0, 5)
 
-  // If AI is not configured, show setup prompt
-  if (!isAIConfigured) {
-    return (
-      <div className="space-y-6">
-        <div className="pb-5 border-b border-gray-200">
-          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Icon icon={Sparkles} size="lg" className="text-primary-600" />
-            Smart Add
-          </h1>
-          <p className="text-text-md text-gray-500 mt-1">AI-powered product identification</p>
-        </div>
-
-        <EmptyState
-          icon={<Icon icon={Settings} size="xl" />}
-          title="AI Not Configured"
-          description="To use Smart Add, please configure an AI provider in Settings."
-          action={
-            <Button onClick={() => navigate('/settings')}>
-              <Icon icon={Settings} size="xs" /> Go to Settings
-            </Button>
-          }
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="pb-5 border-b border-gray-200">
-        <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Icon icon={Sparkles} size="lg" className="text-primary-600" />
+      <div className="pb-5 border-b border-gray-200 dark:border-gray-800">
+        <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
+          <Icon icon={Sparkles} size="lg" className="text-primary-600 dark:text-primary-400" />
           Smart Add
         </h1>
-        <p className="text-text-md text-gray-500 mt-1">
-          Upload a photo and AI will identify the product for you
+        <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">
+          Search for a product or upload a photo and AI will identify it for you
         </p>
       </div>
 
       <div className="max-w-3xl">
-        {/* Upload Section */}
+        {/* Search and Upload Section */}
         {analysisState === 'idle' && (
-          <Card>
-            <CardContent className="p-8">
-              <div
-                className={cn(
-                  'border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer',
-                  isDragging
-                    ? 'border-primary-400 bg-primary-50'
-                    : 'border-gray-300 hover:border-gray-400'
-                )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById('file-input')?.click()}
-              >
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-                    <Icon icon={Upload} size="xl" className="text-gray-400" />
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <form onSubmit={handleSearch} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icon icon={Search} size="sm" className="text-gray-400" />
+                    </div>
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Enter make, model, or product name..."
+                      className="pl-10"
+                    />
                   </div>
-                  <div>
-                    <p className="text-lg font-medium text-gray-900">
-                      Drop photo here or click to upload
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Supports JPG, PNG, WebP up to 10MB
-                    </p>
-                  </div>
-                </div>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleFileInputChange}
-                />
+                  <Button type="submit" isLoading={analyzeMutation.isPending}>
+                    Search
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-gray-200 dark:border-gray-800" />
               </div>
-            </CardContent>
-          </Card>
+              <div className="relative flex justify-center">
+                <span className="px-3 bg-gray-25 dark:bg-gray-900 text-sm text-gray-500">OR</span>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-12">
+                <div
+                  className={cn(
+                    'border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer',
+                    isDragging
+                      ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/10'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+                  )}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('file-input')?.click()}
+                >
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                      <Icon icon={Upload} size="xl" className="text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-medium text-gray-900 dark:text-gray-50">
+                        Drop photo here or click to upload
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Supports JPG, PNG, WebP up to 10MB
+                      </p>
+                    </div>
+                  </div>
+                  <input
+                    id="file-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Analyzing State */}
@@ -316,18 +352,26 @@ export default function SmartAddPage() {
           <Card>
             <CardContent className="p-8">
               <div className="flex flex-col items-center gap-4">
-                {imagePreview && (
+                {imagePreview ? (
                   <img
                     src={imagePreview}
                     alt="Uploaded"
-                    className="w-48 h-48 object-cover rounded-lg"
+                    className="w-48 h-48 object-cover rounded-lg shadow-lg"
                   />
+                ) : (
+                  <div className="w-48 h-48 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <Icon icon={Search} size="xl" className="text-gray-400" />
+                  </div>
                 )}
                 <div className="flex items-center gap-3">
-                  <Icon icon={Sparkles} size="md" className="text-primary-600 animate-pulse" />
-                  <span className="text-lg font-medium text-gray-900">Analyzing image...</span>
+                  <Icon icon={Sparkles} size="md" className="text-primary-600 dark:text-primary-400 animate-pulse" />
+                  <span className="text-lg font-medium text-gray-900 dark:text-gray-50">
+                    {uploadedImage ? 'Analyzing image...' : 'Searching for product...'}
+                  </span>
                 </div>
-                <p className="text-sm text-gray-500">AI is identifying the product</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {searchQuery ? `Searching for "${searchQuery}"` : 'AI is identifying the product'}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -338,12 +382,16 @@ export default function SmartAddPage() {
           <Card>
             <CardContent className="p-8">
               <div className="flex flex-col items-center gap-4">
-                {imagePreview && (
+                {imagePreview ? (
                   <img
                     src={imagePreview}
                     alt="Uploaded"
                     className="w-48 h-48 object-cover rounded-lg opacity-75"
                   />
+                ) : (
+                  <div className="w-48 h-48 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center opacity-75">
+                    <Icon icon={Search} size="xl" className="text-gray-400" />
+                  </div>
                 )}
                 <div className="flex items-center gap-2 text-red-600">
                   <Icon icon={AlertCircle} size="md" />
@@ -352,7 +400,7 @@ export default function SmartAddPage() {
                 <p className="text-sm text-gray-500 text-center">{errorMessage}</p>
                 <div className="flex gap-3">
                   <Button variant="secondary" onClick={handleReset}>
-                    Try Different Photo
+                    Try Again
                   </Button>
                   <Button onClick={handleRetry}>
                     <Icon icon={RefreshCw} size="xs" /> Retry
@@ -366,17 +414,25 @@ export default function SmartAddPage() {
         {/* Results State */}
         {analysisState === 'results' && (
           <div className="space-y-6">
-            {/* Image and Results Side by Side */}
+            {/* Image/Query and Results Side by Side */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Image Preview */}
+              {/* Context Card */}
               <Card>
                 <CardContent className="p-4">
-                  {imagePreview && (
+                  {imagePreview ? (
                     <img
                       src={imagePreview}
                       alt="Uploaded"
                       className="w-full h-64 object-contain rounded-lg bg-gray-50"
                     />
+                  ) : (
+                    <div className="w-full h-64 rounded-lg bg-gray-50 dark:bg-gray-800 flex flex-col items-center justify-center p-6 text-center">
+                      <Icon icon={Search} size="xl" className="text-gray-300 dark:text-gray-600 mb-4" />
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-50">Search for</p>
+                      <p className="text-lg font-semibold text-primary-600 dark:text-primary-400 break-words w-full">
+                        "{searchQuery}"
+                      </p>
+                    </div>
                   )}
                   <Button
                     variant="secondary"
@@ -384,7 +440,7 @@ export default function SmartAddPage() {
                     className="w-full mt-4"
                     onClick={handleReset}
                   >
-                    Upload Different Photo
+                    New Search / Photo
                   </Button>
                 </CardContent>
               </Card>
@@ -393,7 +449,7 @@ export default function SmartAddPage() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-medium text-gray-900">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-50">
                       Results ({results.length} found)
                     </h3>
                   </div>
@@ -406,8 +462,8 @@ export default function SmartAddPage() {
                         className={cn(
                           'w-full text-left p-3 rounded-lg border-2 transition-colors',
                           selectedIndex === index
-                            ? 'border-primary-500 bg-primary-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
+                            : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
                         )}
                       >
                         <div className="flex items-start gap-3">
@@ -416,7 +472,7 @@ export default function SmartAddPage() {
                               'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
                               selectedIndex === index
                                 ? 'border-primary-500 bg-primary-500'
-                                : 'border-gray-300'
+                                : 'border-gray-300 dark:border-gray-600'
                             )}
                           >
                             {selectedIndex === index && (
@@ -424,7 +480,7 @@ export default function SmartAddPage() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900">
+                            <p className="font-medium text-gray-900 dark:text-gray-50">
                               {result.make} {result.model}
                             </p>
                             <div className="flex items-center gap-2 mt-1">
@@ -432,7 +488,7 @@ export default function SmartAddPage() {
                                 {result.type}
                               </Badge>
                               {result.confidence && (
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {Math.round(result.confidence * 100)}% match
                                 </span>
                               )}
@@ -462,7 +518,7 @@ export default function SmartAddPage() {
             {selectedIndex !== null && (
               <Card>
                 <CardContent className="p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Item Details</h3>
+                  <h3 className="font-medium text-gray-900 dark:text-gray-50 mb-4">Item Details</h3>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <Input
                       label="Name"
@@ -533,12 +589,18 @@ export default function SmartAddPage() {
                       rows={3}
                     />
 
-                    <div className="pt-4 border-t border-gray-200">
+                    <div className="pt-4 border-t border-gray-200 space-y-3">
                       <Checkbox
                         id="attach-photo"
                         checked={attachPhoto}
                         onChange={(e) => setAttachPhoto(e.target.checked)}
                         label="Attach uploaded photo as featured image"
+                      />
+                      <Checkbox
+                        id="search-manual"
+                        checked={searchManual}
+                        onChange={(e) => setSearchManual(e.target.checked)}
+                        label="Search for and download product manual (PDF)"
                       />
                     </div>
 
@@ -546,8 +608,9 @@ export default function SmartAddPage() {
                       <Button type="button" variant="secondary" onClick={handleReset}>
                         Cancel
                       </Button>
-                      <Button type="submit" isLoading={createMutation.isPending}>
-                        <Icon icon={Sparkles} size="xs" /> Create Item
+                      <Button type="submit" isLoading={createMutation.isPending || isSearchingManual}>
+                        <Icon icon={Sparkles} size="xs" />
+                        {isSearchingManual ? 'Searching for manual...' : 'Create Item'}
                       </Button>
                     </div>
                   </form>

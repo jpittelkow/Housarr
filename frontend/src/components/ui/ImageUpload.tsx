@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { files } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -128,10 +128,14 @@ export function ImageUpload({
     [avatarMode, existingImages.length, featuredImage, multiple, uploadMutation]
   )
 
-  const allImages = [...existingImages]
-  if (featuredImage && !allImages.find((img) => img.id === featuredImage.id)) {
-    allImages.unshift(featuredImage)
-  }
+  // Memoize to prevent array recreation on every render
+  const allImages = useMemo(() => {
+    const images = [...existingImages]
+    if (featuredImage && !images.find((img) => img.id === featuredImage.id)) {
+      images.unshift(featuredImage)
+    }
+    return images
+  }, [existingImages, featuredImage])
 
   if (avatarMode) {
     const currentAvatar = featuredImage || allImages[0]
@@ -142,11 +146,11 @@ export function ImageUpload({
             <img
               src={currentAvatar.url}
               alt="Avatar"
-              className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
+              className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-gray-800"
             />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300">
-              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-700">
+              <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
@@ -214,16 +218,16 @@ export function ImageUpload({
         className={cn(
           'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
           dragActive
-            ? 'border-primary-500 bg-primary-50'
-            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
+            : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
         )}
       >
         <div className="flex flex-col items-center gap-2">
-          <svg className="w-10 h-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           {uploadMutation.isPending ? (
-            <div className="flex items-center gap-2 text-gray-600">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
               <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -232,8 +236,8 @@ export function ImageUpload({
             </div>
           ) : (
             <>
-              <p className="text-sm text-gray-600">{label}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-600 dark:text-gray-300">{label}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Drag and drop or click to select • JPG, PNG, GIF, WebP
               </p>
             </>
@@ -243,7 +247,7 @@ export function ImageUpload({
 
       {showGallery && allImages.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-gray-700">Images ({allImages.length})</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Images ({allImages.length})</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {allImages.map((image) => (
               <div
@@ -265,7 +269,7 @@ export function ImageUpload({
                         type="button"
                         onClick={() => setFeaturedMutation.mutate(image.id)}
                         disabled={setFeaturedMutation.isPending}
-                        className="p-1.5 bg-white rounded-md text-gray-700 hover:bg-gray-100"
+                        className="p-1.5 bg-white dark:bg-gray-800 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                         title="Set as featured"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,7 +281,7 @@ export function ImageUpload({
                       type="button"
                       onClick={() => deleteMutation.mutate(image.id)}
                       disabled={deleteMutation.isPending}
-                      className="p-1.5 bg-white rounded-md text-error-600 hover:bg-error-50"
+                      className="p-1.5 bg-white dark:bg-gray-800 rounded-md text-error-600 hover:bg-error-50 dark:hover:bg-error-900/30"
                       title="Delete image"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

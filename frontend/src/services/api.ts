@@ -18,6 +18,7 @@ import type {
 
 const api = axios.create({
   baseURL: '/api',
+  timeout: 30000, // 30 second default timeout
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -52,6 +53,15 @@ export const dashboard = {
     incomplete_todos_count: number
   }> => {
     const response = await api.get('/dashboard')
+    return response.data
+  },
+
+  // Batched prefetch for cache warming - returns categories and locations in one request
+  prefetch: async (): Promise<{
+    categories: Category[]
+    locations: Location[]
+  }> => {
+    const response = await api.get('/dashboard/prefetch')
     return response.data
   },
 }
@@ -220,6 +230,12 @@ export const items = {
     return response.data
   },
 
+  // Lightweight endpoint for dropdowns - returns only id and name
+  listMinimal: async (): Promise<{ items: { id: number; name: string }[] }> => {
+    const response = await api.get('/items', { params: { minimal: true } })
+    return response.data
+  },
+
   get: async (id: number): Promise<{ item: Item }> => {
     const response = await api.get(`/items/${id}`)
     return response.data
@@ -248,12 +264,103 @@ export const items = {
     return response.data
   },
 
-  analyzeImage: async (file: File): Promise<{ results: AnalysisResult[] }> => {
+  analyzeImage: async (file?: File, query?: string, categoryNames?: string[]): Promise<{ results: AnalysisResult[] }> => {
     const formData = new FormData()
-    formData.append('image', file)
+    if (file) formData.append('image', file)
+    if (query) formData.append('query', query)
+    if (categoryNames && categoryNames.length > 0) {
+      formData.append('categories', JSON.stringify(categoryNames))
+    }
     const response = await api.post('/items/analyze-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 90000, // Image analysis can take up to 60s on the backend
     })
+    return response.data
+  },
+
+  searchManual: async (make: string, model: string): Promise<{ found: boolean; message: string }> => {
+    const response = await api.post('/items/search-manual', { make, model })
+    return response.data
+  },
+
+  downloadManual: async (itemId: number, make: string, model: string): Promise<{ success: boolean; message: string }> => {
+    // This can take a while as it searches and downloads
+    const response = await api.post(`/items/${itemId}/download-manual`, { make, model }, { timeout: 180000 })
+    return response.data
+  },
+
+  searchManualUrls: async (itemId: number, make: string, model: string, step: 'repositories' | 'ai' | 'web'): Promise<{
+    step: string
+    step_name: string
+    urls: string[]
+    count: number
+  }> => {
+    // AI step can take longer since it calls the AI API
+    const timeout = step === 'ai' ? 45000 : 30000
+    const response = await api.post(`/items/${itemId}/search-manual-urls`, { make, model, step }, { timeout })
+    return response.data
+  },
+
+  downloadManualFromUrl: async (itemId: number, url: string, make: string, model: string): Promise<{
+    success: boolean
+    message: string
+    file?: unknown
+    source_url?: string
+  }> => {
+    // PDF downloads can take up to 90 seconds on the backend
+    const response = await api.post(`/items/${itemId}/download-manual-url`, { url, make, model }, { timeout: 120000 })
+    return response.data
+  },
+
+  getAISuggestions: async (itemId: number, make: string, model: string, category?: string): Promise<{
+    suggestions: {
+      warranty_years?: number
+      maintenance_interval_months?: number
+      typical_lifespan_years?: number
+      notes?: string
+    } | null
+  }> => {
+    const response = await api.post(`/items/${itemId}/ai-suggestions`, { make, model, category })
+    return response.data
+  },
+
+  // Combined AI suggestions endpoint - no separate config check needed
+  // Returns provider info alongside suggestions for UI display
+  queryAISuggestions: async (itemId: number, make: string, model: string, category?: string): Promise<{
+    success: boolean
+    provider?: string | null
+    model?: string | null
+    suggestions?: {
+      warranty_years?: number
+      maintenance_interval_months?: number
+      typical_lifespan_years?: number
+      notes?: string
+    }
+    error?: string
+    raw_response?: string
+  }> => {
+    const response = await api.post(`/items/${itemId}/ai-query`, { make, model, category }, { timeout: 60000 })
+    return response.data
+  },
+
+  suggestParts: async (itemId: number, make: string, model: string, category?: string): Promise<{
+    success: boolean
+    provider?: string
+    parts?: Array<{
+      name: string
+      type: 'replacement' | 'consumable'
+      part_number: string | null
+      estimated_price: number | null
+      replacement_interval: string | null
+      purchase_urls: {
+        repairclinic: string
+        amazon: string
+        home_depot: string
+      }
+    }>
+    error?: string
+  }> => {
+    const response = await api.post(`/items/${itemId}/suggest-parts`, { make, model, category }, { timeout: 60000 })
     return response.data
   },
 }
@@ -267,6 +374,23 @@ export const parts = {
 
   create: async (data: Partial<Part> & { item_id: number }): Promise<{ part: Part }> => {
     const response = await api.post('/parts', data)
+    return response.data
+  },
+
+  createBatch: async (itemId: number, partsData: Array<{
+    name: string
+    type: 'replacement' | 'consumable'
+    part_number?: string | null
+    purchase_url?: string | null
+    purchase_urls?: {
+      repairclinic?: string
+      amazon?: string
+      home_depot?: string
+    } | null
+    price?: number | null
+    notes?: string | null
+  }>): Promise<{ parts: Part[]; count: number }> => {
+    const response = await api.post('/parts/batch', { item_id: itemId, parts: partsData })
     return response.data
   },
 
@@ -516,7 +640,15 @@ export interface AISettings {
 export type AllSettings = StorageSettings & EmailSettings & AISettings
 
 export const settings = {
-  get: async (): Promise<{ settings: Record<string, string | null> }> => {
+  get: async (): Promise<{
+    settings: Record<string, string | null>
+    key_status: {
+      anthropic_api_key_set: boolean
+      openai_api_key_set: boolean
+      gemini_api_key_set: boolean
+      local_api_key_set: boolean
+    }
+  }> => {
     const response = await api.get('/settings')
     return response.data
   },
@@ -538,6 +670,11 @@ export const settings = {
 
   checkAI: async (): Promise<{ provider: string; configured: boolean }> => {
     const response = await api.get('/settings/ai')
+    return response.data
+  },
+
+  testAI: async (settings?: AISettings): Promise<{ success: boolean; message: string; provider?: string; model?: string }> => {
+    const response = await api.post('/settings/ai/test', settings ? { settings } : {})
     return response.data
   },
 }

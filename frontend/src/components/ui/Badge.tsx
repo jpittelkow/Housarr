@@ -10,11 +10,11 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, variant = 'gray', size = 'md', dot, children, ...props }, ref) => {
     const variants = {
-      gray: 'bg-gray-100 text-gray-700 ring-gray-200/50',
-      primary: 'bg-primary-50 text-primary-700 ring-primary-200/50',
-      success: 'bg-success-50 text-success-700 ring-success-200/50',
-      warning: 'bg-warning-50 text-warning-700 ring-warning-200/50',
-      error: 'bg-error-50 text-error-700 ring-error-200/50',
+      gray: 'bg-gray-100 text-gray-700 ring-gray-200/50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700/50',
+      primary: 'bg-primary-50 text-primary-700 ring-primary-200/50 dark:bg-primary-900/30 dark:text-primary-300 dark:ring-primary-800/50',
+      success: 'bg-success-50 text-success-700 ring-success-200/50 dark:bg-success-900/30 dark:text-success-300 dark:ring-success-800/50',
+      warning: 'bg-warning-50 text-warning-700 ring-warning-200/50 dark:bg-warning-900/30 dark:text-warning-300 dark:ring-warning-800/50',
+      error: 'bg-error-50 text-error-700 ring-error-200/50 dark:bg-error-900/30 dark:text-error-300 dark:ring-error-800/50',
     }
 
     const dotColors = {

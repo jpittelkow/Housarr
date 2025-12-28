@@ -99,18 +99,18 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="pb-5 border-b border-gray-200">
-        <h1 className="text-display-sm font-semibold text-gray-900">Profile</h1>
-        <p className="mt-1 text-text-md text-gray-500">
+      <div className="pb-5 border-b border-gray-200 dark:border-gray-800">
+        <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50">Profile</h1>
+        <p className="mt-1 text-text-md text-gray-500 dark:text-gray-400">
           Manage your account settings and change your password.
         </p>
       </div>
 
       {/* Avatar Section */}
       <Card>
-        <CardHeader className="border-b border-gray-200">
+        <CardHeader className="border-b border-gray-200 dark:border-gray-800">
           <CardTitle className="flex items-center gap-2">
-            <Icon icon={User} size="sm" className="text-gray-400" />
+            <Icon icon={User} size="sm" className="text-gray-400 dark:text-gray-500" />
             Profile Photo
           </CardTitle>
         </CardHeader>
@@ -136,9 +136,9 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Information */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-800">
             <CardTitle className="flex items-center gap-2">
-              <Icon icon={User} size="sm" className="text-gray-400" />
+              <Icon icon={User} size="sm" className="text-gray-400 dark:text-gray-500" />
               Profile Information
             </CardTitle>
             {!isEditingProfile && (
@@ -190,20 +190,20 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Name</p>
-                  <p className="mt-1 text-gray-900">{user?.name}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Name</p>
+                  <p className="mt-1 text-gray-900 dark:text-gray-50">{user?.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Email</p>
-                  <p className="mt-1 text-gray-900">{user?.email}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</p>
+                  <p className="mt-1 text-gray-900 dark:text-gray-50">{user?.email}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Role</p>
-                  <p className="mt-1 text-gray-900 capitalize">{user?.role}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Role</p>
+                  <p className="mt-1 text-gray-900 dark:text-gray-50 capitalize">{user?.role}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Household</p>
-                  <p className="mt-1 text-gray-900">{user?.household?.name}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Household</p>
+                  <p className="mt-1 text-gray-900 dark:text-gray-50">{user?.household?.name}</p>
                 </div>
               </div>
             )}

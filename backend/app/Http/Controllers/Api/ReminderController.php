@@ -100,8 +100,9 @@ class ReminderController extends Controller
 
         $reminder->snooze($validated['days'] ?? 1);
 
+        // Model is already updated in memory after snooze(), no need for fresh()
         return response()->json([
-            'reminder' => new ReminderResource($reminder->fresh()->load(['item', 'part', 'user'])),
+            'reminder' => new ReminderResource($reminder->load(['item', 'part', 'user'])),
         ]);
     }
 
@@ -111,9 +112,10 @@ class ReminderController extends Controller
 
         $reminder->complete();
 
+        // Model is already updated in memory after complete(), no need for fresh()
         return response()->json([
             'message' => 'Reminder completed successfully',
-            'reminder' => new ReminderResource($reminder->fresh()->load(['item', 'part', 'user'])),
+            'reminder' => new ReminderResource($reminder->load(['item', 'part', 'user'])),
         ]);
     }
 }

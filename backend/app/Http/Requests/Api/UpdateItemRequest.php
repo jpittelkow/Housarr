@@ -41,6 +41,9 @@ class UpdateItemRequest extends FormRequest
             'install_date' => ['nullable', 'date', 'before_or_equal:today'],
             'location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'warranty_years' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'maintenance_interval_months' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'typical_lifespan_years' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

@@ -26,6 +26,7 @@ export {
   Download,
   Upload,
   RefreshCw,
+  Loader2,
   Copy,
   ExternalLink,
   Package,
@@ -84,6 +85,7 @@ export {
 export { Button, type ButtonProps } from './Button'
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card'
 export { Checkbox } from './Checkbox'
+export { DocumentUpload } from './DocumentUpload'
 export { Dropdown, DropdownItem, DropdownDivider, DropdownLabel } from './Dropdown'
 export { EmptyState } from './EmptyState'
 export { Input, type InputProps } from './Input'
@@ -94,3 +96,7 @@ export { Tabs, TabList, Tab, TabPanel } from './Tabs'
 export { Textarea, type TextareaProps } from './Textarea'
 export { Toggle } from './Toggle'
 export { Tooltip, HelpTooltip } from './Tooltip'
+export { ThemeToggle } from './ThemeToggle'
+
+// Re-export theme icons
+export { Sun, Moon, Monitor } from './Icon'

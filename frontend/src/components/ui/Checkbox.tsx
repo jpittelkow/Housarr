@@ -23,10 +23,10 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           />
           <div
             className={cn(
-              'h-5 w-5 rounded border border-gray-300 bg-white transition-colors',
-              'peer-focus-visible:ring-4 peer-focus-visible:ring-primary-100 peer-focus-visible:border-primary-300',
-              'peer-checked:bg-primary-600 peer-checked:border-primary-600',
-              'peer-disabled:bg-gray-100 peer-disabled:cursor-not-allowed',
+              'h-5 w-5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors',
+              'peer-focus-visible:ring-4 peer-focus-visible:ring-primary-100 dark:peer-focus-visible:ring-primary-900/30 peer-focus-visible:border-primary-300 dark:peer-focus-visible:border-primary-600',
+              'peer-checked:bg-primary-600 peer-checked:border-primary-600 dark:peer-checked:bg-primary-500 dark:peer-checked:border-primary-500',
+              'peer-disabled:bg-gray-100 dark:peer-disabled:bg-gray-900 peer-disabled:cursor-not-allowed',
               className
             )}
           >
@@ -38,13 +38,13 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             {label && (
               <label
                 htmlFor={inputId}
-                className="text-sm font-medium text-gray-700 cursor-pointer"
+                className="text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer"
               >
                 {label}
               </label>
             )}
             {description && (
-              <p className="text-sm text-gray-500">{description}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
             )}
           </div>
         )}

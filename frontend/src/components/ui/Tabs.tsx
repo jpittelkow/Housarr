@@ -47,7 +47,7 @@ function TabList({ children, className }: TabListProps) {
   return (
     <div
       className={cn(
-        'flex border-b border-gray-200',
+        'flex border-b border-gray-200 dark:border-gray-800',
         className
       )}
       role="tablist"
@@ -77,10 +77,10 @@ function Tab({ value, children, className, disabled }: TabProps) {
       onClick={() => setActiveTab(value)}
       className={cn(
         'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:focus-visible:ring-primary-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900',
         isActive
-          ? 'border-primary-600 text-primary-600'
-          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}

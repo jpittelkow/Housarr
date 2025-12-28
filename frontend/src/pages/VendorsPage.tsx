@@ -20,15 +20,15 @@ function VendorSkeleton() {
         <div className="animate-pulse">
           <div className="flex items-start justify-between mb-3">
             <div className="space-y-2">
-              <div className="h-5 bg-gray-200 rounded w-32" />
-              <div className="h-4 bg-gray-100 rounded w-40" />
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-32" />
+              <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-40" />
             </div>
-            <div className="h-6 bg-gray-100 rounded-full w-16" />
+            <div className="h-6 bg-gray-100 dark:bg-gray-800 rounded-full w-16" />
           </div>
           <div className="space-y-2 mt-4">
-            <div className="h-4 bg-gray-100 rounded w-28" />
-            <div className="h-4 bg-gray-100 rounded w-36" />
-            <div className="h-4 bg-gray-100 rounded w-20" />
+            <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-28" />
+            <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36" />
+            <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-20" />
           </div>
         </div>
       </CardContent>
@@ -99,15 +99,15 @@ export default function VendorsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header - Untitled UI style */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-display-sm font-semibold text-gray-900 flex items-center gap-2">
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
             Vendors
             <HelpTooltip position="right">
               Keep track of contractors, repair services, and suppliers. Store contact info, specialties, and link vendors to items.
             </HelpTooltip>
           </h1>
-          <p className="text-text-md text-gray-500 mt-1">Your address book for service providers</p>
+          <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">Your address book for service providers</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)}>
           <Icon icon={Plus} size="xs" /> Add Vendor
@@ -146,14 +146,14 @@ export default function VendorsPage() {
                         className="w-10 h-10 rounded-lg object-cover"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <Icon icon={Users} size="sm" className="text-gray-400" />
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        <Icon icon={Users} size="sm" className="text-gray-400 dark:text-gray-500" />
                       </div>
                     )}
                     <div>
-                      <h3 className="font-semibold text-gray-900">{vendor.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-50">{vendor.name}</h3>
                       {vendor.company && (
-                        <p className="text-sm text-gray-500">{vendor.company}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{vendor.company}</p>
                       )}
                     </div>
                   </div>
@@ -168,7 +168,7 @@ export default function VendorsPage() {
                       size="sm"
                       onClick={() => setEditingVendor(vendor)}
                     >
-                      <Icon icon={Pencil} size="xs" className="text-gray-400" />
+                      <Icon icon={Pencil} size="xs" className="text-gray-400 dark:text-gray-500" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -179,33 +179,33 @@ export default function VendorsPage() {
                         }
                       }}
                     >
-                      <Icon icon={Trash2} size="xs" className="text-gray-400" />
+                      <Icon icon={Trash2} size="xs" className="text-gray-400 dark:text-gray-500" />
                     </Button>
                   </div>
                 </div>
 
                 <div className="space-y-2 text-sm">
                   {vendor.phone && (
-                    <a href={`tel:${vendor.phone}`} className="flex items-center gap-2 text-gray-600 hover:text-primary-600 transition-colors">
-                      <Icon icon={Phone} size="xs" className="text-gray-400" />
+                    <a href={`tel:${vendor.phone}`} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                      <Icon icon={Phone} size="xs" className="text-gray-400 dark:text-gray-500" />
                       {vendor.phone}
                     </a>
                   )}
                   {vendor.email && (
-                    <a href={`mailto:${vendor.email}`} className="flex items-center gap-2 text-gray-600 hover:text-primary-600 transition-colors">
-                      <Icon icon={Mail} size="xs" className="text-gray-400" />
+                    <a href={`mailto:${vendor.email}`} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                      <Icon icon={Mail} size="xs" className="text-gray-400 dark:text-gray-500" />
                       {vendor.email}
                     </a>
                   )}
                   {vendor.website && (
-                    <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 hover:text-primary-600 transition-colors">
-                      <Icon icon={Globe} size="xs" className="text-gray-400" />
+                    <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                      <Icon icon={Globe} size="xs" className="text-gray-400 dark:text-gray-500" />
                       Website
                     </a>
                   )}
                   {vendor.address && (
-                    <div className="flex items-start gap-2 text-gray-500">
-                      <Icon icon={MapPin} size="xs" className="mt-0.5 text-gray-400" />
+                    <div className="flex items-start gap-2 text-gray-500 dark:text-gray-400">
+                      <Icon icon={MapPin} size="xs" className="mt-0.5 text-gray-400 dark:text-gray-500" />
                       <span>{vendor.address}</span>
                     </div>
                   )}

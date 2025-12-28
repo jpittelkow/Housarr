@@ -42,7 +42,12 @@ class FileController extends Controller
         ]);
 
         $fileableClass = $this->fileableTypes[$validated['fileable_type']];
-        $fileable = $fileableClass::findOrFail($validated['fileable_id']);
+
+        // Eager load 'item' for types that need it to avoid N+1
+        $fileable = match ($validated['fileable_type']) {
+            'maintenance_log', 'part' => $fileableClass::with('item')->findOrFail($validated['fileable_id']),
+            default => $fileableClass::findOrFail($validated['fileable_id']),
+        };
 
         // Get household ID based on fileable type
         $householdId = $this->getHouseholdId($validated['fileable_type'], $fileable, $request);

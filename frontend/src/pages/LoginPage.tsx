@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, Home } from '@/components/ui'
+import { Icon, Home, ThemeToggle } from '@/components/ui'
 import { loginSchema, type LoginInput } from '@/lib/validations'
 import toast from 'react-hot-toast'
 
@@ -31,7 +31,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col justify-center bg-gray-50 dark:bg-gray-950 px-4 py-12 sm:px-6 lg:px-8 transition-colors duration-200">
+      {/* Theme Toggle in top right */}
+      <div className="fixed top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <div className="flex justify-center">
@@ -39,20 +44,20 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-xl bg-primary-600 flex items-center justify-center">
               <Icon icon={Home} size="md" className="text-white" />
             </div>
-            <span className="text-2xl font-bold text-gray-900">Housarr</span>
+            <span className="text-2xl font-bold text-gray-900 dark:text-gray-50">Housarr</span>
           </div>
         </div>
 
         {/* Header */}
         <div className="mt-6 text-center">
-          <h1 className="text-display-sm font-semibold text-gray-900">Welcome back</h1>
-          <p className="mt-2 text-text-md text-gray-500">Sign in to your account to continue</p>
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50">Welcome back</h1>
+          <p className="mt-2 text-text-md text-gray-500 dark:text-gray-400">Sign in to your account to continue</p>
         </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Card */}
-        <div className="bg-white py-8 px-6 shadow-sm border border-gray-200 rounded-xl sm:px-10">
+        <div className="bg-white dark:bg-gray-900 py-8 px-6 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl sm:px-10">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <Input
               label="Email"
@@ -79,11 +84,11 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           Don't have an account?{' '}
           <Link
             to="/register"
-            className="font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+            className="font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
           >
             Sign up
           </Link>

@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { categories, locations, profile } from '@/services/api'
+import { dashboard, profile } from '@/services/api'
 import { cn } from '@/lib/utils'
 import {
   Icon,
@@ -18,6 +18,7 @@ import {
   ChevronRight,
   HelpCircle,
   Sparkles,
+  ThemeToggle,
 } from '@/components/ui'
 import type { LucideIcon } from 'lucide-react'
 
@@ -48,18 +49,19 @@ export default function Layout() {
 
   const userAvatar = profileData?.user?.avatar
 
-  // Prefetch common data that's used across multiple pages
+  // Prefetch common data using batched endpoint (single request instead of two)
   useEffect(() => {
-    queryClient.prefetchQuery({
-      queryKey: ['categories'],
-      queryFn: () => categories.list(),
-      staleTime: 1000 * 60 * 10, // 10 minutes
-    })
-    queryClient.prefetchQuery({
-      queryKey: ['locations'],
-      queryFn: () => locations.list(),
-      staleTime: 1000 * 60 * 10, // 10 minutes
-    })
+    const prefetchData = async () => {
+      try {
+        const data = await dashboard.prefetch()
+        // Populate both caches from the single batched response
+        queryClient.setQueryData(['categories'], { categories: data.categories })
+        queryClient.setQueryData(['locations'], { locations: data.locations })
+      } catch {
+        // Silent fail - data will be fetched on demand
+      }
+    }
+    prefetchData()
   }, [queryClient])
 
   // Preload all page chunks in the background after initial render
@@ -102,11 +104,11 @@ export default function Layout() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-gray-900/50 z-40 lg:hidden animate-fade-in"
+          className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 z-40 lg:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -114,22 +116,22 @@ export default function Layout() {
       {/* Sidebar - Untitled UI pattern */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-full w-[280px] bg-white border-r border-gray-200',
+          'fixed top-0 left-0 z-50 h-full w-[280px] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800',
           'flex flex-col',
           'transform transition-transform duration-200 ease-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">H</span>
             </div>
-            <span className="text-xl font-semibold text-gray-900">Housarr</span>
+            <span className="text-xl font-semibold text-gray-900 dark:text-gray-50">Housarr</span>
           </div>
           <button
-            className="lg:hidden p-2 -mr-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="lg:hidden p-2 -mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             onClick={() => setSidebarOpen(false)}
           >
             <Icon icon={X} size="md" />
@@ -153,20 +155,20 @@ export default function Layout() {
                     'group flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium',
                     'transition-colors duration-150',
                     isActive
-                      ? 'bg-gray-50 text-primary-700'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-gray-50 dark:bg-gray-800 text-primary-700 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                   )}
                 >
                   <Icon
                     icon={item.icon}
                     size="sm"
                     className={cn(
-                      isActive ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-500'
+                      isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400'
                     )}
                   />
                   <span className="flex-1">{item.name}</span>
                   {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary-600" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary-600 dark:bg-primary-400" />
                   )}
                 </NavLink>
               )
@@ -175,9 +177,12 @@ export default function Layout() {
         </nav>
 
         {/* Footer section */}
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-gray-200 dark:border-gray-800 p-4 space-y-3">
+          {/* Theme toggle */}
+          <ThemeToggle className="w-full" />
+
           {/* User account */}
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
             <button
               onClick={() => {
                 setSidebarOpen(false)
@@ -192,20 +197,20 @@ export default function Layout() {
                   className="w-9 h-9 rounded-full object-cover"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <span className="text-sm font-medium text-gray-600">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     {user?.name?.charAt(0).toUpperCase()}
                   </span>
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-700 truncate">{user?.name}</p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
               </div>
             </button>
             <button
               onClick={handleLogout}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
               title="Sign out"
             >
               <Icon icon={LogOut} size="sm" />
@@ -217,10 +222,10 @@ export default function Layout() {
       {/* Main content */}
       <div className="lg:pl-[280px]">
         {/* Top bar - Untitled UI style */}
-        <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
+        <header className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
           <div className="flex h-16 items-center gap-4 px-4 lg:px-8">
             <button
-              className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="lg:hidden p-2 -ml-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               onClick={() => setSidebarOpen(true)}
             >
               <Icon icon={Menu} size="md" />
@@ -228,11 +233,11 @@ export default function Layout() {
 
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">{user?.household?.name || 'My Home'}</span>
+              <span className="text-gray-500 dark:text-gray-400">{user?.household?.name || 'My Home'}</span>
               {currentPage && (
                 <>
-                  <Icon icon={ChevronRight} size="xs" className="text-gray-300" />
-                  <span className="font-medium text-gray-900">{currentPage.name}</span>
+                  <Icon icon={ChevronRight} size="xs" className="text-gray-300 dark:text-gray-600" />
+                  <span className="font-medium text-gray-900 dark:text-gray-50">{currentPage.name}</span>
                 </>
               )}
             </div>

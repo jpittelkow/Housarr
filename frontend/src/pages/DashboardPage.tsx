@@ -41,13 +41,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Page Header - Untitled UI style */}
-      <div className="border-b border-gray-200 pb-5">
+      <div className="border-b border-gray-200 dark:border-gray-800 pb-5">
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-primary-600">{greeting()}</p>
-          <h1 className="text-display-sm font-semibold text-gray-900">
+          <p className="text-sm font-medium text-primary-600 dark:text-primary-400">{greeting()}</p>
+          <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50">
             Welcome back, {user?.name?.split(" ")[0]}
           </h1>
-          <p className="text-text-md text-gray-500 mt-1">
+          <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">
             Here's what's happening with your home today.
           </p>
         </div>
@@ -59,13 +59,13 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div className="h-10 w-10 rounded-lg border border-gray-200 bg-white shadow-xs flex items-center justify-center">
-                <Icon icon={Package} size="sm" className="text-gray-700" />
+              <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 shadow-xs flex items-center justify-center">
+                <Icon icon={Package} size="sm" className="text-gray-700 dark:text-gray-300" />
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{itemsCount}</p>
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+              <p className="text-display-xs font-semibold text-gray-900 dark:text-gray-50">{itemsCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                 Total items
                 <HelpTooltip position="bottom">
                   The total number of items you're tracking in your household inventory.
@@ -79,8 +79,8 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div className="h-10 w-10 rounded-lg border border-gray-200 bg-white shadow-xs flex items-center justify-center">
-                <Icon icon={Bell} size="sm" className="text-gray-700" />
+              <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 shadow-xs flex items-center justify-center">
+                <Icon icon={Bell} size="sm" className="text-gray-700 dark:text-gray-300" />
               </div>
               {upcomingReminders.length > 0 && (
                 <Badge variant="warning" size="sm" dot>
@@ -89,8 +89,8 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{upcomingReminders.length}</p>
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+              <p className="text-display-xs font-semibold text-gray-900 dark:text-gray-50">{upcomingReminders.length}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                 Upcoming reminders
                 <HelpTooltip position="bottom">
                   Maintenance reminders due within the next 30 days.
@@ -104,8 +104,8 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div className="h-10 w-10 rounded-lg border border-gray-200 bg-white shadow-xs flex items-center justify-center">
-                <Icon icon={AlertTriangle} size="sm" className="text-gray-700" />
+              <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 shadow-xs flex items-center justify-center">
+                <Icon icon={AlertTriangle} size="sm" className="text-gray-700 dark:text-gray-300" />
               </div>
               {overdueReminders.length > 0 && (
                 <Badge variant="error" size="sm" dot>
@@ -114,8 +114,8 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{overdueReminders.length}</p>
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+              <p className="text-display-xs font-semibold text-gray-900 dark:text-gray-50">{overdueReminders.length}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                 Overdue
                 <HelpTooltip position="bottom">
                   Reminders that have passed their due date and need attention.
@@ -129,13 +129,13 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div className="h-10 w-10 rounded-lg border border-gray-200 bg-white shadow-xs flex items-center justify-center">
-                <Icon icon={CheckSquare} size="sm" className="text-gray-700" />
+              <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 shadow-xs flex items-center justify-center">
+                <Icon icon={CheckSquare} size="sm" className="text-gray-700 dark:text-gray-300" />
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-display-xs font-semibold text-gray-900">{incompleteTodosCount}</p>
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+              <p className="text-display-xs font-semibold text-gray-900 dark:text-gray-50">{incompleteTodosCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                 Open todos
                 <HelpTooltip position="bottom">
                   Tasks that haven't been completed yet.
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming Reminders Card */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <CardTitle>Upcoming Reminders</CardTitle>
               {upcomingReminders.length > 0 && (
@@ -169,10 +169,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="flex items-center gap-4 animate-pulse">
-                      <div className="h-10 w-10 rounded-full bg-gray-100" />
+                      <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-100 rounded w-3/4" />
-                        <div className="h-3 bg-gray-100 rounded w-1/2" />
+                        <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-3/4" />
+                        <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/2" />
                       </div>
                     </div>
                   ))}
@@ -180,36 +180,36 @@ export default function DashboardPage() {
               </div>
             ) : upcomingReminders.length === 0 ? (
               <div className="py-12 px-6 text-center">
-                <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <Icon icon={Bell} size="md" className="text-gray-400" />
+                <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                  <Icon icon={Bell} size="md" className="text-gray-400 dark:text-gray-500" />
                 </div>
-                <p className="text-sm font-medium text-gray-900">No upcoming reminders</p>
-                <p className="text-sm text-gray-500 mt-1">You're all caught up!</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-50">No upcoming reminders</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">You're all caught up!</p>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-200">
+              <ul className="divide-y divide-gray-200 dark:divide-gray-800">
                 {upcomingReminders.slice(0, 5).map((reminder) => {
                   const isOverdue = new Date(reminder.due_date) < new Date()
                   return (
                     <li
                       key={reminder.id}
-                      className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
+                      className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                     >
                       <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                        isOverdue ? 'bg-error-100' : 'bg-warning-100'
+                        isOverdue ? 'bg-error-100 dark:bg-error-900/30' : 'bg-warning-100 dark:bg-warning-900/30'
                       }`}>
                         <Icon
                           icon={Calendar}
                           size="sm"
-                          className={isOverdue ? 'text-error-600' : 'text-warning-600'}
+                          className={isOverdue ? 'text-error-600 dark:text-error-400' : 'text-warning-600 dark:text-warning-400'}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">
                           {reminder.title}
                         </p>
                         {reminder.item && (
-                          <p className="text-sm text-gray-500 truncate">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                             {reminder.item.name}
                           </p>
                         )}
@@ -227,7 +227,7 @@ export default function DashboardPage() {
 
         {/* Open Todos Card */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <CardTitle>Open Todos</CardTitle>
               {incompleteTodos.length > 0 && (
@@ -246,10 +246,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="flex items-center gap-4 animate-pulse">
-                      <div className="h-10 w-10 rounded-full bg-gray-100" />
+                      <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-100 rounded w-3/4" />
-                        <div className="h-3 bg-gray-100 rounded w-1/2" />
+                        <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-3/4" />
+                        <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/2" />
                       </div>
                     </div>
                   ))}
@@ -257,36 +257,36 @@ export default function DashboardPage() {
               </div>
             ) : incompleteTodos.length === 0 ? (
               <div className="py-12 px-6 text-center">
-                <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <Icon icon={CheckSquare} size="md" className="text-gray-400" />
+                <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                  <Icon icon={CheckSquare} size="md" className="text-gray-400 dark:text-gray-500" />
                 </div>
-                <p className="text-sm font-medium text-gray-900">No open todos</p>
-                <p className="text-sm text-gray-500 mt-1">Create a todo to get started</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-50">No open todos</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Create a todo to get started</p>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-200">
+              <ul className="divide-y divide-gray-200 dark:divide-gray-800">
                 {incompleteTodos.slice(0, 5).map((todo) => {
                   const priorityStyles = {
-                    high: { bg: 'bg-error-100', icon: 'text-error-600', badge: 'error' as const },
-                    medium: { bg: 'bg-warning-100', icon: 'text-warning-600', badge: 'warning' as const },
-                    low: { bg: 'bg-gray-100', icon: 'text-gray-600', badge: 'gray' as const },
+                    high: { bg: 'bg-error-100 dark:bg-error-900/30', icon: 'text-error-600 dark:text-error-400', badge: 'error' as const },
+                    medium: { bg: 'bg-warning-100 dark:bg-warning-900/30', icon: 'text-warning-600 dark:text-warning-400', badge: 'warning' as const },
+                    low: { bg: 'bg-gray-100 dark:bg-gray-800', icon: 'text-gray-600 dark:text-gray-400', badge: 'gray' as const },
                   }
                   const style = priorityStyles[todo.priority as keyof typeof priorityStyles] || priorityStyles.low
 
                   return (
                     <li
                       key={todo.id}
-                      className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
+                      className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                     >
                       <div className={`h-10 w-10 rounded-full flex items-center justify-center ${style.bg}`}>
                         <Icon icon={Circle} size="sm" className={style.icon} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate">
                           {todo.title}
                         </p>
                         {todo.item && (
-                          <p className="text-sm text-gray-500 truncate">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                             {todo.item.name}
                           </p>
                         )}

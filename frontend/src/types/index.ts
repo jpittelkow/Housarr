@@ -73,6 +73,9 @@ export interface Item {
   install_date: string | null
   location: string | null
   notes: string | null
+  warranty_years: number | null
+  maintenance_interval_months: number | null
+  typical_lifespan_years: number | null
   category?: Category
   vendor?: Vendor
   location_obj?: Location
@@ -93,6 +96,12 @@ export interface Part {
   part_number: string | null
   type: 'replacement' | 'consumable'
   purchase_url: string | null
+  purchase_urls: {
+    repairclinic?: string
+    amazon?: string
+    home_depot?: string
+    primary?: string
+  } | null
   price: number | null
   notes: string | null
   images?: FileRecord[]

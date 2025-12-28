@@ -24,6 +24,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BackupController extends Controller
 {
+    /**
+     * Export household data with memory-efficient streaming.
+     */
     public function export(Request $request): StreamedResponse
     {
         $user = $request->user();
@@ -33,33 +36,118 @@ class BackupController extends Controller
         }
 
         $householdId = $user->household_id;
-
-        $data = [
-            'version' => '1.0',
-            'exported_at' => Carbon::now()->toIso8601String(),
-            'household' => Household::find($householdId),
-            'users' => User::where('household_id', $householdId)
-                ->get()
-                ->map(fn($u) => $u->makeVisible(['password'])->toArray()),
-            'categories' => Category::where('household_id', $householdId)->get(),
-            'locations' => Location::where('household_id', $householdId)->get(),
-            'vendors' => Vendor::where('household_id', $householdId)->get(),
-            'items' => Item::where('household_id', $householdId)->get(),
-            'parts' => Part::whereHas('item', fn($q) => $q->where('household_id', $householdId))->get(),
-            'maintenance_logs' => MaintenanceLog::where('household_id', $householdId)->get(),
-            'reminders' => Reminder::where('household_id', $householdId)->get(),
-            'todos' => Todo::where('household_id', $householdId)->get(),
-            'notifications' => Notification::whereHas('user', fn($q) => $q->where('household_id', $householdId))->get(),
-            'files' => File::where('household_id', $householdId)->get(),
-        ];
-
         $filename = 'housarr-backup-' . Carbon::now()->format('Y-m-d-His') . '.json';
 
-        return response()->streamDownload(function () use ($data) {
-            echo json_encode($data, JSON_PRETTY_PRINT);
-        }, $filename, [
+        return response()->stream(function () use ($householdId) {
+            // Start JSON object
+            echo '{';
+            echo '"version":"1.0",';
+            echo '"exported_at":"' . Carbon::now()->toIso8601String() . '",';
+
+            // Export household (single record)
+            echo '"household":' . json_encode(Household::find($householdId)) . ',';
+
+            // Export users with password visible
+            echo '"users":';
+            $this->streamCollection(
+                User::where('household_id', $householdId),
+                fn($u) => $u->makeVisible(['password'])->toArray()
+            );
+            echo ',';
+
+            // Export categories
+            echo '"categories":';
+            $this->streamCollection(Category::where('household_id', $householdId));
+            echo ',';
+
+            // Export locations
+            echo '"locations":';
+            $this->streamCollection(Location::where('household_id', $householdId));
+            echo ',';
+
+            // Export vendors
+            echo '"vendors":';
+            $this->streamCollection(Vendor::where('household_id', $householdId));
+            echo ',';
+
+            // Export items
+            echo '"items":';
+            $this->streamCollection(Item::where('household_id', $householdId));
+            echo ',';
+
+            // Export parts (use join instead of whereHas for efficiency)
+            echo '"parts":';
+            $this->streamCollection(
+                Part::select('parts.*')
+                    ->join('items', 'parts.item_id', '=', 'items.id')
+                    ->where('items.household_id', $householdId)
+            );
+            echo ',';
+
+            // Export maintenance logs
+            echo '"maintenance_logs":';
+            $this->streamCollection(MaintenanceLog::where('household_id', $householdId));
+            echo ',';
+
+            // Export reminders
+            echo '"reminders":';
+            $this->streamCollection(Reminder::where('household_id', $householdId));
+            echo ',';
+
+            // Export todos
+            echo '"todos":';
+            $this->streamCollection(Todo::where('household_id', $householdId));
+            echo ',';
+
+            // Export notifications (use join instead of whereHas)
+            echo '"notifications":';
+            $this->streamCollection(
+                Notification::select('notifications.*')
+                    ->join('users', 'notifications.user_id', '=', 'users.id')
+                    ->where('users.household_id', $householdId)
+            );
+            echo ',';
+
+            // Export files
+            echo '"files":';
+            $this->streamCollection(File::where('household_id', $householdId));
+
+            // End JSON object
+            echo '}';
+        }, 200, [
             'Content-Type' => 'application/json',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Stream a collection in chunks to avoid memory issues.
+     */
+    protected function streamCollection($query, ?callable $transform = null): void
+    {
+        echo '[';
+        $first = true;
+
+        $query->orderBy($query->getModel()->getKeyName())
+            ->chunk(100, function ($records) use (&$first, $transform) {
+                foreach ($records as $record) {
+                    if (!$first) {
+                        echo ',';
+                    }
+                    $first = false;
+
+                    $data = $transform ? $transform($record) : $record->toArray();
+                    echo json_encode($data);
+
+                    // Flush output buffer periodically
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+                    flush();
+                }
+            });
+
+        echo ']';
     }
 
     public function import(Request $request): JsonResponse

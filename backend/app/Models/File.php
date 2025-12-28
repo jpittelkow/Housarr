@@ -31,6 +31,9 @@ class File extends Model
 
     protected $appends = ['url'];
 
+    // Cache the URL to avoid repeated Storage::disk() calls during serialization
+    protected ?string $cachedUrl = null;
+
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
@@ -43,7 +46,11 @@ class File extends Model
 
     public function getUrlAttribute(): string
     {
-        return Storage::disk($this->disk)->url($this->path);
+        // Cache URL per instance to avoid repeated Storage::disk() overhead
+        if ($this->cachedUrl === null) {
+            $this->cachedUrl = Storage::disk($this->disk)->url($this->path);
+        }
+        return $this->cachedUrl;
     }
 
     public function deleteFile(): bool

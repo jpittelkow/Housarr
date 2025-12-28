@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useReducer, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { household, users, categories, locations, auth, backup, settings, type StorageSettings, type EmailSettings, type AISettings } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -11,6 +11,90 @@ import { Badge } from '@/components/ui/Badge'
 import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import toast from 'react-hot-toast'
+
+// Settings state management with useReducer for better performance
+type SettingsState = {
+  storage: StorageSettings
+  email: EmailSettings
+  ai: AISettings
+  aiKeyEditing: { anthropic: boolean; openai: boolean; gemini: boolean; local: boolean }
+}
+
+type SettingsAction =
+  | { type: 'SET_STORAGE'; payload: Partial<StorageSettings> }
+  | { type: 'SET_EMAIL'; payload: Partial<EmailSettings> }
+  | { type: 'SET_AI'; payload: Partial<AISettings> }
+  | { type: 'SET_AI_KEY_EDITING'; payload: Partial<SettingsState['aiKeyEditing']> }
+  | { type: 'RESET_STORAGE'; payload: StorageSettings }
+  | { type: 'RESET_EMAIL'; payload: EmailSettings }
+  | { type: 'RESET_AI'; payload: AISettings }
+  | { type: 'RESET_AI_KEY_EDITING' }
+
+const initialSettingsState: SettingsState = {
+  storage: {
+    storage_driver: 'local',
+    aws_access_key_id: '',
+    aws_secret_access_key: '',
+    aws_default_region: '',
+    aws_bucket: '',
+    aws_endpoint: '',
+  },
+  email: {
+    mail_driver: 'log',
+    mail_host: '',
+    mail_port: 587,
+    mail_username: '',
+    mail_password: '',
+    mail_encryption: 'tls',
+    mail_from_address: '',
+    mail_from_name: '',
+    mailgun_domain: '',
+    mailgun_secret: '',
+    mailgun_endpoint: 'api.mailgun.net',
+    sendgrid_api_key: '',
+    ses_key: '',
+    ses_secret: '',
+    ses_region: 'us-east-1',
+    cloudflare_api_token: '',
+    cloudflare_account_id: '',
+  },
+  ai: {
+    ai_provider: 'none',
+    ai_model: '',
+    anthropic_api_key: '',
+    openai_api_key: '',
+    openai_base_url: '',
+    gemini_api_key: '',
+    gemini_base_url: '',
+    local_base_url: '',
+    local_model: '',
+    local_api_key: '',
+  },
+  aiKeyEditing: { anthropic: false, openai: false, gemini: false, local: false },
+}
+
+function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
+  switch (action.type) {
+    case 'SET_STORAGE':
+      return { ...state, storage: { ...state.storage, ...action.payload } }
+    case 'SET_EMAIL':
+      return { ...state, email: { ...state.email, ...action.payload } }
+    case 'SET_AI':
+      return { ...state, ai: { ...state.ai, ...action.payload } }
+    case 'SET_AI_KEY_EDITING':
+      return { ...state, aiKeyEditing: { ...state.aiKeyEditing, ...action.payload } }
+    case 'RESET_STORAGE':
+      return { ...state, storage: action.payload }
+    case 'RESET_EMAIL':
+      return { ...state, email: action.payload }
+    case 'RESET_AI':
+      return { ...state, ai: action.payload }
+    case 'RESET_AI_KEY_EDITING':
+      return { ...state, aiKeyEditing: { anthropic: false, openai: false, gemini: false, local: false } }
+    default:
+      return state
+  }
+}
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
@@ -33,45 +117,24 @@ export default function SettingsPage() {
   const [editingUser, setEditingUser] = useState<{ id: number; name: string; email: string; role: 'admin' | 'member' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isExporting, setIsExporting] = useState(false)
-  const [storageSettings, setStorageSettings] = useState<StorageSettings>({
-    storage_driver: 'local',
-    aws_access_key_id: '',
-    aws_secret_access_key: '',
-    aws_default_region: '',
-    aws_bucket: '',
-    aws_endpoint: '',
-  })
-  const [emailSettings, setEmailSettings] = useState<EmailSettings>({
-    mail_driver: 'log',
-    mail_host: '',
-    mail_port: 587,
-    mail_username: '',
-    mail_password: '',
-    mail_encryption: 'tls',
-    mail_from_address: '',
-    mail_from_name: '',
-    mailgun_domain: '',
-    mailgun_secret: '',
-    mailgun_endpoint: 'api.mailgun.net',
-    sendgrid_api_key: '',
-    ses_key: '',
-    ses_secret: '',
-    ses_region: 'us-east-1',
-    cloudflare_api_token: '',
-    cloudflare_account_id: '',
-  })
-  const [aiSettings, setAISettings] = useState<AISettings>({
-    ai_provider: 'none',
-    ai_model: '',
-    anthropic_api_key: '',
-    openai_api_key: '',
-    openai_base_url: '',
-    gemini_api_key: '',
-    gemini_base_url: '',
-    local_base_url: '',
-    local_model: '',
-    local_api_key: '',
-  })
+
+  // Use reducer for settings state - better performance than multiple useState
+  const [settingsState, dispatchSettings] = useReducer(settingsReducer, initialSettingsState)
+  const { storage: storageSettings, email: emailSettings, ai: aiSettings, aiKeyEditing } = settingsState
+
+  // Memoized dispatch helpers to avoid creating new functions on each render
+  const setStorageSettings = useCallback((updates: Partial<StorageSettings>) => {
+    dispatchSettings({ type: 'SET_STORAGE', payload: updates })
+  }, [])
+  const setEmailSettings = useCallback((updates: Partial<EmailSettings>) => {
+    dispatchSettings({ type: 'SET_EMAIL', payload: updates })
+  }, [])
+  const setAISettings = useCallback((updates: Partial<AISettings>) => {
+    dispatchSettings({ type: 'SET_AI', payload: updates })
+  }, [])
+  const setAIKeyEditing = useCallback((updates: Partial<SettingsState['aiKeyEditing']>) => {
+    dispatchSettings({ type: 'SET_AI_KEY_EDITING', payload: updates })
+  }, [])
 
   const { data: householdData } = useQuery({
     queryKey: ['household'],
@@ -99,50 +162,59 @@ export default function SettingsPage() {
     enabled: user?.role === 'admin',
   })
 
-  // Populate settings when data is loaded
+  // Populate settings when data is loaded - use RESET for full state replacement
   useEffect(() => {
     if (settingsData?.settings) {
       // Storage settings
-      setStorageSettings({
-        storage_driver: (settingsData.settings.storage_driver as 'local' | 's3') || 'local',
-        aws_access_key_id: '',
-        aws_secret_access_key: '',
-        aws_default_region: settingsData.settings.aws_default_region || '',
-        aws_bucket: settingsData.settings.aws_bucket || '',
-        aws_endpoint: settingsData.settings.aws_endpoint || '',
+      dispatchSettings({
+        type: 'RESET_STORAGE',
+        payload: {
+          storage_driver: (settingsData.settings.storage_driver as 'local' | 's3') || 'local',
+          aws_access_key_id: '',
+          aws_secret_access_key: '',
+          aws_default_region: settingsData.settings.aws_default_region || '',
+          aws_bucket: settingsData.settings.aws_bucket || '',
+          aws_endpoint: settingsData.settings.aws_endpoint || '',
+        },
       })
       // Email settings
-      setEmailSettings({
-        mail_driver: (settingsData.settings.mail_driver as EmailSettings['mail_driver']) || 'log',
-        mail_host: settingsData.settings.mail_host || '',
-        mail_port: settingsData.settings.mail_port ? parseInt(settingsData.settings.mail_port) : 587,
-        mail_username: '',
-        mail_password: '',
-        mail_encryption: (settingsData.settings.mail_encryption as 'tls' | 'ssl' | 'null') || 'tls',
-        mail_from_address: settingsData.settings.mail_from_address || '',
-        mail_from_name: settingsData.settings.mail_from_name || '',
-        mailgun_domain: settingsData.settings.mailgun_domain || '',
-        mailgun_secret: '',
-        mailgun_endpoint: settingsData.settings.mailgun_endpoint || 'api.mailgun.net',
-        sendgrid_api_key: '',
-        ses_key: '',
-        ses_secret: '',
-        ses_region: settingsData.settings.ses_region || 'us-east-1',
-        cloudflare_api_token: '',
-        cloudflare_account_id: settingsData.settings.cloudflare_account_id || '',
+      dispatchSettings({
+        type: 'RESET_EMAIL',
+        payload: {
+          mail_driver: (settingsData.settings.mail_driver as EmailSettings['mail_driver']) || 'log',
+          mail_host: settingsData.settings.mail_host || '',
+          mail_port: settingsData.settings.mail_port ? parseInt(settingsData.settings.mail_port) : 587,
+          mail_username: '',
+          mail_password: '',
+          mail_encryption: (settingsData.settings.mail_encryption as 'tls' | 'ssl' | 'null') || 'tls',
+          mail_from_address: settingsData.settings.mail_from_address || '',
+          mail_from_name: settingsData.settings.mail_from_name || '',
+          mailgun_domain: settingsData.settings.mailgun_domain || '',
+          mailgun_secret: '',
+          mailgun_endpoint: settingsData.settings.mailgun_endpoint || 'api.mailgun.net',
+          sendgrid_api_key: '',
+          ses_key: '',
+          ses_secret: '',
+          ses_region: settingsData.settings.ses_region || 'us-east-1',
+          cloudflare_api_token: '',
+          cloudflare_account_id: settingsData.settings.cloudflare_account_id || '',
+        },
       })
       // AI settings
-      setAISettings({
-        ai_provider: (settingsData.settings.ai_provider as AISettings['ai_provider']) || 'none',
-        ai_model: settingsData.settings.ai_model || '',
-        anthropic_api_key: '',
-        openai_api_key: '',
-        openai_base_url: settingsData.settings.openai_base_url || '',
-        gemini_api_key: '',
-        gemini_base_url: settingsData.settings.gemini_base_url || '',
-        local_base_url: settingsData.settings.local_base_url || '',
-        local_model: settingsData.settings.local_model || '',
-        local_api_key: '',
+      dispatchSettings({
+        type: 'RESET_AI',
+        payload: {
+          ai_provider: (settingsData.settings.ai_provider as AISettings['ai_provider']) || 'none',
+          ai_model: settingsData.settings.ai_model || '',
+          anthropic_api_key: '',
+          openai_api_key: '',
+          openai_base_url: settingsData.settings.openai_base_url || '',
+          gemini_api_key: '',
+          gemini_base_url: settingsData.settings.gemini_base_url || '',
+          local_base_url: settingsData.settings.local_base_url || '',
+          local_model: settingsData.settings.local_model || '',
+          local_api_key: '',
+        },
       })
     }
   }, [settingsData])
@@ -277,10 +349,23 @@ export default function SettingsPage() {
     mutationFn: (data: AISettings) => settings.update(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+      // Reset editing state
+      setAIKeyEditing({ anthropic: false, openai: false, gemini: false, local: false })
       toast.success('AI settings updated')
     },
     onError: () => {
       toast.error('Failed to update AI settings')
+    },
+  })
+
+  const testAIMutation = useMutation({
+    mutationFn: (testSettings: AISettings) => settings.testAI(testSettings),
+    onSuccess: (data) => {
+      toast.success(`${data.message} (${data.provider}: ${data.model})`)
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+      const message = error.response?.data?.message || 'Failed to connect to AI provider'
+      toast.error(message)
     },
   })
 
@@ -663,7 +748,7 @@ export default function SettingsPage() {
                       name="storage_driver"
                       value="local"
                       checked={storageSettings.storage_driver === 'local'}
-                      onChange={(e) => setStorageSettings({ ...storageSettings, storage_driver: e.target.value as 'local' | 's3' })}
+                      onChange={(e) => setStorageSettings({ storage_driver: e.target.value as 'local' | 's3' })}
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                     />
                     <span className="text-sm text-gray-900">Local</span>
@@ -674,7 +759,7 @@ export default function SettingsPage() {
                       name="storage_driver"
                       value="s3"
                       checked={storageSettings.storage_driver === 's3'}
-                      onChange={(e) => setStorageSettings({ ...storageSettings, storage_driver: e.target.value as 'local' | 's3' })}
+                      onChange={(e) => setStorageSettings({ storage_driver: e.target.value as 'local' | 's3' })}
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                     />
                     <span className="text-sm text-gray-900">S3 / S3-Compatible</span>
@@ -691,32 +776,32 @@ export default function SettingsPage() {
                     label="Access Key ID"
                     type="password"
                     value={storageSettings.aws_access_key_id || ''}
-                    onChange={(e) => setStorageSettings({ ...storageSettings, aws_access_key_id: e.target.value })}
+                    onChange={(e) => setStorageSettings({ aws_access_key_id: e.target.value })}
                     placeholder="Enter access key (leave blank to keep current)"
                   />
                   <Input
                     label="Secret Access Key"
                     type="password"
                     value={storageSettings.aws_secret_access_key || ''}
-                    onChange={(e) => setStorageSettings({ ...storageSettings, aws_secret_access_key: e.target.value })}
+                    onChange={(e) => setStorageSettings({ aws_secret_access_key: e.target.value })}
                     placeholder="Enter secret key (leave blank to keep current)"
                   />
                   <Input
                     label="Region"
                     value={storageSettings.aws_default_region || ''}
-                    onChange={(e) => setStorageSettings({ ...storageSettings, aws_default_region: e.target.value })}
+                    onChange={(e) => setStorageSettings({ aws_default_region: e.target.value })}
                     placeholder="e.g., us-east-1"
                   />
                   <Input
                     label="Bucket"
                     value={storageSettings.aws_bucket || ''}
-                    onChange={(e) => setStorageSettings({ ...storageSettings, aws_bucket: e.target.value })}
+                    onChange={(e) => setStorageSettings({ aws_bucket: e.target.value })}
                     placeholder="e.g., my-bucket"
                   />
                   <Input
                     label="Endpoint (for S3-compatible services)"
                     value={storageSettings.aws_endpoint || ''}
-                    onChange={(e) => setStorageSettings({ ...storageSettings, aws_endpoint: e.target.value })}
+                    onChange={(e) => setStorageSettings({ aws_endpoint: e.target.value })}
                     placeholder="e.g., https://minio.example.com"
                     hint="Leave blank for AWS S3. Required for MinIO, DigitalOcean Spaces, etc."
                   />
@@ -765,7 +850,7 @@ export default function SettingsPage() {
                     { value: 'cloudflare', label: 'Cloudflare Email' },
                   ]}
                   value={emailSettings.mail_driver || 'log'}
-                  onChange={(e) => setEmailSettings({ ...emailSettings, mail_driver: e.target.value as EmailSettings['mail_driver'] })}
+                  onChange={(e) => setEmailSettings({ mail_driver: e.target.value as EmailSettings['mail_driver'] })}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Select your email service provider. "Log Only" writes emails to logs instead of sending.
@@ -780,13 +865,13 @@ export default function SettingsPage() {
                     label="From Email Address"
                     type="email"
                     value={emailSettings.mail_from_address || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mail_from_address: e.target.value })}
+                    onChange={(e) => setEmailSettings({ mail_from_address: e.target.value })}
                     placeholder="noreply@example.com"
                   />
                   <Input
                     label="From Name"
                     value={emailSettings.mail_from_name || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mail_from_name: e.target.value })}
+                    onChange={(e) => setEmailSettings({ mail_from_name: e.target.value })}
                     placeholder="Housarr"
                   />
                 </div>
@@ -800,14 +885,14 @@ export default function SettingsPage() {
                     <Input
                       label="SMTP Host"
                       value={emailSettings.mail_host || ''}
-                      onChange={(e) => setEmailSettings({ ...emailSettings, mail_host: e.target.value })}
+                      onChange={(e) => setEmailSettings({ mail_host: e.target.value })}
                       placeholder="smtp.example.com"
                     />
                     <Input
                       label="Port"
                       type="number"
                       value={emailSettings.mail_port || 587}
-                      onChange={(e) => setEmailSettings({ ...emailSettings, mail_port: parseInt(e.target.value) || 587 })}
+                      onChange={(e) => setEmailSettings({ mail_port: parseInt(e.target.value) || 587 })}
                       placeholder="587"
                     />
                   </div>
@@ -816,14 +901,14 @@ export default function SettingsPage() {
                       label="Username"
                       type="password"
                       value={emailSettings.mail_username || ''}
-                      onChange={(e) => setEmailSettings({ ...emailSettings, mail_username: e.target.value })}
+                      onChange={(e) => setEmailSettings({ mail_username: e.target.value })}
                       placeholder="Enter username (leave blank to keep current)"
                     />
                     <Input
                       label="Password"
                       type="password"
                       value={emailSettings.mail_password || ''}
-                      onChange={(e) => setEmailSettings({ ...emailSettings, mail_password: e.target.value })}
+                      onChange={(e) => setEmailSettings({ mail_password: e.target.value })}
                       placeholder="Enter password (leave blank to keep current)"
                     />
                   </div>
@@ -835,7 +920,7 @@ export default function SettingsPage() {
                       { value: 'null', label: 'None' },
                     ]}
                     value={emailSettings.mail_encryption || 'tls'}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mail_encryption: e.target.value as 'tls' | 'ssl' | 'null' })}
+                    onChange={(e) => setEmailSettings({ mail_encryption: e.target.value as 'tls' | 'ssl' | 'null' })}
                   />
                 </div>
               )}
@@ -847,20 +932,20 @@ export default function SettingsPage() {
                   <Input
                     label="Domain"
                     value={emailSettings.mailgun_domain || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mailgun_domain: e.target.value })}
+                    onChange={(e) => setEmailSettings({ mailgun_domain: e.target.value })}
                     placeholder="mg.example.com"
                   />
                   <Input
                     label="API Key"
                     type="password"
                     value={emailSettings.mailgun_secret || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mailgun_secret: e.target.value })}
+                    onChange={(e) => setEmailSettings({ mailgun_secret: e.target.value })}
                     placeholder="Enter API key (leave blank to keep current)"
                   />
                   <Input
                     label="Endpoint"
                     value={emailSettings.mailgun_endpoint || 'api.mailgun.net'}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, mailgun_endpoint: e.target.value })}
+                    onChange={(e) => setEmailSettings({ mailgun_endpoint: e.target.value })}
                     placeholder="api.mailgun.net"
                     hint="Use api.eu.mailgun.net for EU region"
                   />
@@ -875,7 +960,7 @@ export default function SettingsPage() {
                     label="API Key"
                     type="password"
                     value={emailSettings.sendgrid_api_key || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, sendgrid_api_key: e.target.value })}
+                    onChange={(e) => setEmailSettings({ sendgrid_api_key: e.target.value })}
                     placeholder="Enter API key (leave blank to keep current)"
                     hint="Your SendGrid API key starting with SG."
                   />
@@ -890,20 +975,20 @@ export default function SettingsPage() {
                     label="Access Key ID"
                     type="password"
                     value={emailSettings.ses_key || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, ses_key: e.target.value })}
+                    onChange={(e) => setEmailSettings({ ses_key: e.target.value })}
                     placeholder="Enter access key (leave blank to keep current)"
                   />
                   <Input
                     label="Secret Access Key"
                     type="password"
                     value={emailSettings.ses_secret || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, ses_secret: e.target.value })}
+                    onChange={(e) => setEmailSettings({ ses_secret: e.target.value })}
                     placeholder="Enter secret key (leave blank to keep current)"
                   />
                   <Input
                     label="Region"
                     value={emailSettings.ses_region || 'us-east-1'}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, ses_region: e.target.value })}
+                    onChange={(e) => setEmailSettings({ ses_region: e.target.value })}
                     placeholder="us-east-1"
                   />
                 </div>
@@ -916,7 +1001,7 @@ export default function SettingsPage() {
                   <Input
                     label="Account ID"
                     value={emailSettings.cloudflare_account_id || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, cloudflare_account_id: e.target.value })}
+                    onChange={(e) => setEmailSettings({ cloudflare_account_id: e.target.value })}
                     placeholder="Your Cloudflare Account ID"
                     hint="Found in your Cloudflare dashboard URL or account settings"
                   />
@@ -924,7 +1009,7 @@ export default function SettingsPage() {
                     label="API Token"
                     type="password"
                     value={emailSettings.cloudflare_api_token || ''}
-                    onChange={(e) => setEmailSettings({ ...emailSettings, cloudflare_api_token: e.target.value })}
+                    onChange={(e) => setEmailSettings({ cloudflare_api_token: e.target.value })}
                     placeholder="Enter API token (leave blank to keep current)"
                     hint="Create a token with Email Routing permissions"
                   />
@@ -972,7 +1057,7 @@ export default function SettingsPage() {
                     { value: 'local', label: 'Local Model (Ollama, LM Studio)' },
                   ]}
                   value={aiSettings.ai_provider || 'none'}
-                  onChange={(e) => setAISettings({ ...aiSettings, ai_provider: e.target.value as AISettings['ai_provider'] })}
+                  onChange={(e) => setAISettings({ ai_provider: e.target.value as AISettings['ai_provider'] })}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Select an AI provider to enable smart features like auto-categorization and suggestions.
@@ -983,18 +1068,64 @@ export default function SettingsPage() {
               {aiSettings.ai_provider === 'claude' && (
                 <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="text-sm font-medium text-gray-900">Claude Settings</h4>
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={aiSettings.anthropic_api_key || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, anthropic_api_key: e.target.value })}
-                    placeholder="Enter API key (leave blank to keep current)"
-                    hint="Get your API key from console.anthropic.com"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
+                    {settingsData?.key_status?.anthropic_api_key_set && !aiKeyEditing.anthropic ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
+                          API key saved ••••••••
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setAIKeyEditing({ anthropic: true })}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this API key?')) {
+                              setAISettings({ anthropic_api_key: '__DELETE__' })
+                              updateAISettingsMutation.mutate({ anthropic_api_key: '__DELETE__' })
+                            }
+                          }}
+                        >
+                          <Icon icon={Trash2} size="xs" className="text-error-500" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          type="password"
+                          value={aiSettings.anthropic_api_key || ''}
+                          onChange={(e) => setAISettings({ anthropic_api_key: e.target.value })}
+                          placeholder={aiKeyEditing.anthropic ? "Enter new API key" : "Enter API key"}
+                          hint="Get your API key from console.anthropic.com"
+                        />
+                        {aiKeyEditing.anthropic && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setAIKeyEditing({ anthropic: false })
+                              setAISettings({ anthropic_api_key: '' })
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     label="Model"
                     value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, ai_model: e.target.value })}
+                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
                     placeholder="claude-sonnet-4-20250514"
                     hint="Leave blank for default model"
                   />
@@ -1005,25 +1136,71 @@ export default function SettingsPage() {
               {aiSettings.ai_provider === 'openai' && (
                 <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="text-sm font-medium text-gray-900">OpenAI Settings</h4>
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={aiSettings.openai_api_key || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, openai_api_key: e.target.value })}
-                    placeholder="Enter API key (leave blank to keep current)"
-                    hint="Get your API key from platform.openai.com"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
+                    {settingsData?.key_status?.openai_api_key_set && !aiKeyEditing.openai ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
+                          API key saved ••••••••
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setAIKeyEditing({ openai: true })}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this API key?')) {
+                              setAISettings({ openai_api_key: '__DELETE__' })
+                              updateAISettingsMutation.mutate({ openai_api_key: '__DELETE__' })
+                            }
+                          }}
+                        >
+                          <Icon icon={Trash2} size="xs" className="text-error-500" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          type="password"
+                          value={aiSettings.openai_api_key || ''}
+                          onChange={(e) => setAISettings({ openai_api_key: e.target.value })}
+                          placeholder={aiKeyEditing.openai ? "Enter new API key" : "Enter API key"}
+                          hint="Get your API key from platform.openai.com"
+                        />
+                        {aiKeyEditing.openai && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setAIKeyEditing({ openai: false })
+                              setAISettings({ openai_api_key: '' })
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     label="Model"
                     value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, ai_model: e.target.value })}
+                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
                     placeholder="gpt-4o"
                     hint="Leave blank for default model"
                   />
                   <Input
                     label="Base URL (Optional)"
                     value={aiSettings.openai_base_url || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, openai_base_url: e.target.value })}
+                    onChange={(e) => setAISettings({ openai_base_url: e.target.value })}
                     placeholder="https://api.openai.com/v1"
                     hint="For OpenAI-compatible APIs (Azure, etc.)"
                   />
@@ -1034,25 +1211,71 @@ export default function SettingsPage() {
               {aiSettings.ai_provider === 'gemini' && (
                 <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="text-sm font-medium text-gray-900">Gemini Settings</h4>
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={aiSettings.gemini_api_key || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, gemini_api_key: e.target.value })}
-                    placeholder="Enter API key (leave blank to keep current)"
-                    hint="Get your API key from aistudio.google.com"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
+                    {settingsData?.key_status?.gemini_api_key_set && !aiKeyEditing.gemini ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
+                          API key saved ••••••••
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setAIKeyEditing({ gemini: true })}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this API key?')) {
+                              setAISettings({ gemini_api_key: '__DELETE__' })
+                              updateAISettingsMutation.mutate({ gemini_api_key: '__DELETE__' })
+                            }
+                          }}
+                        >
+                          <Icon icon={Trash2} size="xs" className="text-error-500" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          type="password"
+                          value={aiSettings.gemini_api_key || ''}
+                          onChange={(e) => setAISettings({ gemini_api_key: e.target.value })}
+                          placeholder={aiKeyEditing.gemini ? "Enter new API key" : "Enter API key"}
+                          hint="Get your API key from aistudio.google.com"
+                        />
+                        {aiKeyEditing.gemini && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setAIKeyEditing({ gemini: false })
+                              setAISettings({ gemini_api_key: '' })
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     label="Model"
                     value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, ai_model: e.target.value })}
+                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
                     placeholder="gemini-1.5-pro"
                     hint="Leave blank for default model"
                   />
                   <Input
                     label="Base URL (Optional)"
                     value={aiSettings.gemini_base_url || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, gemini_base_url: e.target.value })}
+                    onChange={(e) => setAISettings({ gemini_base_url: e.target.value })}
                     placeholder="https://generativelanguage.googleapis.com/v1beta"
                     hint="Leave blank for default Google API"
                   />
@@ -1066,31 +1289,89 @@ export default function SettingsPage() {
                   <Input
                     label="Base URL"
                     value={aiSettings.local_base_url || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, local_base_url: e.target.value })}
+                    onChange={(e) => setAISettings({ local_base_url: e.target.value })}
                     placeholder="http://localhost:11434"
                     hint="Ollama: http://localhost:11434, LM Studio: http://localhost:1234"
                   />
                   <Input
                     label="Model Name"
                     value={aiSettings.local_model || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, local_model: e.target.value })}
+                    onChange={(e) => setAISettings({ local_model: e.target.value })}
                     placeholder="llama3"
                     hint="The model name as shown in your local server"
                   />
-                  <Input
-                    label="API Key (Optional)"
-                    type="password"
-                    value={aiSettings.local_api_key || ''}
-                    onChange={(e) => setAISettings({ ...aiSettings, local_api_key: e.target.value })}
-                    placeholder="Enter API key if required"
-                    hint="Only needed if your local server requires authentication"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key (Optional)</label>
+                    {settingsData?.key_status?.local_api_key_set && !aiKeyEditing.local ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
+                          API key saved ••••••••
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setAIKeyEditing({ local: true })}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this API key?')) {
+                              setAISettings({ local_api_key: '__DELETE__' })
+                              updateAISettingsMutation.mutate({ local_api_key: '__DELETE__' })
+                            }
+                          }}
+                        >
+                          <Icon icon={Trash2} size="xs" className="text-error-500" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          type="password"
+                          value={aiSettings.local_api_key || ''}
+                          onChange={(e) => setAISettings({ local_api_key: e.target.value })}
+                          placeholder={aiKeyEditing.local ? "Enter new API key" : "Enter API key if required"}
+                          hint="Only needed if your local server requires authentication"
+                        />
+                        {aiKeyEditing.local && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setAIKeyEditing({ local: false })
+                              setAISettings({ local_api_key: '' })
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <Button type="submit" isLoading={updateAISettingsMutation.isPending}>
-                Save AI Settings
-              </Button>
+              <div className="flex gap-3">
+                <Button type="submit" isLoading={updateAISettingsMutation.isPending}>
+                  Save AI Settings
+                </Button>
+                {aiSettings.ai_provider !== 'none' && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    isLoading={testAIMutation.isPending}
+                    onClick={() => testAIMutation.mutate(aiSettings)}
+                  >
+                    Test Connection
+                  </Button>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>

@@ -16,6 +16,7 @@ class PartResource extends JsonResource
             'part_number' => $this->part_number,
             'type' => $this->type,
             'purchase_url' => $this->purchase_url,
+            'purchase_urls' => $this->purchase_urls,
             'price' => $this->price ? (float) $this->price : null,
             'notes' => $this->notes,
             'images' => FileResource::collection($this->whenLoaded('images')),

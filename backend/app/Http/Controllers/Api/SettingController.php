@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -43,12 +44,28 @@ class SettingController extends Controller
             'local_model',
         ];
 
-        $settings = Setting::getMany($readableKeys, $householdId);
+        // Fetch all settings in a single query (including encrypted keys for flag checking)
+        $encryptedKeys = ['anthropic_api_key', 'openai_api_key', 'gemini_api_key', 'local_api_key'];
+        $allSettings = Setting::getMany(array_merge($readableKeys, $encryptedKeys), $householdId);
 
-        // Filter out null values
-        $settings = array_filter($settings, fn($value) => $value !== null);
+        // Separate readable settings from encrypted key flags
+        $settings = array_filter(
+            array_intersect_key($allSettings, array_flip($readableKeys)),
+            fn($value) => $value !== null
+        );
 
-        return response()->json(['settings' => $settings]);
+        // Build flags without additional queries
+        $encryptedKeyFlags = [
+            'anthropic_api_key_set' => !empty($allSettings['anthropic_api_key'] ?? null),
+            'openai_api_key_set' => !empty($allSettings['openai_api_key'] ?? null),
+            'gemini_api_key_set' => !empty($allSettings['gemini_api_key'] ?? null),
+            'local_api_key_set' => !empty($allSettings['local_api_key'] ?? null),
+        ];
+
+        return response()->json([
+            'settings' => $settings,
+            'key_status' => $encryptedKeyFlags,
+        ]);
     }
 
     /**
@@ -124,6 +141,13 @@ class SettingController extends Controller
         ];
 
         foreach ($validated['settings'] as $key => $value) {
+            // Handle deletion of encrypted keys
+            if (in_array($key, $encryptedKeys) && $value === '__DELETE__') {
+                Setting::where('household_id', $householdId)
+                    ->where('key', $key)
+                    ->delete();
+                continue;
+            }
             // Skip empty strings for encrypted fields (means "keep current")
             if (in_array($key, $encryptedKeys) && $value === '') {
                 continue;
@@ -141,15 +165,17 @@ class SettingController extends Controller
     public function checkStorage(Request $request): JsonResponse
     {
         $householdId = $request->user()->household_id;
-        $driver = Setting::get('storage_driver', $householdId, 'local');
 
-        $hasS3Credentials = false;
-        if ($driver === 's3') {
-            $accessKey = Setting::get('aws_access_key_id', $householdId);
-            $secretKey = Setting::get('aws_secret_access_key', $householdId);
-            $bucket = Setting::get('aws_bucket', $householdId);
-            $hasS3Credentials = $accessKey && $secretKey && $bucket;
-        }
+        // Batch all storage settings in one query
+        $storageSettings = Setting::getMany([
+            'storage_driver', 'aws_access_key_id', 'aws_secret_access_key', 'aws_bucket'
+        ], $householdId);
+
+        $driver = $storageSettings['storage_driver'] ?? 'local';
+        $hasS3Credentials = $driver === 's3'
+            && !empty($storageSettings['aws_access_key_id'])
+            && !empty($storageSettings['aws_secret_access_key'])
+            && !empty($storageSettings['aws_bucket']);
 
         return response()->json([
             'driver' => $driver,
@@ -163,37 +189,25 @@ class SettingController extends Controller
     public function checkEmail(Request $request): JsonResponse
     {
         $householdId = $request->user()->household_id;
-        $driver = Setting::get('mail_driver', $householdId, 'log');
 
-        $configured = false;
-        switch ($driver) {
-            case 'log':
-                $configured = true;
-                break;
-            case 'smtp':
-                $host = Setting::get('mail_host', $householdId);
-                $configured = !empty($host);
-                break;
-            case 'mailgun':
-                $domain = Setting::get('mailgun_domain', $householdId);
-                $secret = Setting::get('mailgun_secret', $householdId);
-                $configured = !empty($domain) && !empty($secret);
-                break;
-            case 'sendgrid':
-                $apiKey = Setting::get('sendgrid_api_key', $householdId);
-                $configured = !empty($apiKey);
-                break;
-            case 'ses':
-                $key = Setting::get('ses_key', $householdId);
-                $secret = Setting::get('ses_secret', $householdId);
-                $configured = !empty($key) && !empty($secret);
-                break;
-            case 'cloudflare':
-                $apiToken = Setting::get('cloudflare_api_token', $householdId);
-                $accountId = Setting::get('cloudflare_account_id', $householdId);
-                $configured = !empty($apiToken) && !empty($accountId);
-                break;
-        }
+        // Batch all email settings in one query
+        $emailSettings = Setting::getMany([
+            'mail_driver', 'mail_host', 'mailgun_domain', 'mailgun_secret',
+            'sendgrid_api_key', 'ses_key', 'ses_secret',
+            'cloudflare_api_token', 'cloudflare_account_id'
+        ], $householdId);
+
+        $driver = $emailSettings['mail_driver'] ?? 'log';
+
+        $configured = match ($driver) {
+            'log' => true,
+            'smtp' => !empty($emailSettings['mail_host']),
+            'mailgun' => !empty($emailSettings['mailgun_domain']) && !empty($emailSettings['mailgun_secret']),
+            'sendgrid' => !empty($emailSettings['sendgrid_api_key']),
+            'ses' => !empty($emailSettings['ses_key']) && !empty($emailSettings['ses_secret']),
+            'cloudflare' => !empty($emailSettings['cloudflare_api_token']) && !empty($emailSettings['cloudflare_account_id']),
+            default => false,
+        };
 
         return response()->json([
             'driver' => $driver,
@@ -207,34 +221,80 @@ class SettingController extends Controller
     public function checkAI(Request $request): JsonResponse
     {
         $householdId = $request->user()->household_id;
-        $provider = Setting::get('ai_provider', $householdId, 'none');
 
-        $configured = false;
-        switch ($provider) {
-            case 'none':
-                $configured = true;
-                break;
-            case 'claude':
-                $apiKey = Setting::get('anthropic_api_key', $householdId);
-                $configured = !empty($apiKey);
-                break;
-            case 'openai':
-                $apiKey = Setting::get('openai_api_key', $householdId);
-                $configured = !empty($apiKey);
-                break;
-            case 'gemini':
-                $apiKey = Setting::get('gemini_api_key', $householdId);
-                $configured = !empty($apiKey);
-                break;
-            case 'local':
-                $baseUrl = Setting::get('local_base_url', $householdId);
-                $configured = !empty($baseUrl);
-                break;
-        }
+        // Batch all AI settings in one query
+        $aiSettings = Setting::getMany([
+            'ai_provider', 'anthropic_api_key', 'openai_api_key',
+            'gemini_api_key', 'local_base_url'
+        ], $householdId);
+
+        $provider = $aiSettings['ai_provider'] ?? 'none';
+
+        $configured = match ($provider) {
+            'none' => true,
+            'claude' => !empty($aiSettings['anthropic_api_key']),
+            'openai' => !empty($aiSettings['openai_api_key']),
+            'gemini' => !empty($aiSettings['gemini_api_key']),
+            'local' => !empty($aiSettings['local_base_url']),
+            default => false,
+        };
 
         return response()->json([
             'provider' => $provider,
             'configured' => $configured,
+        ]);
+    }
+
+    /**
+     * Test AI connection by making a simple request.
+     */
+    public function testAI(Request $request): JsonResponse
+    {
+        $householdId = $request->user()->household_id;
+
+        // If settings are passed in the request, temporarily save them for testing
+        $testSettings = $request->input('settings');
+        if ($testSettings) {
+            // Temporarily set the settings for this request
+            $encryptedKeys = [
+                'anthropic_api_key',
+                'openai_api_key',
+                'gemini_api_key',
+                'local_api_key',
+            ];
+
+            foreach ($testSettings as $key => $value) {
+                if ($value !== '' && $value !== null) {
+                    $isEncrypted = in_array($key, $encryptedKeys);
+                    Setting::set($key, $value, $householdId, $isEncrypted);
+                }
+            }
+        }
+
+        $aiService = AIService::forHousehold($householdId);
+
+        if (!$aiService->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'AI is not configured. Please set up an AI provider first.',
+            ], 422);
+        }
+
+        // Try a simple completion request with error details
+        $result = $aiService->completeWithError('Respond with only the word "OK" and nothing else.');
+
+        if ($result['error']) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['error'],
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'AI connection successful!',
+            'provider' => $aiService->getProvider(),
+            'model' => $aiService->getModel(),
         ]);
     }
 }

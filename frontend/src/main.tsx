@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
 import './index.css'
+import { useThemeStore } from './stores/themeStore'
+
+// Initialize theme before render to prevent flash
+useThemeStore.getState().initializeTheme()
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -69,6 +69,7 @@ export {
   Download,
   Upload,
   RefreshCw,
+  Loader2,
   Copy,
   ExternalLink,
 
@@ -135,4 +136,9 @@ export {
 
   // AI
   Sparkles,
+
+  // Theme
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react'

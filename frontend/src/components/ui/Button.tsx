@@ -18,12 +18,12 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     )
 
     const variants = {
-      primary: 'bg-primary-600 text-white shadow-xs hover:bg-primary-700 focus-visible:ring-primary-100',
-      secondary: 'bg-white text-gray-700 border border-gray-300 shadow-xs hover:bg-gray-50 hover:text-gray-800 focus-visible:ring-gray-100',
-      tertiary: 'text-gray-600 hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-gray-100',
-      danger: 'bg-error-600 text-white shadow-xs hover:bg-error-700 focus-visible:ring-error-100',
-      ghost: 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-gray-100',
-      link: 'text-primary-600 hover:text-primary-700 underline-offset-4 hover:underline focus-visible:ring-primary-100 p-0',
+      primary: 'bg-primary-600 text-white shadow-xs hover:bg-primary-700 focus-visible:ring-primary-100 dark:focus-visible:ring-primary-900',
+      secondary: 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-100 focus-visible:ring-gray-100 dark:focus-visible:ring-gray-800',
+      tertiary: 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 focus-visible:ring-gray-100 dark:focus-visible:ring-gray-800',
+      danger: 'bg-error-600 text-white shadow-xs hover:bg-error-700 focus-visible:ring-error-100 dark:focus-visible:ring-error-900',
+      ghost: 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 focus-visible:ring-gray-100 dark:focus-visible:ring-gray-800',
+      link: 'text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 underline-offset-4 hover:underline focus-visible:ring-primary-100 dark:focus-visible:ring-primary-900 p-0',
     }
 
     const sizes = {

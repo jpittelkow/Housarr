@@ -19,6 +19,7 @@ class Part extends Model
         'part_number',
         'type',
         'purchase_url',
+        'purchase_urls',
         'price',
         'notes',
     ];
@@ -27,6 +28,7 @@ class Part extends Model
     {
         return [
             'price' => 'decimal:2',
+            'purchase_urls' => 'array',
         ];
     }
 
