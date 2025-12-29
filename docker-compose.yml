@@ -1,23 +1,13 @@
-# Housarr - Simple Docker Compose
+# Housarr - Single Container Docker Compose
 
 services:
   app:
     build:
-      context: ./docker/app
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/app/Dockerfile
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8000}:80"
     volumes:
       - ./backend:/var/www/html
       - ./data:/var/www/html/storage/app
-
-  node:
-    image: node:20-alpine
-    working_dir: /app
-    ports:
-      - "127.0.0.1:${VITE_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"

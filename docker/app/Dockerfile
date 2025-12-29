@@ -1,4 +1,14 @@
-# Housarr - Single Container (nginx + PHP-FPM)
+# Housarr - Single Container (nginx + PHP-FPM + Frontend)
+
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: PHP + Nginx
 FROM php:8.3-fpm-alpine
 
 # Install system dependencies and nginx
@@ -48,16 +58,16 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Configure nginx
 RUN mkdir -p /run/nginx
-COPY nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/app/nginx.conf /etc/nginx/http.d/default.conf
 
 # Configure PHP
-COPY php.ini /usr/local/etc/php/conf.d/99-custom.ini
+COPY docker/app/php.ini /usr/local/etc/php/conf.d/99-custom.ini
 
 # Configure supervisord
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/app/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy entrypoint script
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/app/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set working directory
@@ -66,6 +76,9 @@ WORKDIR /var/www/html
 # Create storage directories
 RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
     && chown -R www-data:www-data /var/www/html
+
+# Copy built frontend from builder stage to separate directory (not overwritten by volume mount)
+COPY --from=frontend-builder /app/dist /var/www/frontend
 
 EXPOSE 80
 
