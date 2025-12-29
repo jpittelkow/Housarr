@@ -13,11 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias([
-            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
-        ]);
-
         $middleware->appendToGroup('api', EnsureFrontendRequestsAreStateful::class);
+        $middleware->appendToGroup('api', \App\Http\Middleware\AddCacheHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

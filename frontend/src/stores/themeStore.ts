@@ -33,14 +33,12 @@ function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
 }
 
 function applyTheme(theme: 'light' | 'dark') {
-  console.log('Applying theme:', theme)
   const root = document.documentElement
   if (theme === 'dark') {
     root.classList.add('dark')
   } else {
     root.classList.remove('dark')
   }
-  console.log('Class list:', Array.from(root.classList))
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -48,7 +46,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   resolvedTheme: 'light',
 
   setMode: (mode: ThemeMode) => {
-    console.log('Setting mode:', mode)
     localStorage.setItem(STORAGE_KEY, mode)
     const resolvedTheme = resolveTheme(mode)
     applyTheme(resolvedTheme)

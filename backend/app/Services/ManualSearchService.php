@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 
 class ManualSearchService
 {
+    private const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
     protected ?AIService $aiService = null;
     protected int $householdId;
 
@@ -179,14 +181,14 @@ PROMPT;
             "{$make} {$model} service manual PDF",
         ];
 
-        Log::info('Starting DuckDuckGo search', ['make' => $make, 'model' => $model, 'queries' => $queries]);
+        Log::debug('Starting DuckDuckGo search', ['make' => $make, 'model' => $model]);
 
         try {
             // Execute all searches in parallel for better performance
             $responses = Http::pool(fn (Pool $pool) => array_map(
                 fn ($query) => $pool
                     ->withHeaders([
-                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'User-Agent' => self::USER_AGENT,
                         'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language' => 'en-US,en;q=0.5',
                     ])
@@ -201,7 +203,7 @@ PROMPT;
                 if ($response->successful()) {
                     $successfulQueries++;
                     $urls = $this->extractUrlsFromHtml($response->body());
-                    Log::info('DuckDuckGo query results', [
+                    Log::debug('DuckDuckGo query results', [
                         'query' => $queries[$index] ?? 'unknown',
                         'urls_found' => count($urls)
                     ]);
@@ -215,7 +217,7 @@ PROMPT;
             }
 
             $uniqueUrls = array_unique($allUrls);
-            Log::info('DuckDuckGo search complete', [
+            Log::debug('DuckDuckGo search complete', [
                 'successful_queries' => $successfulQueries,
                 'total_urls' => count($uniqueUrls)
             ]);
@@ -289,7 +291,7 @@ PROMPT;
         $urls = [];
 
         // Log a sample of the HTML to debug structure
-        Log::debug('DuckDuckGo HTML sample', ['length' => strlen($html), 'sample' => substr($html, 0, 500)]);
+        // Removed HTML sample logging to reduce log noise
 
         // Extract uddg redirect links (DuckDuckGo's tracking redirects)
         // These contain the actual destination URLs
@@ -449,7 +451,7 @@ PROMPT;
     public function findPdfOnPage(string $pageUrl, string $make, string $model): ?string
     {
         try {
-            Log::info('Searching for PDF links on page', ['url' => $pageUrl, 'make' => $make, 'model' => $model]);
+            Log::debug('Searching for PDF links on page', ['url' => $pageUrl]);
 
             $response = Http::withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -485,7 +487,7 @@ PROMPT;
             preg_match_all('/data-(?:src|url|pdf|file)=["\']([^"\']+\.pdf[^"\']*)["\']|data-(?:src|url|pdf|file)=["\']([^"\']+)["\'].*?\.pdf/i', $html, $dataMatches);
             $pdfUrls = array_merge($pdfUrls, array_filter(array_merge($dataMatches[1], $dataMatches[2])));
 
-            Log::info('Found potential PDF URLs on page', ['count' => count($pdfUrls), 'urls' => array_slice($pdfUrls, 0, 5)]);
+            Log::debug('Found potential PDF URLs on page', ['count' => count($pdfUrls)]);
 
             $normalizedUrls = [];
             foreach ($pdfUrls as $pdfUrl) {
@@ -510,7 +512,7 @@ PROMPT;
 
                 // Prefer URLs with the model number
                 if (stripos($pdfUrl, $model) !== false && stripos($pdfUrl, '.pdf') !== false) {
-                    Log::info('Found PDF URL matching model', ['url' => $pdfUrl]);
+                    Log::debug('Found PDF URL matching model', ['url' => $pdfUrl]);
                     return $pdfUrl;
                 }
             }
@@ -518,12 +520,12 @@ PROMPT;
             // Return first PDF-looking URL if no model match
             foreach ($normalizedUrls as $url) {
                 if (stripos($url, '.pdf') !== false) {
-                    Log::info('Returning first PDF URL', ['url' => $url]);
+                    Log::debug('Returning first PDF URL');
                     return $url;
                 }
             }
 
-            Log::info('No suitable PDF URL found on page', ['url' => $pageUrl]);
+            Log::debug('No suitable PDF URL found on page');
             return null;
         } catch (\Exception $e) {
             Log::warning('Failed to find PDF on page', ['url' => $pageUrl, 'error' => $e->getMessage()]);
@@ -553,7 +555,7 @@ PROMPT;
     protected function downloadDirectPdf(string $url): ?array
     {
         try {
-            Log::info('Attempting PDF download', ['url' => $url]);
+            Log::debug('Attempting PDF download');
 
             $response = Http::withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -595,7 +597,7 @@ PROMPT;
 
             $filename = $this->extractFilename($url, $response->header('Content-Disposition'));
 
-            Log::info('PDF downloaded successfully', [
+            Log::debug('PDF downloaded successfully', [
                 'url' => $url,
                 'filename' => $filename,
                 'size' => strlen($body)
@@ -641,7 +643,7 @@ PROMPT;
     {
         $urls = $this->searchForManual($make, $model);
 
-        Log::info('Manual search found URLs', ['count' => count($urls), 'urls' => array_slice($urls, 0, 5)]);
+        Log::debug('Manual search found URLs', ['count' => count($urls)]);
 
         if (empty($urls)) {
             return null;
@@ -678,14 +680,14 @@ PROMPT;
      */
     protected function findPdfOnManualsLib(string $html, string $baseUrl, string $make, string $model): ?string
     {
-        Log::info('Attempting ManualsLib-specific PDF extraction');
+        Log::debug('Attempting ManualsLib-specific PDF extraction');
 
         // ManualsLib search results show links to individual manual pages
         // Pattern: /manual/[number]/[make]-[model]-[type]-manual.html
         preg_match_all('/href="(\/manual\/\d+\/[^"]+\.html)"/i', $html, $manualPages);
 
         $manualUrls = array_filter($manualPages[1]);
-        Log::info('Found ManualsLib manual pages', ['count' => count($manualUrls)]);
+        Log::debug('Found ManualsLib manual pages', ['count' => count($manualUrls)]);
 
         if (empty($manualUrls)) {
             // Try alternative pattern for manual links
@@ -719,7 +721,7 @@ PROMPT;
                 $manualPageUrl = 'https://www.manualslib.com' . $manualPageUrl;
             }
 
-            Log::info('Fetching ManualsLib manual page', ['url' => $manualPageUrl]);
+            Log::debug('Fetching ManualsLib manual page');
 
             try {
                 $response = Http::withHeaders([
@@ -749,7 +751,7 @@ PROMPT;
                     if (strpos($pdfUrl, 'http') !== 0) {
                         $pdfUrl = 'https://www.manualslib.com' . $pdfUrl;
                     }
-                    Log::info('Found PDF URL on ManualsLib', ['url' => $pdfUrl]);
+                    Log::debug('Found PDF URL on ManualsLib');
                     return $pdfUrl;
                 }
             } catch (\Exception $e) {

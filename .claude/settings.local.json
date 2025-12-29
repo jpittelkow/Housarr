@@ -40,7 +40,8 @@
       "WebFetch(domain:skulytics.io)",
       "WebFetch(domain:appliance.io)",
       "Bash(docker ps:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(docker-compose build:*)"
     ]
   }
 }

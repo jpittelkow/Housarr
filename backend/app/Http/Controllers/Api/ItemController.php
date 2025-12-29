@@ -31,6 +31,7 @@ class ItemController extends Controller
             })],
             'search' => ['nullable', 'string', 'max:255'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'page' => ['nullable', 'integer', 'min:1'],
             'minimal' => ['nullable', 'boolean'], // For dropdowns - returns only id and name
         ]);
 
@@ -57,11 +58,22 @@ class ItemController extends Controller
             $query->search($validated['search']);
         }
 
-        $limit = $validated['limit'] ?? 200;
-        $items = $query->orderBy('name')->limit($limit)->get();
+        // Pagination support
+        $perPage = min($validated['limit'] ?? 50, 200); // Default 50, max 200
+        $page = $request->integer('page', 1);
+        
+        $items = $query->orderBy('name')->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
-            'items' => ItemResource::collection($items),
+            'items' => ItemResource::collection($items->items()),
+            'pagination' => [
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+                'from' => $items->firstItem(),
+                'to' => $items->lastItem(),
+            ],
         ]);
     }
 
@@ -346,32 +358,7 @@ class ItemController extends Controller
             ], 422);
         }
 
-        $categoryContext = $validated['category'] ? " in the {$validated['category']} category" : '';
-
-        $prompt = <<<PROMPT
-You are a home maintenance expert. Given the following product information, provide typical maintenance and warranty information.
-
-Product: {$validated['make']} {$validated['model']}{$categoryContext}
-
-Provide the following information based on typical products of this type:
-1. Typical manufacturer warranty period (in years)
-2. Recommended maintenance interval (in months)
-3. Typical lifespan (in years)
-4. Brief maintenance notes or tips (1-2 sentences)
-
-You MUST return ONLY a valid JSON object with no additional text, markdown, or explanation.
-
-Format:
-{
-  "warranty_years": 2,
-  "maintenance_interval_months": 12,
-  "typical_lifespan_years": 15,
-  "notes": "Regular filter changes and annual professional inspection recommended."
-}
-
-If you cannot determine the information, use reasonable estimates based on the product category.
-PROMPT;
-
+        $prompt = $this->buildSuggestionPrompt($validated['make'], $validated['model'], $validated['category'] ?? null);
         $response = $aiService->complete($prompt);
 
         if ($response === null) {
@@ -450,31 +437,7 @@ PROMPT;
             ], 422);
         }
 
-        $categoryContext = $validated['category'] ? " in the {$validated['category']} category" : '';
-
-        $prompt = <<<PROMPT
-You are a home maintenance expert. Given the following product information, provide typical maintenance and warranty information.
-
-Product: {$validated['make']} {$validated['model']}{$categoryContext}
-
-Provide the following information based on typical products of this type:
-1. Typical manufacturer warranty period (in years)
-2. Recommended maintenance interval (in months)
-3. Typical lifespan (in years)
-4. Brief maintenance notes or tips (1-2 sentences)
-
-You MUST return ONLY a valid JSON object with no additional text, markdown, or explanation.
-
-Format:
-{
-  "warranty_years": 2,
-  "maintenance_interval_months": 12,
-  "typical_lifespan_years": 15,
-  "notes": "Regular filter changes and annual professional inspection recommended."
-}
-
-If you cannot determine the information, use reasonable estimates based on the product category.
-PROMPT;
+        $prompt = $this->buildSuggestionPrompt($validated['make'], $validated['model'], $validated['category'] ?? null);
 
         $result = $aiService->completeWithError($prompt);
 
@@ -634,5 +597,37 @@ PROMPT;
             'provider' => $provider,
             'raw_response' => substr($response, 0, 500),
         ]);
+    }
+
+    /**
+     * Build the AI prompt for getting maintenance suggestions.
+     */
+    private function buildSuggestionPrompt(string $make, string $model, ?string $category): string
+    {
+        $categoryContext = $category ? " in the {$category} category" : '';
+
+        return <<<PROMPT
+You are a home maintenance expert. Given the following product information, provide typical maintenance and warranty information.
+
+Product: {$make} {$model}{$categoryContext}
+
+Provide the following information based on typical products of this type:
+1. Typical manufacturer warranty period (in years)
+2. Recommended maintenance interval (in months)
+3. Typical lifespan (in years)
+4. Brief maintenance notes or tips (1-2 sentences)
+
+You MUST return ONLY a valid JSON object with no additional text, markdown, or explanation.
+
+Format:
+{
+  "warranty_years": 2,
+  "maintenance_interval_months": 12,
+  "typical_lifespan_years": 15,
+  "notes": "Regular filter changes and annual professional inspection recommended."
+}
+
+If you cannot determine the information, use reasonable estimates based on the product category.
+PROMPT;
     }
 }

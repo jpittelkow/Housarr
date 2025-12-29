@@ -64,35 +64,32 @@ export default function Layout() {
     prefetchData()
   }, [queryClient])
 
-  // Preload all page chunks in the background after initial render
-  useEffect(() => {
-    const preloadPages = () => {
-      // Use requestIdleCallback to preload during browser idle time
-      const preload = (importFn: () => Promise<unknown>) => {
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(() => importFn(), { timeout: 3000 })
-        } else {
-          setTimeout(() => importFn(), 100)
-        }
-      }
+  // Prefetch page chunks on hover or during idle time (per nav item)
+  // This avoids loading all routes immediately, preserving code-splitting benefits
+  const pagePreloaders: Record<string, () => Promise<unknown>> = {
+    '/': () => import('@/pages/DashboardPage'),
+    '/items': () => import('@/pages/ItemsPage'),
+    '/items/:id': () => import('@/pages/ItemDetailPage'),
+    '/smart-add': () => import('@/pages/SmartAddPage'),
+    '/vendors': () => import('@/pages/VendorsPage'),
+    '/reminders': () => import('@/pages/RemindersPage'),
+    '/todos': () => import('@/pages/TodosPage'),
+    '/settings': () => import('@/pages/SettingsPage'),
+    '/profile': () => import('@/pages/ProfilePage'),
+    '/help': () => import('@/pages/HelpPage'),
+  }
 
-      // Preload all pages
-      preload(() => import('@/pages/DashboardPage'))
-      preload(() => import('@/pages/ItemsPage'))
-      preload(() => import('@/pages/ItemDetailPage'))
-      preload(() => import('@/pages/SmartAddPage'))
-      preload(() => import('@/pages/VendorsPage'))
-      preload(() => import('@/pages/RemindersPage'))
-      preload(() => import('@/pages/TodosPage'))
-      preload(() => import('@/pages/SettingsPage'))
-      preload(() => import('@/pages/ProfilePage'))
-      preload(() => import('@/pages/HelpPage'))
+  const prefetchPage = (href: string) => {
+    const preloader = pagePreloaders[href]
+    if (!preloader) return
+
+    // Use requestIdleCallback for non-blocking prefetch
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => preloader(), { timeout: 2000 })
+    } else {
+      setTimeout(() => preloader(), 50)
     }
-
-    // Start preloading after a short delay to not block initial render
-    const timer = setTimeout(preloadPages, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -151,6 +148,7 @@ export default function Layout() {
                   key={item.name}
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
+                  onMouseEnter={() => prefetchPage(item.href)}
                   className={cn(
                     'group flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium',
                     'transition-colors duration-150',

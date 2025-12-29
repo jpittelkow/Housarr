@@ -82,16 +82,16 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-            <Route path="items" element={<Suspense fallback={<PageLoader />}><ItemsPage /></Suspense>} />
-            <Route path="items/:id" element={<Suspense fallback={<PageLoader />}><ItemDetailPage /></Suspense>} />
-            <Route path="smart-add" element={<Suspense fallback={<PageLoader />}><SmartAddPage /></Suspense>} />
-            <Route path="vendors" element={<Suspense fallback={<PageLoader />}><VendorsPage /></Suspense>} />
-            <Route path="reminders" element={<Suspense fallback={<PageLoader />}><RemindersPage /></Suspense>} />
-            <Route path="todos" element={<Suspense fallback={<PageLoader />}><TodosPage /></Suspense>} />
-            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
-            <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />
-            <Route path="help" element={<Suspense fallback={<PageLoader />}><HelpPage /></Suspense>} />
+            <Route index element={<DashboardPage />} />
+            <Route path="items" element={<ItemsPage />} />
+            <Route path="items/:id" element={<ItemDetailPage />} />
+            <Route path="smart-add" element={<SmartAddPage />} />
+            <Route path="vendors" element={<VendorsPage />} />
+            <Route path="reminders" element={<RemindersPage />} />
+            <Route path="todos" element={<TodosPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="help" element={<HelpPage />} />
           </Route>
         </Routes>
       </Suspense>
