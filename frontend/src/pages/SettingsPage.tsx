@@ -10,7 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 // Settings state management with useReducer for better performance
 type SettingsState = {

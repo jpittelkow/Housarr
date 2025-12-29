@@ -1,16 +1,18 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, Home } from '@/components/ui'
+import { Icon, Home, LoadingScreen } from '@/components/ui'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function RegisterPage() {
   const { register: registerUser } = useAuthStore()
   const navigate = useNavigate()
+  const [isTransitioning, setIsTransitioning] = useState(false)
 
   const {
     register,
@@ -23,11 +25,22 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterInput) => {
     try {
       await registerUser(data)
-      toast.success('Account created successfully!')
-      navigate('/')
+      // Show loading screen instead of navigating immediately
+      setIsTransitioning(true)
     } catch {
       toast.error('Failed to create account. Please try again.')
     }
+  }
+
+  // Show fun loading screen after successful registration
+  if (isTransitioning) {
+    return (
+      <LoadingScreen 
+        title="Welcome to Housarr!" 
+        duration={2500}
+        onComplete={() => navigate('/')}
+      />
+    )
   }
 
   return (

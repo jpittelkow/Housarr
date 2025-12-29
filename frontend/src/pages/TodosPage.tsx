@@ -12,7 +12,7 @@ import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { Icon, Plus, CheckSquare, Circle, CheckCircle, Pencil, Trash2, HelpTooltip } from '@/components/ui'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Todo } from '@/types'
 
 function TodoSkeleton() {

@@ -1,16 +1,18 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, Home, ThemeToggle } from '@/components/ui'
+import { Icon, Home, ThemeToggle, LoadingScreen } from '@/components/ui'
 import { loginSchema, type LoginInput } from '@/lib/validations'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const { login } = useAuthStore()
   const navigate = useNavigate()
+  const [isTransitioning, setIsTransitioning] = useState(false)
 
   const {
     register,
@@ -23,11 +25,22 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginInput) => {
     try {
       await login(data.email, data.password)
-      toast.success('Welcome back!')
-      navigate('/')
+      // Show loading screen instead of navigating immediately
+      setIsTransitioning(true)
     } catch {
       toast.error('Invalid email or password')
     }
+  }
+
+  // Show fun loading screen after successful login
+  if (isTransitioning) {
+    return (
+      <LoadingScreen 
+        title="Welcome back!" 
+        duration={2500}
+        onComplete={() => navigate('/')}
+      />
+    )
   }
 
   return (

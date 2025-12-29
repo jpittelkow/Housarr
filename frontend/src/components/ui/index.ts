@@ -1,6 +1,7 @@
 // UI Component barrel file
 export { Avatar } from './Avatar'
 export { Badge } from './Badge'
+export { LoadingScreen } from './LoadingScreen'
 export { Icon, type IconProps } from './Icon'
 // Re-export all icons from Icon.tsx
 export {

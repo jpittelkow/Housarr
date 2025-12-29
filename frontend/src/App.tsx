@@ -4,9 +4,11 @@ import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Layout from '@/components/Layout'
 
-// Lazy load pages for code splitting
-const LoginPage = lazy(() => import('@/pages/LoginPage'))
-const RegisterPage = lazy(() => import('@/pages/RegisterPage'))
+// Direct imports for instant loading
+import LoginPage from '@/pages/LoginPage'
+import RegisterPage from '@/pages/RegisterPage'
+
+// Lazy load protected pages for code splitting
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const ItemsPage = lazy(() => import('@/pages/ItemsPage'))
 const ItemDetailPage = lazy(() => import('@/pages/ItemDetailPage'))
@@ -17,6 +19,20 @@ const TodosPage = lazy(() => import('@/pages/TodosPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const HelpPage = lazy(() => import('@/pages/HelpPage'))
+
+// Preload all protected pages after login
+export function preloadProtectedPages() {
+  import('@/pages/DashboardPage')
+  import('@/pages/ItemsPage')
+  import('@/pages/ItemDetailPage')
+  import('@/pages/SmartAddPage')
+  import('@/pages/VendorsPage')
+  import('@/pages/RemindersPage')
+  import('@/pages/TodosPage')
+  import('@/pages/SettingsPage')
+  import('@/pages/ProfilePage')
+  import('@/pages/HelpPage')
+}
 
 // Loading fallback component
 function PageLoader() {

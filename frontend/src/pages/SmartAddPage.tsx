@@ -20,7 +20,7 @@ import {
   RefreshCw,
   Search,
 } from '@/components/ui'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Item, Category } from '@/types'
 

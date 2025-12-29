@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip } from '@/components/ui'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Vendor } from '@/types'
 
 function VendorSkeleton() {

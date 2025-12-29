@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Icon, User, Lock } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore()

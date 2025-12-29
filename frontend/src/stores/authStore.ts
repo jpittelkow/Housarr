@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { auth } from '@/services/api'
 import type { User } from '@/types'
+import { preloadProtectedPages } from '@/App'
 
 interface AuthState {
   user: User | null
@@ -30,12 +31,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     await auth.csrf()
     const response = await auth.login({ email, password })
     set({ user: response.user, isAuthenticated: true })
+    preloadProtectedPages()
   },
 
   register: async (data) => {
     await auth.csrf()
     const response = await auth.register(data)
     set({ user: response.user, isAuthenticated: true })
+    preloadProtectedPages()
   },
 
   logout: async () => {
@@ -50,6 +53,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await auth.getUser()
       set({ user: response.user, isAuthenticated: true, isLoading: false })
+      preloadProtectedPages()
     } catch {
       set({ user: null, isAuthenticated: false, isLoading: false })
     }

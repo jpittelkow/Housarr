@@ -32,7 +32,7 @@ import {
   Check,
   X,
 } from '@/components/ui'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Item, Part, MaintenanceLog } from '@/types'
 
 function DetailSkeleton() {

@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { formatDate } from '@/lib/utils'
 import { Icon, Plus, Search, Package, MapPin, Calendar, HelpTooltip, LayoutGrid, List, Building } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Item } from '@/types'
 
 function ItemCardSkeleton() {

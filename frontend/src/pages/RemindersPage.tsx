@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
 import { Icon, Plus, Bell, Check, Clock, Calendar, Pencil, Trash2, HelpTooltip } from '@/components/ui'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Reminder } from '@/types'
 
 function ReminderSkeleton() {
