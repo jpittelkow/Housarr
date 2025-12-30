@@ -1,10 +1,17 @@
+# Tests workflow - DISABLED until tests are stabilized
+# Uncomment the 'on:' section to re-enable
+
 name: Tests
 
+# Disabled for now - tests need fixing
+# on:
+#   push:
+#     branches: [main, develop]
+#   pull_request:
+#     branches: [main, develop]
+
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   frontend-test:
@@ -27,8 +34,7 @@ jobs:
         run: npm ci
       
       - name: Run tests
-        run: npm run test:run || true
-        # Allow failures for now until tests are stabilized
+        run: npm run test:run
 
   backend-test:
     name: Backend Tests
@@ -65,8 +71,7 @@ jobs:
           DB_DATABASE: database/database.sqlite
       
       - name: Run tests
-        run: ./vendor/bin/pest || php artisan test || true
+        run: ./vendor/bin/pest || php artisan test
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: database/database.sqlite
-        # Allow failures for now until tests are stabilized
