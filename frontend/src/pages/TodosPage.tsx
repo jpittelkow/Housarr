@@ -67,6 +67,7 @@ export default function TodosPage() {
     mutationFn: (data: Partial<Todo>) => todos.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todos'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setIsModalOpen(false)
       setFormData({ priority: 'medium' })
       toast.success('Todo created successfully')
@@ -80,6 +81,8 @@ export default function TodosPage() {
     mutationFn: (id: number) => todos.complete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todos'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Todo completed')
     },
   })
 
@@ -87,6 +90,7 @@ export default function TodosPage() {
     mutationFn: ({ id, data }: { id: number; data: Partial<Todo> }) => todos.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todos'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setEditingTodo(null)
       toast.success('Todo updated')
     },
@@ -99,6 +103,7 @@ export default function TodosPage() {
     mutationFn: (id: number) => todos.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todos'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Todo deleted')
     },
     onError: () => {

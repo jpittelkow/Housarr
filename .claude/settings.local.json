@@ -41,7 +41,9 @@
       "WebFetch(domain:appliance.io)",
       "Bash(docker ps:*)",
       "Bash(git reset:*)",
-      "Bash(docker-compose build:*)"
+      "Bash(docker-compose build:*)",
+      "Bash(dir:*)",
+      "Bash(del \"c:\\\\Users\\\\jpitt_6932a9v\\\\code\\\\Housarr\\\\backend\\\\database\\\\migrations\\\\2025_12_29_232226_create_sessions_table.php\")"
     ]
   }
 }

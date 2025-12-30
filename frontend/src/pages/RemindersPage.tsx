@@ -63,6 +63,7 @@ export default function RemindersPage() {
     mutationFn: (data: Partial<Reminder>) => reminders.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setIsModalOpen(false)
       setFormData({})
       toast.success('Reminder created successfully')
@@ -76,6 +77,7 @@ export default function RemindersPage() {
     mutationFn: (id: number) => reminders.complete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Reminder completed')
     },
   })
@@ -84,6 +86,7 @@ export default function RemindersPage() {
     mutationFn: ({ id, days }: { id: number; days: number }) => reminders.snooze(id, days),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Reminder snoozed')
     },
   })
@@ -92,6 +95,7 @@ export default function RemindersPage() {
     mutationFn: ({ id, data }: { id: number; data: Partial<Reminder> }) => reminders.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setEditingReminder(null)
       toast.success('Reminder updated')
     },
@@ -104,6 +108,7 @@ export default function RemindersPage() {
     mutationFn: (id: number) => reminders.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Reminder deleted')
     },
     onError: () => {

@@ -28,7 +28,7 @@ class ItemResource extends JsonResource
             'parts' => PartResource::collection($this->whenLoaded('parts')),
             'replacement_parts' => PartResource::collection($this->whenLoaded('replacementParts')),
             'consumable_parts' => PartResource::collection($this->whenLoaded('consumableParts')),
-            'maintenance_logs' => MaintenanceLogResource::collection($this->whenLoaded('maintenanceLogs')),
+            'maintenanceLogs' => MaintenanceLogResource::collection($this->whenLoaded('maintenanceLogs')),
             'reminders' => ReminderResource::collection($this->whenLoaded('reminders')),
             'files' => FileResource::collection($this->whenLoaded('files')),
             'images' => FileResource::collection($this->whenLoaded('images')),

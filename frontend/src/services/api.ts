@@ -221,6 +221,43 @@ export interface AnalysisResult {
   model: string
   type: string
   confidence: number
+  image_url?: string | null
+  agents_agreed?: number
+  source_agent?: string
+}
+
+// Agent detail info
+export interface AgentDetail {
+  success: boolean
+  duration_ms: number
+  error: string | null
+  has_response: boolean
+}
+
+// Consensus info
+export interface ConsensusInfo {
+  level: 'none' | 'single' | 'low' | 'partial' | 'majority' | 'full'
+  agents_agreeing: number
+  total_agents: number
+}
+
+// Full analysis response
+export interface AnalyzeImageResponse {
+  results: AnalysisResult[]
+  agents_used: string[]
+  agents_succeeded: number
+  agent_details: Record<string, AgentDetail>
+  agent_errors: Record<string, string>
+  primary_agent: string | null
+  synthesis_agent: string | null
+  synthesis_error: string | null
+  consensus: ConsensusInfo | null
+  total_duration_ms: number
+  parse_source: string | null
+  debug?: {
+    had_synthesized: boolean
+    synthesized_preview: string | null
+  }
 }
 
 // Items
@@ -264,16 +301,17 @@ export const items = {
     return response.data
   },
 
-  analyzeImage: async (file?: File, query?: string, categoryNames?: string[]): Promise<{ results: AnalysisResult[] }> => {
+  analyzeImage: async (file?: File, query?: string, categoryNames?: string[]): Promise<AnalyzeImageResponse> => {
     const formData = new FormData()
     if (file) formData.append('image', file)
-    if (query) formData.append('query', query)
+    // Only send query if it's non-empty (avoid sending empty strings)
+    if (query && query.trim()) formData.append('query', query.trim())
     if (categoryNames && categoryNames.length > 0) {
       formData.append('categories', JSON.stringify(categoryNames))
     }
     const response = await api.post('/items/analyze-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 90000, // Image analysis can take up to 60s on the backend
+      timeout: 120000, // Multi-agent analysis can take longer
     })
     return response.data
   },
@@ -294,6 +332,7 @@ export const items = {
     step_name: string
     urls: string[]
     count: number
+    search_links?: Array<{ url: string; label: string }>
   }> => {
     // AI step can take longer since it calls the AI API
     const timeout = step === 'ai' ? 45000 : 30000
@@ -324,32 +363,38 @@ export const items = {
     return response.data
   },
 
-  // Combined AI suggestions endpoint - no separate config check needed
-  // Returns provider info alongside suggestions for UI display
+  // Combined AI suggestions endpoint using multi-agent orchestration
+  // Returns agent metadata alongside suggestions for UI display
   queryAISuggestions: async (itemId: number, make: string, model: string, category?: string): Promise<{
     success: boolean
-    provider?: string | null
-    model?: string | null
     suggestions?: {
       warranty_years?: number
       maintenance_interval_months?: number
       typical_lifespan_years?: number
       notes?: string
     }
+    // Multi-agent metadata
+    agents_used?: string[]
+    agents_succeeded?: number
+    agent_details?: Record<string, { success: boolean; duration_ms: number }>
+    agent_errors?: Record<string, string>
+    synthesis_agent?: string | null
+    fallback_agent?: string | null
+    total_duration_ms?: number
     error?: string
     raw_response?: string
   }> => {
-    const response = await api.post(`/items/${itemId}/ai-query`, { make, model, category }, { timeout: 60000 })
+    const response = await api.post(`/items/${itemId}/ai-query`, { make, model, category }, { timeout: 120000 })
     return response.data
   },
 
   suggestParts: async (itemId: number, make: string, model: string, category?: string): Promise<{
     success: boolean
-    provider?: string
     parts?: Array<{
       name: string
       type: 'replacement' | 'consumable'
       part_number: string | null
+      search_term?: string
       estimated_price: number | null
       replacement_interval: string | null
       purchase_urls: {
@@ -358,9 +403,27 @@ export const items = {
         home_depot: string
       }
     }>
+    // Multi-agent metadata
+    agents_used?: string[]
+    agents_succeeded?: number
+    agent_details?: Record<string, { success: boolean; duration_ms: number }>
+    agent_errors?: Record<string, string>
+    synthesis_agent?: string | null
+    fallback_agent?: string | null
+    total_duration_ms?: number
     error?: string
+    raw_response?: string
   }> => {
-    const response = await api.post(`/items/${itemId}/suggest-parts`, { make, model, category }, { timeout: 60000 })
+    const response = await api.post(`/items/${itemId}/suggest-parts`, { make, model, category }, { timeout: 120000 })
+    return response.data
+  },
+
+  searchPartImage: async (itemId: number, searchTerm: string, partName?: string): Promise<{
+    success: boolean
+    image_url: string | null
+    search_term: string
+  }> => {
+    const response = await api.post(`/items/${itemId}/search-part-image`, { search_term: searchTerm, part_name: partName }, { timeout: 10000 })
     return response.data
   },
 }
@@ -522,7 +585,8 @@ export const files = {
     file: File,
     fileableType: FileableType,
     fileableId: number,
-    isFeatured?: boolean
+    isFeatured?: boolean,
+    displayName?: string
   ): Promise<{ file: FileRecord }> => {
     const formData = new FormData()
     formData.append('file', file)
@@ -531,9 +595,34 @@ export const files = {
     if (isFeatured !== undefined) {
       formData.append('is_featured', isFeatured ? '1' : '0')
     }
+    if (displayName) {
+      formData.append('display_name', displayName)
+    }
     const response = await api.post('/files', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    return response.data
+  },
+
+  uploadFromUrl: async (
+    url: string,
+    fileableType: FileableType,
+    fileableId: number,
+    isFeatured?: boolean,
+    displayName?: string
+  ): Promise<{ file: FileRecord }> => {
+    const response = await api.post('/files/from-url', {
+      url,
+      fileable_type: fileableType,
+      fileable_id: fileableId,
+      is_featured: isFeatured,
+      display_name: displayName,
+    })
+    return response.data
+  },
+
+  update: async (id: number, data: { display_name?: string | null }): Promise<{ file: FileRecord }> => {
+    const response = await api.patch(`/files/${id}`, data)
     return response.data
   },
 
@@ -637,6 +726,41 @@ export interface AISettings {
   local_api_key?: string
 }
 
+// AI Agent Types
+export type AIAgentName = 'claude' | 'openai' | 'gemini' | 'local'
+
+export interface AIAgentTestResult {
+  success: boolean
+  tested_at: string
+  error?: string | null
+}
+
+export interface AIAgent {
+  name: AIAgentName
+  display_name: string
+  enabled: boolean
+  configured: boolean
+  available: boolean
+  model: string | null
+  default_model: string | null
+  last_success_at: string | null
+  last_test: AIAgentTestResult | null
+  is_primary: boolean
+}
+
+export interface AIAgentsResponse {
+  agents: AIAgent[]
+  primary_agent: AIAgentName | null
+  key_status: Record<AIAgentName, boolean>
+}
+
+export interface AIAgentUpdateData {
+  enabled?: boolean
+  model?: string | null
+  api_key?: string
+  base_url?: string | null
+}
+
 export type AllSettings = StorageSettings & EmailSettings & AISettings
 
 export const settings = {
@@ -675,6 +799,32 @@ export const settings = {
 
   testAI: async (settings?: AISettings): Promise<{ success: boolean; message: string; provider?: string; model?: string }> => {
     const response = await api.post('/settings/ai/test', settings ? { settings } : {})
+    return response.data
+  },
+
+  // AI Agent Management
+  getAgents: async (): Promise<AIAgentsResponse> => {
+    const response = await api.get('/settings/ai/agents')
+    return response.data
+  },
+
+  updateAgent: async (agent: AIAgentName, data: AIAgentUpdateData): Promise<{ message: string }> => {
+    const response = await api.patch(`/settings/ai/agents/${agent}`, data)
+    return response.data
+  },
+
+  testAgent: async (agent: AIAgentName, settings?: Record<string, string>): Promise<{
+    success: boolean
+    message: string
+    model?: string
+    response_time_ms?: number
+  }> => {
+    const response = await api.post(`/settings/ai/agents/${agent}/test`, settings ? { settings } : {})
+    return response.data
+  },
+
+  setPrimaryAgent: async (agent: AIAgentName): Promise<{ message: string }> => {
+    const response = await api.post('/settings/ai/primary', { agent })
     return response.data
   },
 }

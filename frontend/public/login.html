@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In - Housarr</title>
+  <link rel="icon" type="image/svg+xml" href="/vite.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary-600: #7F56D9;
+      --primary-700: #6941C6;
+      --gray-50: #FAFAFA;
+      --gray-100: #F5F5F5;
+      --gray-200: #E9EAEB;
+      --gray-300: #D5D7DA;
+      --gray-400: #A4A7AE;
+      --gray-500: #717680;
+      --gray-700: #414651;
+      --gray-800: #252B37;
+      --gray-900: #181D27;
+      --gray-950: #0A0D12;
+      --error-600: #D92D20;
+      --white: #FFFFFF;
+    }
+    
+    html { scroll-behavior: smooth; }
+    
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 48px 16px;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    
+    /* Light mode (default) */
+    body {
+      background-color: var(--gray-50);
+      color: var(--gray-900);
+    }
+    
+    /* Dark mode */
+    html.dark body {
+      background-color: var(--gray-950);
+      color: var(--gray-50);
+    }
+    
+    .container {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    
+    /* Theme toggle */
+    .theme-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 1px solid var(--gray-300);
+      background: var(--white);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    
+    .theme-toggle:hover {
+      background: var(--gray-50);
+      border-color: var(--gray-400);
+    }
+    
+    html.dark .theme-toggle {
+      background: var(--gray-800);
+      border-color: var(--gray-700);
+    }
+    
+    html.dark .theme-toggle:hover {
+      background: var(--gray-700);
+    }
+    
+    .theme-toggle svg {
+      width: 20px;
+      height: 20px;
+      color: var(--gray-700);
+    }
+    
+    html.dark .theme-toggle svg {
+      color: var(--gray-200);
+    }
+    
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
+    html.dark .sun-icon { display: none; }
+    html.dark .moon-icon { display: block; }
+    
+    /* Logo */
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary-600);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .logo-icon svg {
+      width: 24px;
+      height: 24px;
+      color: var(--white);
+    }
+    
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    
+    html.dark .logo-text {
+      color: var(--gray-50);
+    }
+    
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    
+    .header h1 {
+      font-size: 30px;
+      font-weight: 600;
+      line-height: 38px;
+      margin-bottom: 8px;
+    }
+    
+    html.dark .header h1 {
+      color: var(--gray-50);
+    }
+    
+    .header p {
+      color: var(--gray-500);
+      font-size: 16px;
+    }
+    
+    html.dark .header p {
+      color: var(--gray-400);
+    }
+    
+    /* Card */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 32px 40px;
+      box-shadow: 0px 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    
+    html.dark .card {
+      background: var(--gray-900);
+      border-color: var(--gray-800);
+    }
+    
+    @media (max-width: 640px) {
+      .card { padding: 32px 24px; }
+    }
+    
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group:last-of-type {
+      margin-bottom: 24px;
+    }
+    
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 6px;
+    }
+    
+    html.dark label {
+      color: var(--gray-200);
+    }
+    
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 16px;
+      font-family: inherit;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--gray-900);
+      transition: all 0.15s;
+      box-shadow: 0px 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    
+    input::placeholder {
+      color: var(--gray-500);
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: var(--primary-600);
+      box-shadow: 0 0 0 4px rgba(127, 86, 217, 0.24);
+    }
+    
+    html.dark input {
+      background: var(--gray-800);
+      border-color: var(--gray-700);
+      color: var(--gray-100);
+    }
+    
+    html.dark input::placeholder {
+      color: var(--gray-400);
+    }
+    
+    html.dark input:focus {
+      border-color: var(--primary-600);
+    }
+    
+    input.error {
+      border-color: var(--error-600);
+    }
+    
+    input.error:focus {
+      box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.24);
+    }
+    
+    .error-text {
+      color: var(--error-600);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    
+    /* Button */
+    button[type="submit"] {
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      color: var(--white);
+      background: var(--primary-600);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0px 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    button[type="submit"]:hover:not(:disabled) {
+      background: var(--primary-700);
+    }
+    
+    button[type="submit"]:focus {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(127, 86, 217, 0.24);
+    }
+    
+    button[type="submit"]:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Footer */
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: var(--gray-500);
+    }
+    
+    html.dark .footer {
+      color: var(--gray-400);
+    }
+    
+    .footer a {
+      color: var(--primary-600);
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    
+    .footer a:hover {
+      color: var(--primary-700);
+    }
+    
+    html.dark .footer a {
+      color: #B692F6;
+    }
+    
+    html.dark .footer a:hover {
+      color: #D6BBFB;
+    }
+    
+    /* Alert */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .alert.error {
+      background: #FEF3F2;
+      border: 1px solid #FECDCA;
+      color: #B42318;
+    }
+    
+    html.dark .alert.error {
+      background: rgba(180, 35, 24, 0.1);
+      border-color: rgba(180, 35, 24, 0.3);
+      color: #F97066;
+    }
+    
+    .alert.show {
+      display: block;
+    }
+  </style>
+  <script>
+    // Apply theme immediately to prevent flash
+    (function() {
+      try {
+        const stored = localStorage.getItem('housarr-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = stored === 'dark' || (stored === 'auto' && prefersDark) || (!stored && prefersDark) ? 'dark' : 'light';
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- Theme Toggle -->
+  <button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    </svg>
+  </button>
+
+  <div class="container">
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      </div>
+      <span class="logo-text">Housarr</span>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Welcome back</h1>
+      <p>Sign in to your account to continue</p>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+      <div id="alert" class="alert error"></div>
+      
+      <form id="loginForm" novalidate>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            placeholder="Enter your email"
+            autocomplete="email"
+            required
+          >
+          <div id="emailError" class="error-text" style="display: none;"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            placeholder="Enter your password"
+            autocomplete="current-password"
+            required
+          >
+          <div id="passwordError" class="error-text" style="display: none;"></div>
+        </div>
+
+        <button type="submit" id="submitBtn">
+          <span id="btnText">Sign in</span>
+          <div id="btnSpinner" class="spinner" style="display: none;"></div>
+        </button>
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <p class="footer">
+      Don't have an account? <a href="/register">Sign up</a>
+    </p>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.contains('dark');
+      if (isDark) {
+        html.classList.remove('dark');
+        localStorage.setItem('housarr-theme', 'light');
+      } else {
+        html.classList.add('dark');
+        localStorage.setItem('housarr-theme', 'dark');
+      }
+    }
+
+    const form = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const emailError = document.getElementById('emailError');
+    const passwordError = document.getElementById('passwordError');
+    const alert = document.getElementById('alert');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+
+    function showError(input, errorEl, message) {
+      input.classList.add('error');
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
+
+    function clearError(input, errorEl) {
+      input.classList.remove('error');
+      errorEl.style.display = 'none';
+    }
+
+    function clearAllErrors() {
+      clearError(emailInput, emailError);
+      clearError(passwordInput, passwordError);
+      alert.classList.remove('show');
+    }
+
+    function setLoading(loading) {
+      submitBtn.disabled = loading;
+      btnText.textContent = loading ? 'Signing in...' : 'Sign in';
+      btnSpinner.style.display = loading ? 'block' : 'none';
+    }
+
+    function validateEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearAllErrors();
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      // Validate
+      let valid = true;
+      
+      if (!email) {
+        showError(emailInput, emailError, 'Email is required');
+        valid = false;
+      } else if (!validateEmail(email)) {
+        showError(emailInput, emailError, 'Please enter a valid email');
+        valid = false;
+      }
+
+      if (!password) {
+        showError(passwordInput, passwordError, 'Password is required');
+        valid = false;
+      } else if (password.length < 8) {
+        showError(passwordInput, passwordError, 'Password must be at least 8 characters');
+        valid = false;
+      }
+
+      if (!valid) return;
+
+      setLoading(true);
+
+      try {
+        // Get CSRF cookie first
+        await fetch('/sanctum/csrf-cookie', {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        // Get CSRF token from cookie
+        const csrfToken = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('XSRF-TOKEN='))
+          ?.split('=')[1];
+
+        // Login request
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-XSRF-TOKEN': csrfToken ? decodeURIComponent(csrfToken) : '',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (response.ok) {
+          // #region agent log
+          console.log('[DEBUG] login API success at', Date.now(), '- about to redirect');
+          // Store timestamp for measuring redirect time
+          sessionStorage.setItem('login_redirect_start', Date.now().toString());
+          // #endregion
+          // Success - redirect to app
+          window.location.href = '/';
+        } else {
+          const data = await response.json().catch(() => ({}));
+          alert.textContent = data.message || 'Invalid email or password';
+          alert.classList.add('show');
+          setLoading(false);
+        }
+      } catch (err) {
+        alert.textContent = 'Unable to connect. Please try again.';
+        alert.classList.add('show');
+        setLoading(false);
+      }
+    });
+
+    // Clear errors on input
+    emailInput.addEventListener('input', () => clearError(emailInput, emailError));
+    passwordInput.addEventListener('input', () => clearError(passwordInput, passwordError));
+  </script>
+</body>
+</html>

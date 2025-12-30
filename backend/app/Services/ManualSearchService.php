@@ -131,22 +131,54 @@ class ManualSearchService
             return [];
         }
 
+        // Map common brands to their EXACT support URL patterns
+        $brandPatterns = [
+            'ge' => "https://products.geappliances.com/appliance/gea-specs/{MODEL}/support",
+            'ge profile' => "https://products.geappliances.com/appliance/gea-specs/{MODEL}/support",
+            'general electric' => "https://products.geappliances.com/appliance/gea-specs/{MODEL}/support",
+            'lg' => "https://www.lg.com/us/support/products/{MODEL}",
+            'samsung' => "https://www.samsung.com/us/support/model/{MODEL}/",
+            'whirlpool' => "https://www.whirlpool.com/services/product-details.{MODEL}.html",
+            'carrier' => "https://www.carrier.com/residential/en/us/products/{MODEL}/",
+            'trane' => "https://www.trane.com/residential/en/products/{MODEL}/",
+            'honeywell' => "https://customer.resideo.com/en-US/support/product-support/",
+            'bosch' => "https://www.bosch-home.com/us/support/product-details/{MODEL}",
+            'kitchenaid' => "https://www.kitchenaid.com/services/product-details.{MODEL}.html",
+            'maytag' => "https://www.maytag.com/services/product-details.{MODEL}.html",
+            'frigidaire' => "https://www.frigidaire.com/support/product/{MODEL}/",
+            'dyson' => "https://www.dyson.com/support/journey/register/{MODEL}",
+        ];
+
+        $makeLower = strtolower($make);
+        $knownUrl = '';
+        foreach ($brandPatterns as $brand => $pattern) {
+            if (stripos($makeLower, $brand) !== false) {
+                $knownUrl = str_replace('{MODEL}', $model, $pattern);
+                break;
+            }
+        }
+
         $prompt = <<<PROMPT
-You are helping find product manuals online. Given this product:
+Find the EXACT product support page URL for this product:
 
 Make: {$make}
 Model: {$model}
 
-Suggest up to 5 direct URLs where the user manual or installation guide PDF might be found.
-Focus on:
-1. The manufacturer's official support/documentation page
-2. Known manual repository sites (manualslib.com, manualsonline.com, etc.)
-3. Direct PDF links if you know them
+KNOWN URL PATTERNS FOR THIS BRAND:
+- GE/GE Profile: https://products.geappliances.com/appliance/gea-specs/MODEL/support
+- LG: https://www.lg.com/us/support/products/MODEL
+- Samsung: https://www.samsung.com/us/support/model/MODEL/
+- Whirlpool/KitchenAid/Maytag: https://www.BRAND.com/services/product-details.MODEL.html
 
-Return ONLY a JSON array of URLs, no other text:
-["https://example.com/manual.pdf", "https://example2.com/docs"]
+For the model "{$model}", provide:
+1. The EXACT manufacturer support page URL using the pattern above
+2. The direct PDF manual download URL if you know it
+3. ManualsLib URL: https://www.manualslib.com/products/Make-Model-XXX.html
 
-If you don't know specific URLs, return an empty array: []
+Return ONLY a JSON array of 1-3 URLs, no explanation:
+["https://products.geappliances.com/appliance/gea-specs/{$model}/support"]
+
+Do NOT make up URLs. Use the exact patterns shown above.
 PROMPT;
 
         try {
@@ -156,7 +188,9 @@ PROMPT;
                 if (preg_match('/\[[\s\S]*\]/', $response, $matches)) {
                     $urls = json_decode($matches[0], true);
                     if (is_array($urls)) {
-                        return array_filter($urls, fn($url) => filter_var($url, FILTER_VALIDATE_URL));
+                        $validUrls = array_filter($urls, fn($url) => filter_var($url, FILTER_VALIDATE_URL));
+                        Log::debug('AI suggested URLs', ['count' => count($validUrls), 'urls' => $validUrls]);
+                        return $validUrls;
                     }
                 }
             }
@@ -164,11 +198,21 @@ PROMPT;
             Log::warning('AI URL suggestion failed', ['error' => $e->getMessage()]);
         }
 
+        // Fallback: return known URL pattern if we have one
+        if ($knownUrl) {
+            Log::debug('Using known brand URL pattern', ['url' => $knownUrl]);
+            return [$knownUrl];
+        }
+
         return [];
     }
 
     /**
      * Search DuckDuckGo with multiple query formats using parallel requests.
+     * 
+     * NOTE: DuckDuckGo has implemented bot detection that often blocks automated
+     * requests with CAPTCHAs. This method may return empty results. As a fallback,
+     * we return pre-constructed search URLs that users can visit manually.
      */
     protected function searchWithDuckDuckGo(string $make, string $model): array
     {
@@ -191,6 +235,10 @@ PROMPT;
                         'User-Agent' => self::USER_AGENT,
                         'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language' => 'en-US,en;q=0.5',
+                        'DNT' => '1',
+                        'Sec-Fetch-Dest' => 'document',
+                        'Sec-Fetch-Mode' => 'navigate',
+                        'Sec-Fetch-Site' => 'none',
                     ])
                     ->timeout(20)
                     ->get('https://html.duckduckgo.com/html/', ['q' => $query]),
@@ -199,10 +247,21 @@ PROMPT;
 
             $allUrls = [];
             $successfulQueries = 0;
+            $blockedByBot = false;
+            
             foreach ($responses as $index => $response) {
                 if ($response->successful()) {
+                    $body = $response->body();
+                    
+                    // Check if we hit bot detection
+                    if (stripos($body, 'anomaly-modal') !== false || stripos($body, 'bots use DuckDuckGo') !== false) {
+                        Log::warning('DuckDuckGo bot detection triggered');
+                        $blockedByBot = true;
+                        continue;
+                    }
+                    
                     $successfulQueries++;
-                    $urls = $this->extractUrlsFromHtml($response->body());
+                    $urls = $this->extractUrlsFromHtml($body);
                     Log::debug('DuckDuckGo query results', [
                         'query' => $queries[$index] ?? 'unknown',
                         'urls_found' => count($urls)
@@ -219,16 +278,56 @@ PROMPT;
             $uniqueUrls = array_unique($allUrls);
             Log::debug('DuckDuckGo search complete', [
                 'successful_queries' => $successfulQueries,
-                'total_urls' => count($uniqueUrls)
+                'total_urls' => count($uniqueUrls),
+                'blocked_by_bot' => $blockedByBot
             ]);
 
-            return $uniqueUrls;
+            // If blocked or no results, return structured data with search links
+            if ($blockedByBot || empty($uniqueUrls)) {
+                Log::info('DuckDuckGo blocked - returning search links for manual access');
+                return [
+                    'urls' => [],
+                    'search_links' => $this->getSearchLinks($make, $model),
+                ];
+            }
+
+            return [
+                'urls' => $uniqueUrls,
+                'search_links' => [],
+            ];
         } catch (\Exception $e) {
             Log::error('DuckDuckGo parallel search error', ['error' => $e->getMessage()]);
-
-            // Fallback to sequential search on failure
-            return $this->searchWithDuckDuckGoSequential($make, $model);
+            
+            // Return search links as fallback
+            return [
+                'urls' => [],
+                'search_links' => $this->getSearchLinks($make, $model),
+            ];
         }
+    }
+    
+    /**
+     * Get labeled search links that user can visit manually.
+     * Returns array of objects with 'url' and 'label' keys.
+     */
+    protected function getSearchLinks(string $make, string $model): array
+    {
+        $makeModel = urlencode("{$make} {$model}");
+        
+        return [
+            [
+                'url' => "https://www.google.com/search?q={$makeModel}+manual+PDF+filetype:pdf",
+                'label' => "Google: {$make} {$model} manual PDF"
+            ],
+            [
+                'url' => "https://www.google.com/search?q=site:manualslib.com+{$makeModel}",
+                'label' => "ManualsLib: {$make} {$model}"
+            ],
+            [
+                'url' => "https://duckduckgo.com/?q={$makeModel}+owner%27s+manual+PDF",
+                'label' => "DuckDuckGo: {$make} {$model} manual"
+            ],
+        ];
     }
 
     /**
@@ -471,6 +570,42 @@ PROMPT;
                 $pdfUrl = $this->findPdfOnManualsLib($html, $baseUrl, $make, $model);
                 if ($pdfUrl) {
                     return $pdfUrl;
+                }
+            }
+
+            // Special handling for GE Appliances - look for their specific PDF patterns
+            if (stripos($pageUrl, 'geappliances.com') !== false || stripos($pageUrl, 'products.ge') !== false) {
+                // GE uses a specific pattern for manuals: look for links containing "manual" and "pdf"
+                preg_match_all('/href=["\']([^"\']+)["\'][^>]*>[^<]*(?:manual|owner|guide)[^<]*/i', $html, $geManuals);
+                foreach ($geManuals[1] ?? [] as $link) {
+                    if (!empty($link) && stripos($link, 'pdf') !== false) {
+                        if (!preg_match('/^https?:\/\//', $link)) {
+                            $link = $baseUrl . $link;
+                        }
+                        Log::debug('Found GE manual link', ['url' => $link]);
+                        return $link;
+                    }
+                }
+                
+                // Also look for data-href attributes (GE sometimes uses these)
+                preg_match_all('/data-href=["\']([^"\']+\.pdf[^"\']*)["\']/', $html, $dataHrefMatches);
+                foreach ($dataHrefMatches[1] ?? [] as $link) {
+                    if (!preg_match('/^https?:\/\//', $link)) {
+                        $link = $baseUrl . $link;
+                    }
+                    Log::debug('Found GE data-href PDF link', ['url' => $link]);
+                    return $link;
+                }
+                
+                // Try looking for any link with the model number and .pdf
+                preg_match_all('/href=["\']([^"\']*' . preg_quote($model, '/') . '[^"\']*\.pdf[^"\']*)["\']|href=["\']([^"\']*\.pdf[^"\']*' . preg_quote($model, '/') . '[^"\']*)["\']/', $html, $modelPdfMatches);
+                $modelPdfs = array_filter(array_merge($modelPdfMatches[1] ?? [], $modelPdfMatches[2] ?? []));
+                foreach ($modelPdfs as $link) {
+                    if (!preg_match('/^https?:\/\//', $link)) {
+                        $link = $baseUrl . $link;
+                    }
+                    Log::debug('Found GE model-specific PDF link', ['url' => $link]);
+                    return $link;
                 }
             }
 

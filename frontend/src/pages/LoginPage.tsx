@@ -5,42 +5,33 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, Home, ThemeToggle, LoadingScreen } from '@/components/ui'
+import { Icon, Home, ThemeToggle } from '@/components/ui'
 import { loginSchema, type LoginInput } from '@/lib/validations'
 import { toast } from 'sonner'
 
 export default function LoginPage() {
   const { login } = useAuthStore()
   const navigate = useNavigate()
-  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
   })
 
   const onSubmit = async (data: LoginInput) => {
+    setIsLoading(true)
     try {
       await login(data.email, data.password)
-      // Show loading screen instead of navigating immediately
-      setIsTransitioning(true)
+      navigate('/')
     } catch {
       toast.error('Invalid email or password')
+    } finally {
+      setIsLoading(false)
     }
-  }
-
-  // Show fun loading screen after successful login
-  if (isTransitioning) {
-    return (
-      <LoadingScreen 
-        title="Welcome back!" 
-        duration={2500}
-        onComplete={() => navigate('/')}
-      />
-    )
   }
 
   return (
@@ -90,7 +81,7 @@ export default function LoginPage() {
               {...register('password')}
             />
 
-            <Button type="submit" className="w-full" size="lg" isLoading={isSubmitting}>
+            <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
               Sign in
             </Button>
           </form>

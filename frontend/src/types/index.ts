@@ -120,6 +120,7 @@ export interface MaintenanceLog {
   notes: string | null
   attachments: string[] | null
   vendor?: Vendor
+  parts?: Part[]
   created_at: string
   updated_at: string
 }
@@ -177,6 +178,7 @@ export interface FileRecord {
   disk: string
   path: string
   original_name: string
+  display_name: string | null
   mime_type: string | null
   size: number | null
   is_featured: boolean

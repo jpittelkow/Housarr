@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useReducer, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { household, users, categories, locations, auth, backup, settings, type StorageSettings, type EmailSettings, type AISettings } from '@/services/api'
+import { AIAgentCard } from '@/components/settings/AIAgentCard'
 import { useAuthStore } from '@/stores/authStore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
-import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip } from '@/components/ui'
+import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip, Star } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { toast } from 'sonner'
 
@@ -120,7 +121,7 @@ export default function SettingsPage() {
 
   // Use reducer for settings state - better performance than multiple useState
   const [settingsState, dispatchSettings] = useReducer(settingsReducer, initialSettingsState)
-  const { storage: storageSettings, email: emailSettings, ai: aiSettings, aiKeyEditing } = settingsState
+  const { storage: storageSettings, email: emailSettings } = settingsState
 
   // Memoized dispatch helpers to avoid creating new functions on each render
   const setStorageSettings = useCallback((updates: Partial<StorageSettings>) => {
@@ -128,12 +129,6 @@ export default function SettingsPage() {
   }, [])
   const setEmailSettings = useCallback((updates: Partial<EmailSettings>) => {
     dispatchSettings({ type: 'SET_EMAIL', payload: updates })
-  }, [])
-  const setAISettings = useCallback((updates: Partial<AISettings>) => {
-    dispatchSettings({ type: 'SET_AI', payload: updates })
-  }, [])
-  const setAIKeyEditing = useCallback((updates: Partial<SettingsState['aiKeyEditing']>) => {
-    dispatchSettings({ type: 'SET_AI_KEY_EDITING', payload: updates })
   }, [])
 
   const { data: householdData } = useQuery({
@@ -160,6 +155,14 @@ export default function SettingsPage() {
     queryKey: ['settings'],
     queryFn: () => settings.get(),
     enabled: user?.role === 'admin',
+  })
+
+  // AI Agents query
+  const { data: agentsData, refetch: refetchAgents } = useQuery({
+    queryKey: ['ai-agents'],
+    queryFn: () => settings.getAgents(),
+    enabled: user?.role === 'admin',
+    refetchInterval: 60000, // Auto-refresh every 60 seconds
   })
 
   // Populate settings when data is loaded - use RESET for full state replacement
@@ -342,30 +345,6 @@ export default function SettingsPage() {
     },
     onError: () => {
       toast.error('Failed to update email settings')
-    },
-  })
-
-  const updateAISettingsMutation = useMutation({
-    mutationFn: (data: AISettings) => settings.update(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
-      // Reset editing state
-      setAIKeyEditing({ anthropic: false, openai: false, gemini: false, local: false })
-      toast.success('AI settings updated')
-    },
-    onError: () => {
-      toast.error('Failed to update AI settings')
-    },
-  })
-
-  const testAIMutation = useMutation({
-    mutationFn: (testSettings: AISettings) => settings.testAI(testSettings),
-    onSuccess: (data) => {
-      toast.success(`${data.message} (${data.provider}: ${data.model})`)
-    },
-    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
-      const message = error.response?.data?.message || 'Failed to connect to AI provider'
-      toast.error(message)
     },
   })
 
@@ -1027,352 +1006,39 @@ export default function SettingsPage() {
       {/* AI Configuration - Admin only */}
       {user?.role === 'admin' && (
         <Card>
-          <CardHeader className="border-b border-gray-200">
+          <CardHeader className="border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg border border-gray-200 bg-white flex items-center justify-center">
-                <Icon icon={Zap} size="sm" className="text-gray-700" />
+              <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center">
+                <Icon icon={Zap} size="sm" className="text-gray-700 dark:text-gray-300" />
               </div>
               <div>
                 <CardTitle>AI Configuration</CardTitle>
-                <CardDescription>Connect to AI providers for smart features</CardDescription>
+                <CardDescription>Configure AI providers for smart features. Enable multiple agents and set a primary for result summarization.</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                updateAISettingsMutation.mutate(aiSettings)
-              }}
-              className="space-y-6"
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">AI Provider</label>
-                <Select
-                  options={[
-                    { value: 'none', label: 'None (Disabled)' },
-                    { value: 'claude', label: 'Claude (Anthropic)' },
-                    { value: 'openai', label: 'OpenAI' },
-                    { value: 'gemini', label: 'Gemini (Google)' },
-                    { value: 'local', label: 'Local Model (Ollama, LM Studio)' },
-                  ]}
-                  value={aiSettings.ai_provider || 'none'}
-                  onChange={(e) => setAISettings({ ai_provider: e.target.value as AISettings['ai_provider'] })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Select an AI provider to enable smart features like auto-categorization and suggestions.
+            {agentsData?.agents ? (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Enable AI agents below. The <Badge variant="primary" size="sm"><Icon icon={Star} size="xs" className="mr-0.5" />Primary</Badge> agent is used for summarizing results when multiple agents are called.
                 </p>
+                <div className="grid gap-4">
+                  {agentsData.agents.map((agent) => (
+                    <AIAgentCard
+                      key={agent.name}
+                      agent={agent}
+                      hasApiKey={agentsData.key_status[agent.name] ?? false}
+                      onRefresh={() => refetchAgents()}
+                    />
+                  ))}
+                </div>
               </div>
-
-              {/* Claude (Anthropic) Settings */}
-              {aiSettings.ai_provider === 'claude' && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900">Claude Settings</h4>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
-                    {settingsData?.key_status?.anthropic_api_key_set && !aiKeyEditing.anthropic ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
-                          API key saved ••••••••
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setAIKeyEditing({ anthropic: true })}
-                        >
-                          Change
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this API key?')) {
-                              setAISettings({ anthropic_api_key: '__DELETE__' })
-                              updateAISettingsMutation.mutate({ anthropic_api_key: '__DELETE__' })
-                            }
-                          }}
-                        >
-                          <Icon icon={Trash2} size="xs" className="text-error-500" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          type="password"
-                          value={aiSettings.anthropic_api_key || ''}
-                          onChange={(e) => setAISettings({ anthropic_api_key: e.target.value })}
-                          placeholder={aiKeyEditing.anthropic ? "Enter new API key" : "Enter API key"}
-                          hint="Get your API key from console.anthropic.com"
-                        />
-                        {aiKeyEditing.anthropic && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setAIKeyEditing({ anthropic: false })
-                              setAISettings({ anthropic_api_key: '' })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    label="Model"
-                    value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
-                    placeholder="claude-sonnet-4-20250514"
-                    hint="Leave blank for default model"
-                  />
-                </div>
-              )}
-
-              {/* OpenAI Settings */}
-              {aiSettings.ai_provider === 'openai' && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900">OpenAI Settings</h4>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
-                    {settingsData?.key_status?.openai_api_key_set && !aiKeyEditing.openai ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
-                          API key saved ••••••••
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setAIKeyEditing({ openai: true })}
-                        >
-                          Change
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this API key?')) {
-                              setAISettings({ openai_api_key: '__DELETE__' })
-                              updateAISettingsMutation.mutate({ openai_api_key: '__DELETE__' })
-                            }
-                          }}
-                        >
-                          <Icon icon={Trash2} size="xs" className="text-error-500" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          type="password"
-                          value={aiSettings.openai_api_key || ''}
-                          onChange={(e) => setAISettings({ openai_api_key: e.target.value })}
-                          placeholder={aiKeyEditing.openai ? "Enter new API key" : "Enter API key"}
-                          hint="Get your API key from platform.openai.com"
-                        />
-                        {aiKeyEditing.openai && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setAIKeyEditing({ openai: false })
-                              setAISettings({ openai_api_key: '' })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    label="Model"
-                    value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
-                    placeholder="gpt-4o"
-                    hint="Leave blank for default model"
-                  />
-                  <Input
-                    label="Base URL (Optional)"
-                    value={aiSettings.openai_base_url || ''}
-                    onChange={(e) => setAISettings({ openai_base_url: e.target.value })}
-                    placeholder="https://api.openai.com/v1"
-                    hint="For OpenAI-compatible APIs (Azure, etc.)"
-                  />
-                </div>
-              )}
-
-              {/* Gemini Settings */}
-              {aiSettings.ai_provider === 'gemini' && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900">Gemini Settings</h4>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key</label>
-                    {settingsData?.key_status?.gemini_api_key_set && !aiKeyEditing.gemini ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
-                          API key saved ••••••••
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setAIKeyEditing({ gemini: true })}
-                        >
-                          Change
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this API key?')) {
-                              setAISettings({ gemini_api_key: '__DELETE__' })
-                              updateAISettingsMutation.mutate({ gemini_api_key: '__DELETE__' })
-                            }
-                          }}
-                        >
-                          <Icon icon={Trash2} size="xs" className="text-error-500" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          type="password"
-                          value={aiSettings.gemini_api_key || ''}
-                          onChange={(e) => setAISettings({ gemini_api_key: e.target.value })}
-                          placeholder={aiKeyEditing.gemini ? "Enter new API key" : "Enter API key"}
-                          hint="Get your API key from aistudio.google.com"
-                        />
-                        {aiKeyEditing.gemini && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setAIKeyEditing({ gemini: false })
-                              setAISettings({ gemini_api_key: '' })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <Input
-                    label="Model"
-                    value={aiSettings.ai_model || ''}
-                    onChange={(e) => setAISettings({ ai_model: e.target.value })}
-                    placeholder="gemini-1.5-pro"
-                    hint="Leave blank for default model"
-                  />
-                  <Input
-                    label="Base URL (Optional)"
-                    value={aiSettings.gemini_base_url || ''}
-                    onChange={(e) => setAISettings({ gemini_base_url: e.target.value })}
-                    placeholder="https://generativelanguage.googleapis.com/v1beta"
-                    hint="Leave blank for default Google API"
-                  />
-                </div>
-              )}
-
-              {/* Local Model Settings */}
-              {aiSettings.ai_provider === 'local' && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900">Local Model Settings</h4>
-                  <Input
-                    label="Base URL"
-                    value={aiSettings.local_base_url || ''}
-                    onChange={(e) => setAISettings({ local_base_url: e.target.value })}
-                    placeholder="http://localhost:11434"
-                    hint="Ollama: http://localhost:11434, LM Studio: http://localhost:1234"
-                  />
-                  <Input
-                    label="Model Name"
-                    value={aiSettings.local_model || ''}
-                    onChange={(e) => setAISettings({ local_model: e.target.value })}
-                    placeholder="llama3"
-                    hint="The model name as shown in your local server"
-                  />
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">API Key (Optional)</label>
-                    {settingsData?.key_status?.local_api_key_set && !aiKeyEditing.local ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-500">
-                          API key saved ••••••••
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setAIKeyEditing({ local: true })}
-                        >
-                          Change
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Delete this API key?')) {
-                              setAISettings({ local_api_key: '__DELETE__' })
-                              updateAISettingsMutation.mutate({ local_api_key: '__DELETE__' })
-                            }
-                          }}
-                        >
-                          <Icon icon={Trash2} size="xs" className="text-error-500" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          type="password"
-                          value={aiSettings.local_api_key || ''}
-                          onChange={(e) => setAISettings({ local_api_key: e.target.value })}
-                          placeholder={aiKeyEditing.local ? "Enter new API key" : "Enter API key if required"}
-                          hint="Only needed if your local server requires authentication"
-                        />
-                        {aiKeyEditing.local && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setAIKeyEditing({ local: false })
-                              setAISettings({ local_api_key: '' })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <Button type="submit" isLoading={updateAISettingsMutation.isPending}>
-                  Save AI Settings
-                </Button>
-                {aiSettings.ai_provider !== 'none' && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    isLoading={testAIMutation.isPending}
-                    onClick={() => testAIMutation.mutate(aiSettings)}
-                  >
-                    Test Connection
-                  </Button>
-                )}
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                Loading AI configuration...
               </div>
-            </form>
+            )}
           </CardContent>
         </Card>
       )}

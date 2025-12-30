@@ -70,6 +70,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/items/{item}/ai-config', [ItemController::class, 'checkAIConfig']);
     Route::post('/items/{item}/ai-query', [ItemController::class, 'queryAISuggestions']);
     Route::post('/items/{item}/suggest-parts', [ItemController::class, 'suggestParts']);
+    Route::post('/items/{item}/search-part-image', [ItemController::class, 'searchPartImage']);
 
     // Parts
     Route::get('/items/{item}/parts', [PartController::class, 'index']);
@@ -105,11 +106,19 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/settings/ai', [SettingController::class, 'checkAI']);
     Route::post('/settings/ai/test', [SettingController::class, 'testAI']);
 
+    // AI Agent Management
+    Route::get('/settings/ai/agents', [SettingController::class, 'getAgentsStatus']);
+    Route::patch('/settings/ai/agents/{agent}', [SettingController::class, 'updateAgent']);
+    Route::post('/settings/ai/agents/{agent}/test', [SettingController::class, 'testAgentConnection']);
+    Route::post('/settings/ai/primary', [SettingController::class, 'setPrimaryAgent']);
+
     // Files (with stricter rate limiting for uploads)
     Route::middleware('throttle:30,1')->group(function () {
         Route::post('/files', [FileController::class, 'store']);
+        Route::post('/files/from-url', [FileController::class, 'storeFromUrl']);
     });
     Route::post('/files/{file}/featured', [FileController::class, 'setFeatured']);
+    Route::patch('/files/{file}', [FileController::class, 'update']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
 
     // Backup/Restore (admin only, rate limited)

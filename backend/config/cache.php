@@ -3,7 +3,7 @@
 use Illuminate\Support\Str;
 
 return [
-    'default' => env('CACHE_STORE', 'redis'),
+    'default' => env('CACHE_STORE', 'file'),
 
     'stores' => [
         'array' => [
@@ -21,8 +21,9 @@ return [
 
         'file' => [
             'driver' => 'file',
-            'path' => storage_path('framework/cache/data'),
-            'lock_path' => storage_path('framework/cache/data'),
+            // Use /tmp for cache files to avoid slow Windows-to-Docker volume mount I/O
+            'path' => env('CACHE_FILES_PATH', '/tmp/cache'),
+            'lock_path' => env('CACHE_FILES_PATH', '/tmp/cache'),
         ],
 
         'redis' => [

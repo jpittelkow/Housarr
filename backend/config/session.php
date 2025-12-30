@@ -3,11 +3,13 @@
 use Illuminate\Support\Str;
 
 return [
-    'driver' => env('SESSION_DRIVER', 'redis'),
+    // Database sessions are faster than file sessions on slow volume mounts
+    'driver' => env('SESSION_DRIVER', 'database'),
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
     'encrypt' => env('SESSION_ENCRYPT', false),
-    'files' => storage_path('framework/sessions'),
+    // Use /tmp for session files to avoid slow Windows-to-Docker volume mount I/O
+    'files' => env('SESSION_FILES_PATH', '/tmp/sessions'),
     'connection' => env('SESSION_CONNECTION'),
     'table' => env('SESSION_TABLE', 'sessions'),
     'store' => env('SESSION_STORE'),

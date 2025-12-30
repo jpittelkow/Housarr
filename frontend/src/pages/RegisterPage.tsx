@@ -5,42 +5,33 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, Home, LoadingScreen } from '@/components/ui'
+import { Icon, Home } from '@/components/ui'
 import { registerSchema, type RegisterInput } from '@/lib/validations'
 import { toast } from 'sonner'
 
 export default function RegisterPage() {
   const { register: registerUser } = useAuthStore()
   const navigate = useNavigate()
-  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
   })
 
   const onSubmit = async (data: RegisterInput) => {
+    setIsLoading(true)
     try {
       await registerUser(data)
-      // Show loading screen instead of navigating immediately
-      setIsTransitioning(true)
+      navigate('/')
     } catch {
       toast.error('Failed to create account. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
-  }
-
-  // Show fun loading screen after successful registration
-  if (isTransitioning) {
-    return (
-      <LoadingScreen 
-        title="Welcome to Housarr!" 
-        duration={2500}
-        onComplete={() => navigate('/')}
-      />
-    )
   }
 
   return (
@@ -110,7 +101,7 @@ export default function RegisterPage() {
               {...register('password_confirmation')}
             />
 
-            <Button type="submit" className="w-full" size="lg" isLoading={isSubmitting}>
+            <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
               Create account
             </Button>
           </form>

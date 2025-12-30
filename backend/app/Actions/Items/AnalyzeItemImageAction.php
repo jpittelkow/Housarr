@@ -2,16 +2,26 @@
 
 namespace App\Actions\Items;
 
-use App\Services\AIService;
+use App\Services\AIAgentOrchestrator;
+use App\Services\ProductImageSearchService;
 use Illuminate\Http\UploadedFile;
 
 class AnalyzeItemImageAction
 {
+    /**
+     * Execute the product analysis using multiple AI agents.
+     *
+     * @param UploadedFile|null $file Image file to analyze
+     * @param array|null $categories Available category names for context
+     * @param int|null $householdId Household ID for AI settings
+     * @param string|null $query Text query for product search
+     * @return array Results with agent metadata
+     */
     public function execute(?UploadedFile $file, ?array $categories = [], ?int $householdId = null, ?string $query = null): array
     {
-        $aiService = AIService::forHousehold($householdId);
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
 
-        if (!$aiService->isAvailable()) {
+        if (!$orchestrator->isAvailable()) {
             throw new \Exception('AI is not configured. Please configure an AI provider in Settings.');
         }
 
@@ -23,6 +33,32 @@ class AnalyzeItemImageAction
             $mimeType = $file->getMimeType();
         }
 
+        $prompt = $this->buildPrompt($file, $query, $categories);
+
+        // Use multi-agent analysis with synthesis
+        if ($base64Image) {
+            $response = $orchestrator->analyzeImageWithAllAgentsAndSynthesize(
+                $base64Image,
+                $mimeType,
+                $prompt,
+                ['max_tokens' => 2048, 'timeout' => 90]
+            );
+        } else {
+            $response = $orchestrator->callActiveAgentsWithSummary(
+                $prompt,
+                ['max_tokens' => 2048, 'timeout' => 60]
+            );
+        }
+
+        // Extract results from the orchestrator response
+        return $this->processOrchestratorResponse($response, $orchestrator);
+    }
+
+    /**
+     * Build the analysis prompt.
+     */
+    protected function buildPrompt(?UploadedFile $file, ?string $query, ?array $categories): string
+    {
         $categoryList = !empty($categories)
             ? "Available categories: " . implode(', ', $categories) . "\nChoose from these categories when possible, or suggest a new one if none fit."
             : "Suggest an appropriate category for this product.";
@@ -36,7 +72,7 @@ class AnalyzeItemImageAction
             $context = "Identify the product based on the following search text: '$query'.";
         }
 
-        $prompt = <<<PROMPT
+        return <<<PROMPT
 $context
 Identify the following:
 1. Make/Manufacturer (e.g., Carrier, GE, Samsung, Whirlpool)
@@ -56,52 +92,299 @@ Format:
 
 If you cannot identify the product, return an empty array: []
 PROMPT;
-
-        if ($base64Image) {
-            $results = $aiService->analyzeImage($base64Image, $mimeType, $prompt);
-        } else {
-            $response = $aiService->complete($prompt);
-            $results = $this->parseResults($response);
-        }
-
-        if ($results === null) {
-            throw new \Exception('Failed to analyze product. Please try again.');
-        }
-
-        return $this->normalizeResults($results);
     }
 
+    /**
+     * Process the orchestrator response into a standardized format.
+     */
+    protected function processOrchestratorResponse(array $response, AIAgentOrchestrator $orchestrator): array
+    {
+        $agentsUsed = [];
+        $agentDetails = [];
+        $agentsSucceeded = 0;
+        $agentErrors = [];
+
+        // Collect agent metadata
+        if (!empty($response['agents'])) {
+            foreach ($response['agents'] as $agentName => $agentResult) {
+                $agentsUsed[] = $agentName;
+                $success = $agentResult['success'] ?? false;
+                $agentDetails[$agentName] = [
+                    'success' => $success,
+                    'duration_ms' => $agentResult['duration_ms'] ?? 0,
+                    'error' => $agentResult['error'] ?? null,
+                    'has_response' => !empty($agentResult['response']),
+                ];
+                if ($success) {
+                    $agentsSucceeded++;
+                }
+                if (!empty($agentResult['error'])) {
+                    $agentErrors[$agentName] = $agentResult['error'];
+                }
+            }
+        }
+
+        // Get synthesized results (preferred) or summary
+        $synthesizedText = $response['synthesized'] ?? $response['summary'] ?? null;
+        $results = [];
+        $parseSource = null;
+
+        // Try to parse from synthesized response first
+        if ($synthesizedText) {
+            $results = $this->parseResults($synthesizedText);
+            if (!empty($results)) {
+                $parseSource = 'synthesized';
+            }
+        }
+
+        // If synthesis failed, try to parse from individual agent responses
+        if (empty($results) && !empty($response['agents'])) {
+            $results = $this->extractResultsFromAgentResponses($response['agents']);
+            if (!empty($results)) {
+                $parseSource = 'individual_agents';
+            }
+        }
+
+        // Handle case where we have no results
+        if ($results === null || empty($results)) {
+            // Return detailed error info instead of throwing
+            return [
+                'results' => [],
+                'agents_used' => $agentsUsed,
+                'agents_succeeded' => $agentsSucceeded,
+                'agent_details' => $agentDetails,
+                'agent_errors' => $agentErrors,
+                'primary_agent' => $orchestrator->getPrimaryAgent(),
+                'synthesis_agent' => $response['synthesis_agent'] ?? $response['summary_agent'] ?? null,
+                'synthesis_error' => $response['synthesis_error'] ?? $response['summary_error'] ?? null,
+                'consensus' => [
+                    'level' => 'none',
+                    'agents_agreeing' => 0,
+                    'total_agents' => count($agentsUsed),
+                ],
+                'total_duration_ms' => $response['total_duration_ms'] ?? 0,
+                'parse_source' => null,
+                'debug' => [
+                    'had_synthesized' => !empty($synthesizedText),
+                    'synthesized_preview' => $synthesizedText ? substr($synthesizedText, 0, 200) : null,
+                ],
+            ];
+        }
+
+        $normalizedResults = $this->normalizeResults($results);
+
+        // Calculate consensus info
+        $consensus = $this->calculateConsensus($response['agents'] ?? [], $normalizedResults);
+
+        return [
+            'results' => $normalizedResults,
+            'agents_used' => $agentsUsed,
+            'agents_succeeded' => $agentsSucceeded,
+            'agent_details' => $agentDetails,
+            'agent_errors' => $agentErrors,
+            'primary_agent' => $orchestrator->getPrimaryAgent(),
+            'synthesis_agent' => $response['synthesis_agent'] ?? $response['summary_agent'] ?? null,
+            'synthesis_error' => $response['synthesis_error'] ?? $response['summary_error'] ?? null,
+            'consensus' => $consensus,
+            'total_duration_ms' => $response['total_duration_ms'] ?? 0,
+            'parse_source' => $parseSource,
+        ];
+    }
+
+    /**
+     * Try to extract results from individual agent responses if synthesis failed.
+     */
+    protected function extractResultsFromAgentResponses(array $agents): ?array
+    {
+        $allResults = [];
+
+        foreach ($agents as $agentName => $agentData) {
+            if (($agentData['success'] ?? false) && !empty($agentData['response'])) {
+                $parsed = $this->parseResults($agentData['response']);
+                if (is_array($parsed) && !empty($parsed)) {
+                    foreach ($parsed as $result) {
+                        $result['source_agent'] = $agentName;
+                        $allResults[] = $result;
+                    }
+                }
+            }
+        }
+
+        if (empty($allResults)) {
+            return null;
+        }
+
+        // Deduplicate by make+model, keeping highest confidence
+        $unique = [];
+        foreach ($allResults as $result) {
+            $key = strtolower(($result['make'] ?? '') . '|' . ($result['model'] ?? ''));
+            if (!isset($unique[$key]) || ($result['confidence'] ?? 0) > ($unique[$key]['confidence'] ?? 0)) {
+                $unique[$key] = $result;
+            }
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * Calculate consensus information from agent responses.
+     */
+    protected function calculateConsensus(array $agents, array $normalizedResults): array
+    {
+        if (empty($normalizedResults) || empty($agents)) {
+            return [
+                'level' => 'none',
+                'agents_agreeing' => 0,
+                'total_agents' => count($agents),
+            ];
+        }
+
+        $successfulAgents = array_filter($agents, fn($a) => $a['success'] ?? false);
+        $totalSuccessful = count($successfulAgents);
+
+        if ($totalSuccessful <= 1) {
+            return [
+                'level' => 'single',
+                'agents_agreeing' => $totalSuccessful,
+                'total_agents' => count($agents),
+            ];
+        }
+
+        // Check if the top result has agents_agreed field from synthesis
+        $topResult = $normalizedResults[0] ?? [];
+        $agentsAgreed = $topResult['agents_agreed'] ?? $totalSuccessful;
+
+        $level = match (true) {
+            $agentsAgreed >= $totalSuccessful => 'full',
+            $agentsAgreed >= $totalSuccessful * 0.5 => 'majority',
+            $agentsAgreed >= 2 => 'partial',
+            default => 'low',
+        };
+
+        return [
+            'level' => $level,
+            'agents_agreeing' => $agentsAgreed,
+            'total_agents' => count($agents),
+        ];
+    }
+
+    /**
+     * Parse JSON results from a response string.
+     */
     protected function parseResults(?string $response): ?array
     {
         if (!$response) return null;
 
-        // Try to extract JSON from the response
-        $jsonPattern = '/\[[\s\S]*\]/';
+        // Clean up common issues
+        $response = trim($response);
+        
+        // Remove markdown code blocks if present
+        $response = preg_replace('/^```(?:json)?\s*/i', '', $response);
+        $response = preg_replace('/\s*```$/i', '', $response);
+        $response = trim($response);
+
+        // Try to extract JSON array from the response
+        $jsonPattern = '/\[[\s\S]*?\]/';
         if (preg_match($jsonPattern, $response, $matches)) {
-            return json_decode($matches[0], true);
+            $parsed = json_decode($matches[0], true);
+            if (is_array($parsed)) {
+                return $parsed;
+            }
         }
 
-        return json_decode($response, true);
+        // Try parsing the whole response as JSON
+        $parsed = json_decode($response, true);
+        if (is_array($parsed)) {
+            return $parsed;
+        }
+
+        return null;
     }
 
+    /**
+     * Normalize and sort results.
+     */
     protected function normalizeResults(array $results): array
     {
         $normalizedResults = [];
         foreach ($results as $result) {
             if (isset($result['make']) || isset($result['model']) || isset($result['type'])) {
-                $normalizedResults[] = [
+                $normalized = [
                     'make' => $result['make'] ?? '',
                     'model' => $result['model'] ?? '',
                     'type' => $result['type'] ?? '',
                     'confidence' => (float) ($result['confidence'] ?? 0.5),
+                    'image_url' => $result['image_url'] ?? null,
                 ];
+
+                // Include agents_agreed if present (from synthesis)
+                if (isset($result['agents_agreed'])) {
+                    $normalized['agents_agreed'] = (int) $result['agents_agreed'];
+                }
+
+                // Include source_agent if present (fallback mode)
+                if (isset($result['source_agent'])) {
+                    $normalized['source_agent'] = $result['source_agent'];
+                }
+
+                $normalizedResults[] = $normalized;
             }
         }
 
         // Sort by confidence
         usort($normalizedResults, fn($a, $b) => $b['confidence'] <=> $a['confidence']);
 
+        // Search for product images for each result
+        $normalizedResults = $this->enrichWithProductImages($normalizedResults);
+
         return $normalizedResults;
     }
-}
 
+    /**
+     * Enrich results with real product images from web search.
+     * Only processes top 3 results for speed.
+     */
+    protected function enrichWithProductImages(array $results): array
+    {
+        \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Starting', ['results_count' => count($results)]);
+
+        $imageService = new ProductImageSearchService();
+        $searchCount = 0;
+        $maxSearches = 3; // Only search for top 3 results to avoid timeout
+
+        foreach ($results as $index => $result) {
+            // Limit searches for speed
+            if ($searchCount >= $maxSearches) {
+                break;
+            }
+
+            // Skip if already has a valid image URL
+            if (!empty($result['image_url'])) {
+                continue;
+            }
+
+            $make = $result['make'] ?? '';
+            $model = $result['model'] ?? '';
+            $type = $result['type'] ?? '';
+
+            if (empty($make) && empty($model)) {
+                continue;
+            }
+
+            // Search for product image
+            $imageUrl = $imageService->getBestImage($make, $model, $type);
+            $searchCount++;
+
+            \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Image result', [
+                'index' => $index,
+                'imageUrl' => $imageUrl
+            ]);
+
+            if ($imageUrl) {
+                $results[$index]['image_url'] = $imageUrl;
+            }
+        }
+
+        return $results;
+    }
+}

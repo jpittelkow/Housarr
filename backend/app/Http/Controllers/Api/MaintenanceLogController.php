@@ -19,7 +19,7 @@ class MaintenanceLogController extends Controller
         Gate::authorize('view', $item);
 
         $logs = $item->maintenanceLogs()
-            ->with('vendor')
+            ->with(['vendor', 'parts'])
             ->latest('date')
             ->get();
 
@@ -30,10 +30,18 @@ class MaintenanceLogController extends Controller
 
     public function store(StoreMaintenanceLogRequest $request): JsonResponse
     {
-        $log = MaintenanceLog::create($request->validated());
+        $validated = $request->validated();
+        $partIds = $validated['part_ids'] ?? [];
+        unset($validated['part_ids']);
+
+        $log = MaintenanceLog::create($validated);
+
+        if (! empty($partIds)) {
+            $log->parts()->sync($partIds);
+        }
 
         return response()->json([
-            'log' => new MaintenanceLogResource($log->load('vendor')),
+            'log' => new MaintenanceLogResource($log->load(['vendor', 'parts'])),
         ], 201);
     }
 
@@ -53,12 +61,21 @@ class MaintenanceLogController extends Controller
             'date' => ['sometimes', 'date', 'before_or_equal:today'],
             'cost' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'part_ids' => ['sometimes', 'array'],
+            'part_ids.*' => ['integer', 'exists:parts,id'],
         ]);
+
+        $partIds = $validated['part_ids'] ?? null;
+        unset($validated['part_ids']);
 
         $maintenanceLog->update($validated);
 
+        if ($partIds !== null) {
+            $maintenanceLog->parts()->sync($partIds);
+        }
+
         return response()->json([
-            'log' => new MaintenanceLogResource($maintenanceLog->load('vendor')),
+            'log' => new MaintenanceLogResource($maintenanceLog->load(['vendor', 'parts'])),
         ]);
     }
 

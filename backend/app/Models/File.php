@@ -19,6 +19,7 @@ class File extends Model
         'disk',
         'path',
         'original_name',
+        'display_name',
         'mime_type',
         'size',
         'is_featured',

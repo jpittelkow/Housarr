@@ -31,6 +31,8 @@ class StoreMaintenanceLogRequest extends FormRequest
             'date' => ['required', 'date', 'before_or_equal:today'],
             'cost' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'part_ids' => ['sometimes', 'array'],
+            'part_ids.*' => ['integer', 'exists:parts,id'],
         ];
     }
 }

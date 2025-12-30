@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link } from 'react-router-dom'
 import { items, categories, locations } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -130,50 +129,14 @@ const VirtualizedItemRow = ({ item }: { item: Item }) => (
   </Link>
 )
 
-// Virtualized list component for large datasets
-function VirtualizedItemList({ items: itemsList }: { items: Item[] }) {
-  const parentRef = useRef<HTMLDivElement>(null)
-
-  const virtualizer = useVirtualizer({
-    count: itemsList.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 60, // Estimated row height
-    overscan: 5, // Render 5 extra rows above/below for smoother scrolling
-  })
-
+// Simple list component (virtualization caused rendering issues)
+function ItemList({ items: itemsList }: { items: Item[] }) {
   return (
     <Card>
-      <div
-        ref={parentRef}
-        className="max-h-[calc(100vh-300px)] overflow-auto"
-        style={{ contain: 'strict' }}
-      >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const item = itemsList[virtualRow.index]
-            return (
-              <div
-                key={item.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <VirtualizedItemRow item={item} />
-              </div>
-            )
-          })}
-        </div>
+      <div className="max-h-[calc(100vh-300px)] overflow-auto">
+        {itemsList.map((item) => (
+          <VirtualizedItemRow key={item.id} item={item} />
+        ))}
       </div>
     </Card>
   )
@@ -225,6 +188,7 @@ export default function ItemsPage() {
     mutationFn: (data: Partial<Item>) => items.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setIsModalOpen(false)
       setFormData({})
       toast.success('Item created successfully')
@@ -414,7 +378,7 @@ export default function ItemsPage() {
         </div>
       ) : (
         /* List View - Virtualized for large datasets */
-        <VirtualizedItemList items={allItems} />
+        <ItemList items={allItems} />
       )}
 
       {/* Create Modal */}

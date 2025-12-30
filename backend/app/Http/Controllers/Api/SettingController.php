@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\AIAgent;
+use App\Services\AIAgentOrchestrator;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -296,5 +298,152 @@ class SettingController extends Controller
             'provider' => $aiService->getProvider(),
             'model' => $aiService->getModel(),
         ]);
+    }
+
+    /**
+     * Get all AI agents with their status.
+     */
+    public function getAgentsStatus(Request $request): JsonResponse
+    {
+        $householdId = $request->user()->household_id;
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
+
+        // Get key status for each agent (whether API key is set)
+        $keyStatus = [];
+        $settings = Setting::getMany([
+            'anthropic_api_key',
+            'openai_api_key',
+            'gemini_api_key',
+            'local_api_key',
+        ], $householdId);
+
+        foreach (AIAgent::AGENTS as $agent) {
+            $keyName = AIAgent::getApiKeySettingName($agent);
+            $keyStatus[$agent] = !empty($settings[$keyName] ?? null);
+        }
+
+        return response()->json([
+            'agents' => $orchestrator->getAllAgentsStatus(),
+            'primary_agent' => $orchestrator->getPrimaryAgent(),
+            'key_status' => $keyStatus,
+        ]);
+    }
+
+    /**
+     * Update an AI agent's settings.
+     */
+    public function updateAgent(Request $request, string $agent): JsonResponse
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Only admins can update AI agent settings');
+        }
+
+        if (!in_array($agent, AIAgent::AGENTS)) {
+            abort(404, 'Unknown agent');
+        }
+
+        $validated = $request->validate([
+            'enabled' => ['sometimes', 'boolean'],
+            'model' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'api_key' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'base_url' => ['sometimes', 'nullable', 'url', 'max:255'],
+        ]);
+
+        $householdId = $request->user()->household_id;
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
+
+        // Update enabled status
+        if (isset($validated['enabled'])) {
+            $orchestrator->setAgentEnabled($agent, $validated['enabled']);
+        }
+
+        // Update model
+        if (array_key_exists('model', $validated)) {
+            $orchestrator->setAgentModel($agent, $validated['model']);
+        }
+
+        // Update API key
+        if (isset($validated['api_key'])) {
+            $keyName = AIAgent::getApiKeySettingName($agent);
+            if ($keyName) {
+                if ($validated['api_key'] === '__DELETE__') {
+                    Setting::where('household_id', $householdId)
+                        ->where('key', $keyName)
+                        ->delete();
+                } elseif ($validated['api_key'] !== '') {
+                    Setting::set($keyName, $validated['api_key'], $householdId, true);
+                }
+            }
+        }
+
+        // Update base URL
+        if (array_key_exists('base_url', $validated)) {
+            $urlName = AIAgent::getBaseUrlSettingName($agent);
+            if ($urlName) {
+                if ($validated['base_url']) {
+                    Setting::set($urlName, $validated['base_url'], $householdId);
+                } else {
+                    Setting::where('household_id', $householdId)
+                        ->where('key', $urlName)
+                        ->delete();
+                }
+            }
+        }
+
+        return response()->json(['message' => 'Agent settings updated']);
+    }
+
+    /**
+     * Test connection for a specific AI agent.
+     */
+    public function testAgentConnection(Request $request, string $agent): JsonResponse
+    {
+        if (!in_array($agent, AIAgent::AGENTS)) {
+            abort(404, 'Unknown agent');
+        }
+
+        $householdId = $request->user()->household_id;
+
+        // If settings are passed in the request, temporarily save them for testing
+        $testSettings = $request->input('settings');
+        if ($testSettings) {
+            $encryptedKeys = ['anthropic_api_key', 'openai_api_key', 'gemini_api_key', 'local_api_key'];
+
+            foreach ($testSettings as $key => $value) {
+                if ($value !== '' && $value !== null) {
+                    $isEncrypted = in_array($key, $encryptedKeys);
+                    Setting::set($key, $value, $householdId, $isEncrypted);
+                }
+            }
+        }
+
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
+        $result = $orchestrator->testAgent($agent);
+
+        if (!$result['success']) {
+            return response()->json($result, 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Set the primary AI agent.
+     */
+    public function setPrimaryAgent(Request $request): JsonResponse
+    {
+        if (!$request->user()->isAdmin()) {
+            abort(403, 'Only admins can set the primary AI agent');
+        }
+
+        $validated = $request->validate([
+            'agent' => ['required', 'string', 'in:' . implode(',', AIAgent::AGENTS)],
+        ]);
+
+        $householdId = $request->user()->household_id;
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
+        $orchestrator->setPrimaryAgent($validated['agent']);
+
+        return response()->json(['message' => 'Primary agent updated']);
     }
 }

@@ -17,6 +17,7 @@ class MaintenanceLogResource extends JsonResource
             'cost' => $this->cost ? (float) $this->cost : null,
             'notes' => $this->notes,
             'vendor' => new VendorResource($this->whenLoaded('vendor')),
+            'parts' => PartResource::collection($this->whenLoaded('parts')),
             'files' => FileResource::collection($this->whenLoaded('files')),
             'created_at' => $this->created_at->toISOString(),
         ];

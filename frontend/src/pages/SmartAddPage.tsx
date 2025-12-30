@@ -19,6 +19,10 @@ import {
   Check,
   RefreshCw,
   Search,
+  Users,
+  Zap,
+  CheckCircle,
+  XCircle,
 } from '@/components/ui'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -30,9 +34,53 @@ interface AnalysisResult {
   model: string
   type: string
   confidence: number
+  image_url?: string | null
+  agents_agreed?: number
+  source_agent?: string
+}
+
+// Type for agent details
+interface AgentDetail {
+  success: boolean
+  duration_ms: number
+  error: string | null
+  has_response: boolean
+}
+
+// Type for agent consensus info
+interface ConsensusInfo {
+  level: 'none' | 'single' | 'low' | 'partial' | 'majority' | 'full'
+  agents_agreeing: number
+  total_agents: number
+}
+
+// Type for agent metadata from API response
+interface AgentMetadata {
+  agents_used: string[]
+  agents_succeeded: number
+  agent_details: Record<string, AgentDetail>
+  agent_errors: Record<string, string>
+  primary_agent: string | null
+  synthesis_agent: string | null
+  synthesis_error: string | null
+  consensus: ConsensusInfo | null
+  total_duration_ms: number
+  parse_source: string | null
+  debug?: {
+    had_synthesized: boolean
+    synthesized_preview: string | null
+  }
 }
 
 type AnalysisState = 'idle' | 'uploading' | 'analyzing' | 'results' | 'error'
+
+// Agent display names
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  claude: 'Claude',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  local: 'Local',
+}
 
 export default function SmartAddPage() {
   const navigate = useNavigate()
@@ -52,6 +100,10 @@ export default function SmartAddPage() {
   const [formData, setFormData] = useState<Partial<Item>>({})
   const [isDragging, setIsDragging] = useState(false)
   const [isSearchingManual, setIsSearchingManual] = useState(false)
+  const [agentMetadata, setAgentMetadata] = useState<AgentMetadata | null>(null)
+  const [showAgentDetails, setShowAgentDetails] = useState(false)
+  const [wasPhotoSearch, setWasPhotoSearch] = useState(false) // Track if original search used a photo
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null) // Selected result's image
 
   // Queries
   const { data: categoriesData } = useQuery({
@@ -83,11 +135,36 @@ export default function SmartAddPage() {
     mutationFn: ({ file, query }: { file?: File; query?: string }) =>
       items.analyzeImage(file, query, allCategories.map(c => c.name)),
     onSuccess: (data) => {
+      // Store agent metadata
+      setAgentMetadata({
+        agents_used: data.agents_used || [],
+        agents_succeeded: data.agents_succeeded || 0,
+        agent_details: data.agent_details || {},
+        agent_errors: data.agent_errors || {},
+        primary_agent: data.primary_agent || null,
+        synthesis_agent: data.synthesis_agent || null,
+        synthesis_error: data.synthesis_error || null,
+        consensus: data.consensus || null,
+        total_duration_ms: data.total_duration_ms || 0,
+        parse_source: data.parse_source || null,
+        debug: data.debug || undefined,
+      })
+
       if (data.results && data.results.length > 0) {
         setResults(data.results)
         setAnalysisState('results')
       } else {
-        setErrorMessage('Could not identify the product. Try a different search or clearer photo.')
+        // Build detailed error message
+        const errors = Object.entries(data.agent_errors || {})
+        let errorMsg = 'Could not identify the product.'
+        if (errors.length > 0) {
+          errorMsg += ' Agent errors: ' + errors.map(([agent, err]) => `${AGENT_DISPLAY_NAMES[agent] || agent}: ${err}`).join('; ')
+        } else if (data.agents_succeeded === 0) {
+          errorMsg += ' No AI agents responded successfully.'
+        } else {
+          errorMsg += ' Try a different search or clearer photo.'
+        }
+        setErrorMessage(errorMsg)
         setAnalysisState('error')
       }
     },
@@ -104,9 +181,15 @@ export default function SmartAddPage() {
       const newItem = data.item
 
       // Upload photo if checkbox is checked
-      if (attachPhoto && uploadedImage && newItem?.id) {
+      if (attachPhoto && newItem?.id) {
         try {
-          await files.upload(uploadedImage, 'item', newItem.id, true)
+          if (wasPhotoSearch && uploadedImage) {
+            // User uploaded a photo - use that
+            await files.upload(uploadedImage, 'item', newItem.id, true)
+          } else if (!wasPhotoSearch && selectedImageUrl) {
+            // Text search with product image URL - download and attach it
+            await files.uploadFromUrl(selectedImageUrl, 'item', newItem.id, true)
+          }
         } catch {
           toast.error('Item created but failed to attach photo')
         }
@@ -130,6 +213,7 @@ export default function SmartAddPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['items'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Item created successfully!')
       navigate(`/items/${newItem.id}`)
     },
@@ -158,10 +242,15 @@ export default function SmartAddPage() {
       setFormData({})
       setErrorMessage(null)
       setShowAllResults(false)
+      setAgentMetadata(null)
+      setShowAgentDetails(false)
+      setWasPhotoSearch(true) // This search was initiated with a photo
+      setSelectedImageUrl(null)
 
       // Start analysis immediately if image is dropped/selected
       setAnalysisState('analyzing')
-      analyzeMutation.mutate({ file, query: searchQuery })
+      // Only include query if it's non-empty
+      analyzeMutation.mutate({ file, query: searchQuery || undefined })
     },
     [analyzeMutation, searchQuery]
   )
@@ -169,9 +258,20 @@ export default function SmartAddPage() {
   // Handle manual search trigger
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault()
-    if (!searchQuery && !uploadedImage) {
+    
+    // Get the query from the form input directly (handles cases where React state wasn't synced)
+    const formElement = e?.target as HTMLFormElement | undefined
+    const inputElement = formElement?.querySelector('input') as HTMLInputElement | null
+    const queryValue = inputElement?.value || searchQuery
+    
+    if (!queryValue && !uploadedImage) {
       toast.error('Please enter a search term or upload a photo')
       return
+    }
+
+    // Update searchQuery state if reading from DOM
+    if (queryValue !== searchQuery) {
+      setSearchQuery(queryValue)
     }
 
     setResults([])
@@ -179,8 +279,12 @@ export default function SmartAddPage() {
     setFormData({})
     setErrorMessage(null)
     setShowAllResults(false)
+    setAgentMetadata(null)
+    setShowAgentDetails(false)
+    setWasPhotoSearch(!!uploadedImage) // Track if this search used an uploaded photo
+    setSelectedImageUrl(null)
     setAnalysisState('analyzing')
-    analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
+    analyzeMutation.mutate({ file: uploadedImage || undefined, query: queryValue })
   }
 
   // Handle drag events
@@ -219,6 +323,9 @@ export default function SmartAddPage() {
     // Find matching category
     const matchedCategory = findMatchingCategory(result.type)
 
+    // Track the selected result's image URL
+    setSelectedImageUrl(result.image_url || null)
+
     // Pre-fill form
     setFormData({
       name: `${result.make} ${result.model}`.trim() || 'New Item',
@@ -249,13 +356,40 @@ export default function SmartAddPage() {
     setFormData({})
     setErrorMessage(null)
     setShowAllResults(false)
+    setAgentMetadata(null)
+    setShowAgentDetails(false)
   }
 
   // Retry analysis
   const handleRetry = () => {
     setErrorMessage(null)
+    setAgentMetadata(null)
+    setShowAgentDetails(false)
     setAnalysisState('analyzing')
     analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
+  }
+
+  // Get consensus badge variant and label
+  const getConsensusBadge = (consensus: ConsensusInfo | null) => {
+    if (!consensus) return null
+    
+    const { level, agents_agreeing, total_agents } = consensus
+    
+    const variants: Record<string, { variant: 'success' | 'warning' | 'gray' | 'primary', label: string }> = {
+      full: { variant: 'success', label: `${agents_agreeing}/${total_agents} agents agree` },
+      majority: { variant: 'success', label: `${agents_agreeing}/${total_agents} agents agree` },
+      partial: { variant: 'warning', label: `${agents_agreeing}/${total_agents} agents agree` },
+      low: { variant: 'warning', label: `${agents_agreeing}/${total_agents} agents agree` },
+      single: { variant: 'gray', label: '1 agent' },
+      none: { variant: 'gray', label: 'No consensus' },
+    }
+    
+    return variants[level] || variants.none
+  }
+
+  // Format agent names for display
+  const formatAgentNames = (agents: string[]) => {
+    return agents.map(a => AGENT_DISPLAY_NAMES[a] || a).join(', ')
   }
 
   const displayedResults = showAllResults ? results : results.slice(0, 5)
@@ -372,6 +506,23 @@ export default function SmartAddPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {searchQuery ? `Searching for "${searchQuery}"` : 'AI is identifying the product'}
                 </p>
+                {/* Multi-agent progress indicator */}
+                <div className="flex flex-col items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Icon icon={Users} size="xs" />
+                    <span>Querying multiple AI agents in parallel...</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {['claude', 'openai', 'gemini'].map((agent) => (
+                      <div
+                        key={agent}
+                        className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 animate-pulse"
+                      >
+                        {AGENT_DISPLAY_NAMES[agent]}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -397,7 +548,48 @@ export default function SmartAddPage() {
                   <Icon icon={AlertCircle} size="md" />
                   <span className="font-medium">Analysis Failed</span>
                 </div>
-                <p className="text-sm text-gray-500 text-center">{errorMessage}</p>
+                <p className="text-sm text-gray-500 text-center max-w-md">{errorMessage}</p>
+                
+                {/* Agent status details on error */}
+                {agentMetadata && agentMetadata.agents_used.length > 0 && (
+                  <div className="w-full max-w-md mt-2">
+                    <button
+                      onClick={() => setShowAgentDetails(!showAgentDetails)}
+                      className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1 mx-auto"
+                    >
+                      <Icon icon={showAgentDetails ? ChevronUp : ChevronDown} size="xs" />
+                      {showAgentDetails ? 'Hide' : 'Show'} agent details
+                    </button>
+                    {showAgentDetails && (
+                      <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs space-y-2">
+                        {agentMetadata.agents_used.map((agent) => {
+                          const detail = agentMetadata.agent_details[agent]
+                          return (
+                            <div key={agent} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {detail?.success ? (
+                                  <Icon icon={CheckCircle} size="xs" className="text-success-500" />
+                                ) : (
+                                  <Icon icon={XCircle} size="xs" className="text-error-500" />
+                                )}
+                                <span className="font-medium">{AGENT_DISPLAY_NAMES[agent] || agent}</span>
+                              </div>
+                              <div className="text-gray-400">
+                                {detail?.duration_ms ? `${(detail.duration_ms / 1000).toFixed(1)}s` : '-'}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {agentMetadata.synthesis_error && (
+                          <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-error-500">
+                            Synthesis error: {agentMetadata.synthesis_error}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="flex gap-3">
                   <Button variant="secondary" onClick={handleReset}>
                     Try Again
@@ -414,6 +606,81 @@ export default function SmartAddPage() {
         {/* Results State */}
         {analysisState === 'results' && (
           <div className="space-y-6">
+            {/* Agent Info Banner */}
+            {agentMetadata && agentMetadata.agents_used.length > 0 && (
+              <div className="px-4 py-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <Icon icon={Users} size="sm" className="text-primary-600 dark:text-primary-400" />
+                      <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
+                        {formatAgentNames(agentMetadata.agents_used)}
+                      </span>
+                    </div>
+                    {agentMetadata.consensus && (
+                      <Badge 
+                        size="sm" 
+                        variant={getConsensusBadge(agentMetadata.consensus)?.variant || 'gray'}
+                      >
+                        {getConsensusBadge(agentMetadata.consensus)?.label}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {agentMetadata.total_duration_ms > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-primary-500 dark:text-primary-400">
+                        <Icon icon={Zap} size="xs" />
+                        <span>{(agentMetadata.total_duration_ms / 1000).toFixed(1)}s</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowAgentDetails(!showAgentDetails)}
+                      className="text-xs text-primary-500 hover:text-primary-700 dark:hover:text-primary-300"
+                    >
+                      {showAgentDetails ? 'Hide details' : 'Details'}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Expandable agent details */}
+                {showAgentDetails && (
+                  <div className="mt-3 pt-3 border-t border-primary-200 dark:border-primary-800 space-y-2">
+                    {agentMetadata.agents_used.map((agent) => {
+                      const detail = agentMetadata.agent_details[agent]
+                      const error = agentMetadata.agent_errors[agent]
+                      return (
+                        <div key={agent} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            {detail?.success ? (
+                              <Icon icon={CheckCircle} size="xs" className="text-success-500" />
+                            ) : (
+                              <Icon icon={XCircle} size="xs" className="text-error-500" />
+                            )}
+                            <span className="font-medium text-primary-700 dark:text-primary-300">
+                              {AGENT_DISPLAY_NAMES[agent] || agent}
+                            </span>
+                            {error && (
+                              <span className="text-error-500 truncate max-w-[200px]" title={error}>
+                                {error}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-primary-400">
+                            {detail?.duration_ms ? `${(detail.duration_ms / 1000).toFixed(1)}s` : '-'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {agentMetadata.parse_source && (
+                      <div className="text-xs text-primary-400 pt-1">
+                        Results from: {agentMetadata.parse_source === 'synthesized' ? 'AI synthesis' : 'individual agents'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Image/Query and Results Side by Side */}
             <div className="grid md:grid-cols-2 gap-6">
               {/* Context Card */}
@@ -467,6 +734,13 @@ export default function SmartAddPage() {
                         )}
                       >
                         <div className="flex items-start gap-3">
+                          {/* Product Image / Brand Placeholder */}
+                          <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
+                            <span className="text-white font-bold text-xl">
+                              {(result.make || result.model || '?').substring(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          {/* Radio button */}
                           <div
                             className={cn(
                               'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5',
@@ -483,13 +757,24 @@ export default function SmartAddPage() {
                             <p className="font-medium text-gray-900 dark:text-gray-50">
                               {result.make} {result.model}
                             </p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
                               <Badge size="sm" variant="gray">
                                 {result.type}
                               </Badge>
                               {result.confidence && (
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {Math.round(result.confidence * 100)}% match
+                                </span>
+                              )}
+                              {result.agents_agreed && result.agents_agreed > 1 && (
+                                <span className="text-xs text-success-600 dark:text-success-400 flex items-center gap-1">
+                                  <Icon icon={Users} size="xs" />
+                                  {result.agents_agreed} agree
+                                </span>
+                              )}
+                              {result.source_agent && (
+                                <span className="text-xs text-gray-400">
+                                  via {AGENT_DISPLAY_NAMES[result.source_agent] || result.source_agent}
                                 </span>
                               )}
                             </div>
@@ -590,12 +875,18 @@ export default function SmartAddPage() {
                     />
 
                     <div className="pt-4 border-t border-gray-200 space-y-3">
-                      <Checkbox
-                        id="attach-photo"
-                        checked={attachPhoto}
-                        onChange={(e) => setAttachPhoto(e.target.checked)}
-                        label="Attach uploaded photo as featured image"
-                      />
+                      {(wasPhotoSearch || selectedImageUrl) && (
+                        <Checkbox
+                          id="attach-photo"
+                          checked={attachPhoto}
+                          onChange={(e) => setAttachPhoto(e.target.checked)}
+                          label={
+                            wasPhotoSearch
+                              ? 'Attach uploaded photo as featured image'
+                              : 'Download product image as featured image'
+                          }
+                        />
+                      )}
                       <Checkbox
                         id="search-manual"
                         checked={searchManual}

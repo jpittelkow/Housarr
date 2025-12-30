@@ -10,8 +10,10 @@ use App\Http\Requests\Api\UpdateItemRequest;
 use App\Http\Resources\FileResource;
 use App\Http\Resources\ItemResource;
 use App\Models\Item;
+use App\Services\AIAgentOrchestrator;
 use App\Services\AIService;
 use App\Services\ManualSearchService;
+use App\Services\ProductImageSearchService;
 use App\Services\StorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -103,7 +105,7 @@ class ItemController extends Controller
                 'parts',
                 'parts.images',
                 'parts.featuredImage',
-                'maintenanceLogs' => fn($q) => $q->orderBy('date', 'desc'),
+                'maintenanceLogs' => fn($q) => $q->with('parts')->orderBy('date', 'desc'),
                 'reminders' => fn($q) => $q->where('status', 'pending'),
                 'files',
                 'images',
@@ -170,9 +172,34 @@ class ItemController extends Controller
 
     public function analyzeImage(Request $request, AnalyzeItemImageAction $analyzeAction): JsonResponse
     {
+        // Custom validation: require either image OR non-empty query
+        $hasImage = $request->hasFile('image');
+        $hasQuery = $request->filled('query'); // filled() checks for non-empty value
+
+        if (!$hasImage && !$hasQuery) {
+            return response()->json([
+                'message' => 'Please provide an image or search query.',
+                'errors' => [
+                    'image' => ['An image or search query is required.'],
+                ]
+            ], 422);
+        }
+
+        // Validate image if provided
+        if ($hasImage) {
+            $request->validate([
+                'image' => ['file', 'mimes:jpeg,jpg,png,webp,gif', 'max:10240'],
+            ]);
+        }
+
+        // Validate query if provided
+        if ($hasQuery) {
+            $request->validate([
+                'query' => ['string', 'max:500'],
+            ]);
+        }
+
         $request->validate([
-            'image' => ['required_without:query', 'nullable', 'file', 'mimes:jpeg,jpg,png,webp', 'max:10240'],
-            'query' => ['required_without:image', 'nullable', 'string', 'max:500'],
             'categories' => ['nullable', 'string'],
         ]);
 
@@ -182,20 +209,36 @@ class ItemController extends Controller
         }
 
         try {
-            $results = $analyzeAction->execute(
+            $analysisResult = $analyzeAction->execute(
                 $request->file('image'),
                 $categories,
                 $request->user()->household_id,
                 $request->input('query')
             );
 
+            // The action now returns an enhanced response with agent metadata
             return response()->json([
-                'results' => $results,
+                'results' => $analysisResult['results'] ?? [],
+                'agents_used' => $analysisResult['agents_used'] ?? [],
+                'agents_succeeded' => $analysisResult['agents_succeeded'] ?? 0,
+                'agent_details' => $analysisResult['agent_details'] ?? [],
+                'agent_errors' => $analysisResult['agent_errors'] ?? [],
+                'primary_agent' => $analysisResult['primary_agent'] ?? null,
+                'synthesis_agent' => $analysisResult['synthesis_agent'] ?? null,
+                'synthesis_error' => $analysisResult['synthesis_error'] ?? null,
+                'consensus' => $analysisResult['consensus'] ?? null,
+                'total_duration_ms' => $analysisResult['total_duration_ms'] ?? 0,
+                'parse_source' => $analysisResult['parse_source'] ?? null,
+                'debug' => $analysisResult['debug'] ?? null,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),
                 'results' => [],
+                'agents_used' => [],
+                'agents_succeeded' => 0,
+                'agent_details' => [],
+                'agent_errors' => [],
             ], 422);
         }
     }
@@ -247,6 +290,7 @@ class ItemController extends Controller
         $manualService = new ManualSearchService($householdId);
 
         $urls = [];
+        $searchLinks = [];
         $stepName = '';
 
         switch ($validated['step']) {
@@ -260,7 +304,15 @@ class ItemController extends Controller
                 break;
             case 'web':
                 $stepName = 'Searching the web';
-                $urls = $manualService->searchWithDuckDuckGoPublic($validated['make'], $validated['model']);
+                $webResult = $manualService->searchWithDuckDuckGoPublic($validated['make'], $validated['model']);
+                // Web search returns structured data with urls and search_links
+                if (is_array($webResult) && isset($webResult['urls'])) {
+                    $urls = $webResult['urls'];
+                    $searchLinks = $webResult['search_links'] ?? [];
+                } else {
+                    // Backwards compatibility if it returns just URLs
+                    $urls = $webResult;
+                }
                 break;
         }
 
@@ -269,6 +321,7 @@ class ItemController extends Controller
             'step_name' => $stepName,
             'urls' => $urls,
             'count' => count($urls),
+            'search_links' => $searchLinks,
         ]);
     }
 
@@ -304,9 +357,16 @@ class ItemController extends Controller
         }
 
         if ($result === null) {
+            // Check if this is a search URL (Google, etc.)
+            $isSearchUrl = preg_match('/google\.com\/search|bing\.com\/search|duckduckgo\.com/i', $url);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Could not download from this source.',
+                'message' => $isSearchUrl 
+                    ? 'This is a search page. Please open it in your browser to find the manual.'
+                    : 'Could not download from this source. The site may require login or have bot protection.',
+                'is_search_url' => $isSearchUrl,
+                'open_url' => $url, // Frontend can offer to open this
             ]);
         }
 
@@ -408,8 +468,8 @@ class ItemController extends Controller
     }
 
     /**
-     * Combined AI suggestions endpoint - no separate config check needed.
-     * Returns provider info alongside suggestions for UI display.
+     * Combined AI suggestions endpoint using multi-agent orchestration.
+     * Queries all active AI agents in parallel and synthesizes results.
      */
     public function queryAISuggestions(Request $request, Item $item): JsonResponse
     {
@@ -422,67 +482,120 @@ class ItemController extends Controller
         ]);
 
         $householdId = $request->user()->household_id;
-        $aiService = AIService::forHousehold($householdId);
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
 
-        // Return provider info along with availability status
-        $provider = $aiService->isAvailable() ? $aiService->getProvider() : null;
-        $model = $aiService->isAvailable() ? $aiService->getModel() : null;
-
-        if (!$aiService->isAvailable()) {
+        // Check if any agents are available
+        $activeAgents = $orchestrator->getActiveAgents();
+        if (empty($activeAgents)) {
             return response()->json([
                 'success' => false,
                 'error' => 'AI is not configured. Please configure an AI provider in Settings.',
-                'provider' => null,
-                'model' => null,
+                'agents_used' => [],
+                'agents_succeeded' => 0,
             ], 422);
         }
 
         $prompt = $this->buildSuggestionPrompt($validated['make'], $validated['model'], $validated['category'] ?? null);
+        $startTime = microtime(true);
 
-        $result = $aiService->completeWithError($prompt);
+        // Call all active agents and get synthesized result
+        $result = $orchestrator->callActiveAgentsWithSummary($prompt);
 
-        if ($result['error']) {
-            return response()->json([
-                'success' => false,
-                'error' => $result['error'],
-                'provider' => $provider,
-                'model' => $model,
-                'raw_response' => null,
-            ]);
+        $totalDuration = (int) ((microtime(true) - $startTime) * 1000);
+
+        // Count successful agents
+        $agentsUsed = array_keys($result['agents'] ?? []);
+        $agentsSucceeded = count(array_filter($result['agents'] ?? [], fn($r) => $r['success'] ?? false));
+
+        // Build agent details for debugging
+        $agentDetails = [];
+        $agentErrors = [];
+        foreach ($result['agents'] ?? [] as $agentName => $agentResult) {
+            $agentDetails[$agentName] = [
+                'success' => $agentResult['success'] ?? false,
+                'duration_ms' => $agentResult['duration_ms'] ?? 0,
+            ];
+            if (!($agentResult['success'] ?? false) && ($agentResult['error'] ?? null)) {
+                $agentErrors[$agentName] = $agentResult['error'];
+            }
         }
 
-        $response = $result['response'];
-
-        // Try to parse JSON from response
-        $jsonMatch = preg_match('/\{[\s\S]*\}/', $response, $matches);
-        if ($jsonMatch) {
-            $suggestions = json_decode($matches[0], true);
+        // Try to parse JSON from synthesized response
+        $response = $result['summary'] ?? null;
+        if ($response) {
+            $suggestions = $this->parseSuggestionsFromResponse($response);
             if ($suggestions) {
                 return response()->json([
                     'success' => true,
-                    'provider' => $provider,
-                    'model' => $model,
-                    'suggestions' => [
-                        'warranty_years' => $suggestions['warranty_years'] ?? null,
-                        'maintenance_interval_months' => $suggestions['maintenance_interval_months'] ?? null,
-                        'typical_lifespan_years' => $suggestions['typical_lifespan_years'] ?? null,
-                        'notes' => $suggestions['notes'] ?? null,
-                    ],
+                    'suggestions' => $suggestions,
+                    'agents_used' => $agentsUsed,
+                    'agents_succeeded' => $agentsSucceeded,
+                    'agent_details' => $agentDetails,
+                    'agent_errors' => $agentErrors,
+                    'synthesis_agent' => $result['summary_agent'] ?? null,
+                    'total_duration_ms' => $totalDuration,
                 ]);
+            }
+        }
+
+        // Fallback: Try to parse from individual agent responses
+        foreach ($result['agents'] ?? [] as $agentName => $agentResult) {
+            if (($agentResult['success'] ?? false) && ($agentResult['response'] ?? null)) {
+                $suggestions = $this->parseSuggestionsFromResponse($agentResult['response']);
+                if ($suggestions) {
+                    return response()->json([
+                        'success' => true,
+                        'suggestions' => $suggestions,
+                        'agents_used' => $agentsUsed,
+                        'agents_succeeded' => $agentsSucceeded,
+                        'agent_details' => $agentDetails,
+                        'agent_errors' => $agentErrors,
+                        'synthesis_agent' => null,
+                        'fallback_agent' => $agentName,
+                        'total_duration_ms' => $totalDuration,
+                    ]);
+                }
             }
         }
 
         return response()->json([
             'success' => false,
-            'error' => 'Could not parse AI response',
-            'provider' => $provider,
-            'model' => $model,
-            'raw_response' => substr($response, 0, 500),
+            'error' => $result['summary_error'] ?? 'Could not parse AI response',
+            'agents_used' => $agentsUsed,
+            'agents_succeeded' => $agentsSucceeded,
+            'agent_details' => $agentDetails,
+            'agent_errors' => $agentErrors,
+            'total_duration_ms' => $totalDuration,
+            'raw_response' => $response ? substr($response, 0, 500) : null,
         ]);
     }
 
     /**
-     * Get AI-suggested replacement and consumable parts for an item.
+     * Parse suggestions JSON from AI response text.
+     */
+    private function parseSuggestionsFromResponse(?string $response): ?array
+    {
+        if (!$response) {
+            return null;
+        }
+
+        if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+            $suggestions = json_decode($matches[0], true);
+            if ($suggestions) {
+                return [
+                    'warranty_years' => $suggestions['warranty_years'] ?? null,
+                    'maintenance_interval_months' => $suggestions['maintenance_interval_months'] ?? null,
+                    'typical_lifespan_years' => $suggestions['typical_lifespan_years'] ?? null,
+                    'notes' => $suggestions['notes'] ?? null,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get AI-suggested replacement and consumable parts for an item using multi-agent orchestration.
      */
     public function suggestParts(Request $request, Item $item): JsonResponse
     {
@@ -495,17 +608,19 @@ class ItemController extends Controller
         ]);
 
         $householdId = $request->user()->household_id;
-        $aiService = AIService::forHousehold($householdId);
+        $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
 
-        if (!$aiService->isAvailable()) {
+        // Check if any agents are available
+        $activeAgents = $orchestrator->getActiveAgents();
+        if (empty($activeAgents)) {
             return response()->json([
                 'success' => false,
-                'error' => 'AI is not configured',
+                'error' => 'AI is not configured. Please configure an AI provider in Settings.',
+                'agents_used' => [],
+                'agents_succeeded' => 0,
             ], 422);
         }
 
-        $provider = $aiService->getProvider();
-        $model = $aiService->getModel();
         $categoryContext = $validated['category'] ? " ({$validated['category']})" : '';
 
         $prompt = <<<PROMPT
@@ -548,31 +663,102 @@ Format:
 If you cannot determine parts for this product, return an empty array: []
 PROMPT;
 
-        $result = $aiService->completeWithError($prompt);
+        $startTime = microtime(true);
 
-        if ($result['error']) {
-            return response()->json([
-                'success' => false,
-                'error' => $result['error'],
-                'provider' => $provider,
-            ]);
+        // Call all active agents and get synthesized result
+        $result = $orchestrator->callActiveAgentsWithSummary($prompt);
+
+        $totalDuration = (int) ((microtime(true) - $startTime) * 1000);
+
+        // Count successful agents
+        $agentsUsed = array_keys($result['agents'] ?? []);
+        $agentsSucceeded = count(array_filter($result['agents'] ?? [], fn($r) => $r['success'] ?? false));
+
+        // Build agent details for debugging
+        $agentDetails = [];
+        $agentErrors = [];
+        foreach ($result['agents'] ?? [] as $agentName => $agentResult) {
+            $agentDetails[$agentName] = [
+                'success' => $agentResult['success'] ?? false,
+                'duration_ms' => $agentResult['duration_ms'] ?? 0,
+            ];
+            if (!($agentResult['success'] ?? false) && ($agentResult['error'] ?? null)) {
+                $agentErrors[$agentName] = $agentResult['error'];
+            }
         }
 
-        $response = $result['response'];
+        // Try to parse JSON array from synthesized response
+        $response = $result['summary'] ?? null;
+        if ($response) {
+            $parts = $this->parsePartsFromResponse($response, $validated['make'], $validated['model']);
+            if ($parts !== null) {
+                return response()->json([
+                    'success' => true,
+                    'parts' => $parts,
+                    'agents_used' => $agentsUsed,
+                    'agents_succeeded' => $agentsSucceeded,
+                    'agent_details' => $agentDetails,
+                    'agent_errors' => $agentErrors,
+                    'synthesis_agent' => $result['summary_agent'] ?? null,
+                    'total_duration_ms' => $totalDuration,
+                ]);
+            }
+        }
 
-        // Try to parse JSON array from response
+        // Fallback: Try to parse from individual agent responses
+        foreach ($result['agents'] ?? [] as $agentName => $agentResult) {
+            if (($agentResult['success'] ?? false) && ($agentResult['response'] ?? null)) {
+                $parts = $this->parsePartsFromResponse($agentResult['response'], $validated['make'], $validated['model']);
+                if ($parts !== null) {
+                    return response()->json([
+                        'success' => true,
+                        'parts' => $parts,
+                        'agents_used' => $agentsUsed,
+                        'agents_succeeded' => $agentsSucceeded,
+                        'agent_details' => $agentDetails,
+                        'agent_errors' => $agentErrors,
+                        'synthesis_agent' => null,
+                        'fallback_agent' => $agentName,
+                        'total_duration_ms' => $totalDuration,
+                    ]);
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'error' => $result['summary_error'] ?? 'Could not parse AI response',
+            'agents_used' => $agentsUsed,
+            'agents_succeeded' => $agentsSucceeded,
+            'agent_details' => $agentDetails,
+            'agent_errors' => $agentErrors,
+            'total_duration_ms' => $totalDuration,
+            'raw_response' => $response ? substr($response, 0, 500) : null,
+        ]);
+    }
+
+    /**
+     * Parse parts JSON array from AI response text and add purchase URLs.
+     */
+    private function parsePartsFromResponse(?string $response, string $make, string $model): ?array
+    {
+        if (!$response) {
+            return null;
+        }
+
         if (preg_match('/\[[\s\S]*\]/', $response, $matches)) {
             $parts = json_decode($matches[0], true);
             if (is_array($parts)) {
                 // Generate purchase URLs for each part
-                $partsWithUrls = array_map(function ($part) {
-                    $searchTerm = $part['search_term'] ?? $part['name'];
+                return array_map(function ($part) use ($make, $model) {
+                    $searchTerm = $part['search_term'] ?? "{$make} {$model} " . ($part['name'] ?? '');
                     $encodedSearch = urlencode($searchTerm);
 
                     return [
                         'name' => $part['name'] ?? 'Unknown Part',
                         'type' => in_array($part['type'] ?? '', ['replacement', 'consumable']) ? $part['type'] : 'replacement',
                         'part_number' => $part['part_number'] ?? null,
+                        'search_term' => $searchTerm,
                         'estimated_price' => is_numeric($part['estimated_price'] ?? null) ? (float) $part['estimated_price'] : null,
                         'replacement_interval' => $part['replacement_interval'] ?? null,
                         'purchase_urls' => [
@@ -582,20 +768,31 @@ PROMPT;
                         ],
                     ];
                 }, $parts);
-
-                return response()->json([
-                    'success' => true,
-                    'provider' => $provider,
-                    'parts' => $partsWithUrls,
-                ]);
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Search for a product image for a part.
+     */
+    public function searchPartImage(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('view', $item);
+
+        $validated = $request->validate([
+            'search_term' => ['required', 'string', 'max:500'],
+            'part_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $imageService = new ProductImageSearchService();
+        $imageUrl = $imageService->searchForPartImage($validated['search_term']);
+
         return response()->json([
-            'success' => false,
-            'error' => 'Could not parse AI response',
-            'provider' => $provider,
-            'raw_response' => substr($response, 0, 500),
+            'success' => $imageUrl !== null,
+            'image_url' => $imageUrl,
+            'search_term' => $validated['search_term'],
         ]);
     }
 

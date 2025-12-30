@@ -13,6 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Debug timing middleware - runs FIRST to measure full request time
+        $middleware->prependToGroup('api', \App\Http\Middleware\DebugTiming::class);
         $middleware->appendToGroup('api', EnsureFrontendRequestsAreStateful::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\AddCacheHeaders::class);
     })
