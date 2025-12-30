@@ -7,6 +7,9 @@ A modern home inventory and maintenance management application. Track your house
 ![React](https://img.shields.io/badge/React-18-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)
 ![Laravel](https://img.shields.io/badge/Laravel-11-red.svg)
+![Docker](https://img.shields.io/badge/Docker-ghcr.io-blue.svg)
+
+**Docker Image:** `ghcr.io/jpittelkow/housarr:latest`
 
 ## ✨ Features
 
