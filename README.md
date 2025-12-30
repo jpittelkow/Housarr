@@ -59,6 +59,10 @@ For production environments with enhanced security:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
+### Unraid Deployment
+
+See the [Unraid Deployment Guide](docker/unraid/README.md) for detailed instructions on deploying Housarr on Unraid using Docker Compose Manager.
+
 See [Docker Documentation](docs/DOCUMENTATION_DOCKER.md) for detailed configuration options.
 
 ## 🏗️ Architecture
