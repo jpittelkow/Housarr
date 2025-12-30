@@ -639,7 +639,10 @@ export const files = {
 // Backup
 export const backup = {
   export: async (): Promise<Blob> => {
-    const response = await api.get('/backup/export', { responseType: 'blob' })
+    const response = await api.get('/backup/export', { 
+      responseType: 'blob',
+      timeout: 300000, // 5 minutes for large backups with files
+    })
     return response.data
   },
 
@@ -648,6 +651,7 @@ export const backup = {
     formData.append('backup', file)
     const response = await api.post('/backup/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 minutes for large backups with files
     })
     return response.data
   },
@@ -720,6 +724,9 @@ export interface AISettings {
   // Gemini (Google)
   gemini_api_key?: string
   gemini_base_url?: string
+  // AI Prompts
+  ai_prompt_smart_add?: string
+  ai_prompt_synthesis?: string
   // Local (Ollama, LM Studio, etc.)
   local_base_url?: string
   local_model?: string
@@ -825,6 +832,67 @@ export const settings = {
 
   setPrimaryAgent: async (agent: AIAgentName): Promise<{ message: string }> => {
     const response = await api.post('/settings/ai/primary', { agent })
+    return response.data
+  },
+}
+
+// Chat
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatResponse {
+  success: boolean
+  response?: string | null
+  error?: string | null
+  agent?: string | null
+  duration_ms?: number
+  context?: {
+    item_id?: number
+    item_name?: string
+    manuals_included?: number
+    service_history_included?: number
+    parts_included?: number
+  }
+}
+
+export const chat = {
+  checkAvailability: async (): Promise<{ available: boolean; agent?: string | null }> => {
+    const response = await api.get('/chat/available')
+    return response.data
+  },
+
+  send: async (message: string, history: ChatMessage[] = []): Promise<ChatResponse> => {
+    const response = await api.post('/chat', {
+      message,
+      conversation_history: history,
+    }, { timeout: 120000 })
+    return response.data
+  },
+
+  sendWithItem: async (
+    itemId: number,
+    message: string,
+    history: ChatMessage[] = [],
+    options?: {
+      includeManuals?: boolean
+      includeServiceHistory?: boolean
+      includeParts?: boolean
+    }
+  ): Promise<ChatResponse> => {
+    const response = await api.post(`/items/${itemId}/chat`, {
+      message,
+      conversation_history: history,
+      include_manuals: options?.includeManuals ?? true,
+      include_service_history: options?.includeServiceHistory ?? true,
+      include_parts: options?.includeParts ?? true,
+    }, { timeout: 120000 })
+    return response.data
+  },
+
+  getSuggestedQuestions: async (itemId: number): Promise<{ suggestions: string[] }> => {
+    const response = await api.get(`/items/${itemId}/chat/suggestions`)
     return response.data
   },
 }

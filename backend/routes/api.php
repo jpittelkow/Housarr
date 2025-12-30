@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FileController;
 use App\Http\Controllers\Api\HouseholdController;
@@ -121,9 +122,13 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::patch('/files/{file}', [FileController::class, 'update']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
 
-    // Backup/Restore (admin only, rate limited)
-    Route::middleware('throttle:5,1')->group(function () {
-        Route::get('/backup/export', [BackupController::class, 'export']);
-        Route::post('/backup/import', [BackupController::class, 'import']);
-    });
+    // Backup/Restore (admin only, minimal rate limiting for large file handling)
+    Route::get('/backup/export', [BackupController::class, 'export']);
+    Route::post('/backup/import', [BackupController::class, 'import']);
+
+    // AI Chat
+    Route::get('/chat/available', [ChatController::class, 'checkAvailability']);
+    Route::post('/chat', [ChatController::class, 'chat']);
+    Route::post('/items/{item}/chat', [ChatController::class, 'chatWithItem']);
+    Route::get('/items/{item}/chat/suggestions', [ChatController::class, 'getSuggestedQuestions']);
 });

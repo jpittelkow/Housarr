@@ -38,8 +38,10 @@ import {
   CheckCircle,
   Users,
   Link,
+  Star,
 } from '@/components/ui'
 import { toast } from 'sonner'
+import { ItemChatPanel } from '@/components/Chat'
 import type { Item, Part, MaintenanceLog, FileRecord } from '@/types'
 
 // Calculate smart stats based on install date and item properties
@@ -453,6 +455,25 @@ export default function ItemDetailPage() {
       toast.success('Document name updated')
     },
     onError: () => toast.error('Failed to update document name'),
+  })
+
+  // Image management mutations
+  const deleteImageMutation = useMutation({
+    mutationFn: (imageId: number) => files.delete(imageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      toast.success('Image deleted')
+    },
+    onError: () => toast.error('Failed to delete image'),
+  })
+
+  const setFeaturedImageMutation = useMutation({
+    mutationFn: (imageId: number) => files.setFeatured(imageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items', id] })
+      toast.success('Featured image updated')
+    },
+    onError: () => toast.error('Failed to set featured image'),
   })
 
   // Manual search links for when direct download fails (with labels)
@@ -1168,6 +1189,9 @@ export default function ItemDetailPage() {
         )}
       </div>
 
+      {/* AI Chat Section */}
+      <ItemChatPanel item={item} />
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Details, Parts, Maintenance */}
@@ -1500,22 +1524,64 @@ export default function ItemDetailPage() {
               )}
               <div className="grid grid-cols-4 gap-2">
                 {allImages.slice(0, 8).map((image, index) => (
-                  <button
+                  <div
                     key={image.id}
-                    onClick={() => {
-                      setGalleryIndex(index)
-                      setIsGalleryOpen(true)
-                    }}
-                    className={`relative aspect-square rounded-lg overflow-hidden border-2 hover:opacity-90 transition-opacity ${
+                    className={`relative aspect-square rounded-lg overflow-hidden border-2 group ${
                       image.is_featured ? 'border-primary-500' : 'border-transparent'
                     }`}
                   >
-                    <img
-                      src={image.url}
-                      alt={image.original_name}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
+                    <button
+                      onClick={() => {
+                        setGalleryIndex(index)
+                        setIsGalleryOpen(true)
+                      }}
+                      className="w-full h-full"
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.original_name}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                    {/* Hover controls */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors pointer-events-none">
+                      <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                        {!image.is_featured && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFeaturedImageMutation.mutate(image.id)
+                            }}
+                            disabled={setFeaturedImageMutation.isPending}
+                            className="p-1.5 bg-white dark:bg-gray-800 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title="Set as featured"
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm('Delete this image?')) {
+                              deleteImageMutation.mutate(image.id)
+                            }
+                          }}
+                          disabled={deleteImageMutation.isPending}
+                          className="p-1.5 bg-white dark:bg-gray-800 rounded-md text-error-600 hover:bg-error-50 dark:hover:bg-error-900/30"
+                          title="Delete image"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {image.is_featured && (
+                      <div className="absolute top-1 left-1 bg-primary-500 text-white text-[10px] px-1 py-0.5 rounded">
+                        ★
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
               {allImages.length > 8 && (

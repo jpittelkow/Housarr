@@ -136,6 +136,8 @@ export {
 
   // AI
   Sparkles,
+  MessageCircle,
+  Send,
 
   // Theme
   Sun,

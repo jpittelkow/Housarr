@@ -4,6 +4,7 @@ import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Layout from '@/components/Layout'
 import { LoadingScreen } from '@/components/ui'
+import { FloatingChat } from '@/components/Chat'
 
 // Auth pages - loaded directly for instant access
 import LoginPage from '@/pages/LoginPage'
@@ -115,6 +116,8 @@ function App() {
             <Route path="help" element={<HelpPage />} />
           </Route>
         </Routes>
+        {/* Floating AI Chat - only show when authenticated */}
+        {isAuthenticated && <FloatingChat />}
       </Suspense>
     </ErrorBoundary>
   )
