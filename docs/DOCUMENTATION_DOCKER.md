@@ -2,39 +2,67 @@
 
 ## Overview
 
-Housarr supports two deployment modes:
-1. **Single Container**: Development setup with nginx, PHP-FPM, and built frontend in one container
-2. **Multi-Container**: Production setup with separate containers for each service
+Housarr uses Docker Compose with two configuration files:
+1. **docker-compose.yml**: Full development stack with all services
+2. **docker-compose.prod.yml**: Production overlay with security hardening
+
+## Quick Start
+
+```bash
+# Development
+docker compose up -d
+
+# Production
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
 
 ## Docker Compose Files
 
-### docker-compose.yml (Single Container)
+### docker-compose.yml (Development)
 
-**Purpose**: Development/simple deployment
+**Purpose**: Full development stack
 
 **Services**:
-- `app`: Single container with nginx + PHP-FPM + frontend
+- `nginx`: Web server (port 8000)
+- `php`: PHP-FPM application server
+- `mysql`: MySQL 8.0 database
+- `redis`: Redis cache/queue
+- `scheduler`: Laravel task scheduler
+- `worker`: Laravel queue worker
+- `node`: Vite dev server (optional, use `--profile dev`)
 
 **Configuration**:
 ```yaml
 services:
-  app:
-    build:
-      context: .
-      dockerfile: docker/app/Dockerfile
-    restart: unless-stopped
+  nginx:
+    image: nginx:alpine
     ports:
       - "${APP_PORT:-8000}:80"
-    volumes:
-      - ./backend:/var/www/html
-      - ./data:/var/www/html/storage/app
+  php:
+    build:
+      dockerfile: docker/php/Dockerfile
+      target: development
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "${DB_PORT:-3306}:3306"
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
 ```
 
-**Port**: Default 8000 (configurable via APP_PORT env)
+**Ports**:
+- `8000`: Web application (configurable via APP_PORT)
+- `3306`: MySQL (configurable via DB_PORT)
+- `6379`: Redis (configurable via REDIS_PORT)
+- `5173`: Vite dev server (with `--profile dev`)
 
 **Volumes**:
 - `./backend`: Laravel application code (mounted)
 - `./data`: Persistent storage (mapped to Laravel storage/app)
+- `mysql_data`: MySQL data persistence
+- `redis_data`: Redis data persistence
 
 ### docker-compose.prod.yml (Production Overlay)
 

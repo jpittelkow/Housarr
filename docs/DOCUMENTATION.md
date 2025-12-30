@@ -45,39 +45,38 @@ The application uses a decoupled architecture:
 
 ```
 Housarr/
-├── backend/          # Laravel API application
-├── frontend/         # React SPA application
-├── docker/           # Docker configuration files
-├── data/             # Persistent data storage
-├── docker-compose.yml          # Single container setup
+├── backend/                    # Laravel API application
+├── frontend/                   # React SPA application
+├── docker/                     # Docker configuration files
+├── data/                       # Persistent data storage
+├── docs/                       # Documentation and ADRs
+├── docker-compose.yml          # Development stack (nginx, php, mysql, redis, etc.)
 └── docker-compose.prod.yml     # Production overlay
 ```
 
 ## Quick Start
 
-### Development Setup (Single Container)
+### Development
 
-1. Build and start the container:
-   ```bash
-   docker compose up -d
-   ```
+```bash
+docker compose up -d
+```
 
-2. Access the application:
-   - Frontend: http://localhost:8000
-   - API: http://localhost:8000/api
+Access the application:
+- Frontend: http://localhost:8000
+- API: http://localhost:8000/api
 
-### Production Setup
+### Production
 
-1. Build with production overlay:
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-   ```
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
 
-2. The application will run with:
-   - Separate nginx, php, mysql, redis containers
-   - Read-only filesystem for security
-   - Resource limits and scaling
-   - Production-optimized configurations
+Production includes:
+- Read-only filesystem for security
+- Resource limits and scaling
+- No exposed database/redis ports
+- Production-optimized configurations
 
 ## Documentation Index
 
