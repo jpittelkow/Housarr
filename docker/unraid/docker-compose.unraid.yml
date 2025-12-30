@@ -1,10 +1,12 @@
-# Housarr Docker Compose for Unraid
-# Simplified production setup optimized for Unraid
+# Housarr - Single Container for Unraid
+# Pre-configured for SQLite (no external database needed)
 #
-# Usage:
-#   1. Copy this file to /mnt/user/appdata/housarr/
-#   2. Create .env file with your settings
+# Quick Start:
+#   1. Copy this folder to /mnt/user/appdata/housarr/
+#   2. Copy env.example to .env and update APP_KEY
 #   3. Run: docker compose -f docker-compose.unraid.yml up -d
+#
+# First run will build the image (~5 min) and initialize the database.
 
 services:
   housarr:
@@ -16,54 +18,39 @@ services:
     ports:
       - "${APP_PORT:-8000}:80"
     volumes:
-      # Persistent data - IMPORTANT: Map these to your Unraid shares
-      - ${DATA_PATH:-/mnt/user/appdata/housarr/data}:/var/www/html/storage/app
-      - ${DB_PATH:-/mnt/user/appdata/housarr/database}:/var/www/html/database
-      - ${LOGS_PATH:-/mnt/user/appdata/housarr/logs}:/var/www/html/storage/logs
+      # Database - SQLite file persistence
+      - ${APPDATA_PATH:-/mnt/user/appdata/housarr}/database:/var/www/html/database
+      # Uploaded files (manuals, images, etc.)
+      - ${APPDATA_PATH:-/mnt/user/appdata/housarr}/storage:/var/www/html/storage/app
+      # Logs
+      - ${APPDATA_PATH:-/mnt/user/appdata/housarr}/logs:/var/www/html/storage/logs
     environment:
       # Application
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - APP_KEY=${APP_KEY:?APP_KEY is required}
-      - APP_URL=${APP_URL:-http://localhost:8000}
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Generate APP_KEY - see env.example}
+      APP_URL: ${APP_URL:-http://localhost:8000}
       
-      # Database (SQLite by default - simpler for Unraid)
-      - DB_CONNECTION=${DB_CONNECTION:-sqlite}
-      - DB_DATABASE=/var/www/html/database/database.sqlite
+      # SQLite Database (simple, no external DB needed)
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /var/www/html/database/database.sqlite
       
-      # Optional: MySQL (uncomment if using external MySQL/MariaDB)
-      # - DB_CONNECTION=mysql
-      # - DB_HOST=${DB_HOST:-mariadb}
-      # - DB_PORT=${DB_PORT:-3306}
-      # - DB_DATABASE=${DB_DATABASE:-housarr}
-      # - DB_USERNAME=${DB_USERNAME:-housarr}
-      # - DB_PASSWORD=${DB_PASSWORD}
-      
-      # Cache & Session
-      - CACHE_STORE=file
-      - SESSION_DRIVER=file
-      - QUEUE_CONNECTION=sync
+      # File-based cache/session (no Redis needed)
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
       
       # Timezone
-      - TZ=${TZ:-America/New_York}
+      TZ: ${TZ:-America/New_York}
+      
+      # Optional mail settings (configure in UI or here)
+      MAIL_MAILER: ${MAIL_MAILER:-log}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/up"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
     labels:
-      - "net.unraid.docker.icon=https://raw.githubusercontent.com/jpittelkow/Housarr/main/frontend/public/vite.svg"
-      - "net.unraid.docker.webui=http://[IP]:[PORT:8000]"
-
-# Optional: Add MariaDB if you need MySQL instead of SQLite
-#  mariadb:
-#    image: mariadb:10.11
-#    container_name: housarr-db
-#    restart: unless-stopped
-#    environment:
-#      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-#      - MYSQL_DATABASE=${DB_DATABASE:-housarr}
-#      - MYSQL_USER=${DB_USERNAME:-housarr}
-#      - MYSQL_PASSWORD=${DB_PASSWORD}
-#    volumes:
-#      - ${MYSQL_DATA_PATH:-/mnt/user/appdata/housarr/mysql}:/var/lib/mysql
+      net.unraid.docker.icon: "https://raw.githubusercontent.com/jpittelkow/Housarr/main/frontend/public/vite.svg"
+      net.unraid.docker.webui: "http://[IP]:[PORT:8000]"

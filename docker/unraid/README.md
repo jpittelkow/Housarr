@@ -1,187 +1,100 @@
 # Housarr on Unraid
 
-This guide covers deploying Housarr on Unraid using Docker Compose Manager.
+Single-container deployment with SQLite - simple and self-contained.
 
 ## Prerequisites
 
 - Unraid 6.9+ with Docker enabled
 - **Docker Compose Manager** plugin (install from Community Applications)
-- Basic familiarity with Unraid terminal
 
-## Quick Start
+## Installation
 
-### 1. Create Directory Structure
+### 1. Create Directory & Clone
 
-SSH into Unraid or use the web terminal:
+SSH into Unraid (or use web terminal):
 
 ```bash
 mkdir -p /mnt/user/appdata/housarr
 cd /mnt/user/appdata/housarr
-```
-
-### 2. Clone Repository
-
-```bash
 git clone https://github.com/jpittelkow/Housarr.git .
 ```
 
-### 3. Create Environment File
+### 2. Configure Environment
 
 ```bash
-cp docker/unraid/.env.example .env
-nano .env  # Edit with your settings
+cd docker/unraid
+cp env.example .env
 ```
 
-**Required settings to change:**
-- `APP_KEY` - Generate with: `docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"`
-- `APP_URL` - Your Housarr URL (e.g., `http://192.168.1.100:8000`)
-- `TZ` - Your timezone (e.g., `America/New_York`)
-
-### 4. Build Frontend
-
+**Generate your APP_KEY:**
 ```bash
-cd frontend
-docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build"
-cd ..
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
 ```
 
-### 5. Add to Docker Compose Manager
+**Edit `.env` and paste your key:**
+```bash
+nano .env
+```
+
+Update these values:
+- `APP_KEY` - Paste the generated key
+- `APP_URL` - Your Unraid IP (e.g., `http://192.168.1.100:8000`)
+- `TZ` - Your timezone (e.g., `America/Chicago`)
+
+### 3. Add Stack in Unraid
 
 1. Go to **Docker** → **Compose** in Unraid web UI
 2. Click **Add New Stack**
-3. Configure:
+3. Set:
    - **Name:** `housarr`
-   - **Compose File:** Select `docker-compose.yml` from `/mnt/user/appdata/housarr`
+   - **Compose File:** Browse to `/mnt/user/appdata/housarr/docker/unraid/docker-compose.unraid.yml`
 4. Click **Save**
 
-### 6. Start the Stack
+### 4. Start Housarr
 
-1. Find **housarr** in the Compose stacks list
-2. Click the **Play** button (Compose Up)
-3. Wait for all services to be healthy (2-5 minutes first run)
+1. Find **housarr** in the Compose stacks
+2. Click **▶ Compose Up**
+3. First build takes ~5 minutes (building PHP image + frontend)
 
-### 7. Initialize Database
+### 5. Access
 
-```bash
-cd /mnt/user/appdata/housarr
-docker compose exec php php artisan migrate --force
-docker compose exec php php artisan storage:link
-```
+Open: **http://YOUR_UNRAID_IP:8000**
 
-### 8. Access Housarr
-
-Open your browser to `http://YOUR_UNRAID_IP:8000`
+Create your account and start adding items!
 
 ---
 
-## Simplified Setup (SQLite)
+## Data Storage
 
-For a simpler single-container setup with SQLite (no MySQL needed):
+All data is stored in `/mnt/user/appdata/housarr/`:
 
-```bash
-cd /mnt/user/appdata/housarr
-docker compose -f docker/unraid/docker-compose.unraid.yml up -d
-```
+| Folder | Contents |
+|--------|----------|
+| `database/` | SQLite database file |
+| `storage/` | Uploaded files, manuals, images |
+| `logs/` | Application logs |
 
-This uses:
-- Single container with nginx + PHP
-- SQLite database (simpler, no separate DB container)
-- File-based cache/session (no Redis needed)
+**Back up the `database/` and `storage/` folders regularly!**
 
 ---
 
-## Reverse Proxy Setup
+## Reverse Proxy (Optional)
 
-### Using Nginx Proxy Manager (Recommended)
+### Nginx Proxy Manager
 
-1. In Nginx Proxy Manager, add a new Proxy Host:
+1. Add Proxy Host:
    - **Domain:** `housarr.yourdomain.com`
-   - **Forward Hostname:** `housarr` (container name) or Unraid IP
-   - **Forward Port:** `8000` (or `80` if using production overlay)
-   - **Websockets Support:** ON
-   - **SSL:** Request new certificate
+   - **Forward Hostname/IP:** Your Unraid IP
+   - **Forward Port:** `8000`
+   - **Websockets:** ON
+   - **SSL:** Request certificate
 
-2. Update your `.env`:
+2. Update `.env`:
    ```
    APP_URL=https://housarr.yourdomain.com
    ```
 
-3. Restart the stack.
-
-### Using Traefik
-
-Add these labels to the nginx service in your compose file:
-
-```yaml
-labels:
-  - "traefik.enable=true"
-  - "traefik.http.routers.housarr.rule=Host(`housarr.yourdomain.com`)"
-  - "traefik.http.routers.housarr.entrypoints=websecure"
-  - "traefik.http.routers.housarr.tls.certresolver=letsencrypt"
-  - "traefik.http.services.housarr.loadbalancer.server.port=80"
-```
-
----
-
-## Data Persistence
-
-All persistent data is stored in `/mnt/user/appdata/housarr/`:
-
-| Path | Contents |
-|------|----------|
-| `data/` | Uploaded files, manuals, images |
-| `backend/database/database.sqlite` | Database (if using SQLite) |
-| `backend/storage/logs/` | Application logs |
-
-**Backup these directories regularly!**
-
----
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_PORT` | Web UI port | `8000` |
-| `APP_KEY` | Encryption key (required) | - |
-| `APP_URL` | Full URL to Housarr | `http://localhost:8000` |
-| `APP_ENV` | Environment mode | `production` |
-| `DB_CONNECTION` | Database type | `mysql` |
-| `DB_PASSWORD` | MySQL password | - |
-| `REDIS_PASSWORD` | Redis password | - |
-| `TZ` | Timezone | `UTC` |
-
----
-
-## Troubleshooting
-
-### Container won't start
-
-Check logs:
-```bash
-docker compose logs -f
-```
-
-### Database migration errors
-
-```bash
-docker compose exec php php artisan migrate:fresh --force
-```
-⚠️ This resets the database!
-
-### Permission issues
-
-```bash
-docker compose exec php chown -R www-data:www-data /var/www/html/storage
-docker compose exec php chmod -R 775 /var/www/html/storage
-```
-
-### Frontend shows blank page
-
-Rebuild frontend:
-```bash
-cd frontend
-docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build"
-```
+3. Restart: In Docker Compose Manager, click **🔄 Compose Restart**
 
 ---
 
@@ -190,16 +103,45 @@ docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run b
 ```bash
 cd /mnt/user/appdata/housarr
 git pull
-cd frontend && docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build" && cd ..
-docker compose down
-docker compose build --no-cache
-docker compose up -d
-docker compose exec php php artisan migrate --force
+```
+
+Then in Unraid Docker Compose Manager:
+1. Click **⬇ Compose Down**
+2. Click **🔨 Compose Build** (rebuilds with updates)
+3. Click **▶ Compose Up**
+
+---
+
+## Troubleshooting
+
+### View Logs
+```bash
+cd /mnt/user/appdata/housarr/docker/unraid
+docker compose -f docker-compose.unraid.yml logs -f
+```
+
+### Restart Container
+In Docker Compose Manager, click **🔄 Compose Restart**
+
+### Reset Database (⚠️ Deletes all data)
+```bash
+rm /mnt/user/appdata/housarr/database/database.sqlite
+# Then restart the container - it will create a fresh database
+```
+
+### Permission Issues
+```bash
+docker exec housarr chown -R www-data:www-data /var/www/html/storage /var/www/html/database
 ```
 
 ---
 
-## Support
+## Configuration Reference
 
-- [Documentation](../../docs/README.md)
-- [GitHub Issues](https://github.com/jpittelkow/Housarr/issues)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `APP_KEY` | Encryption key **(required)** | - |
+| `APP_PORT` | Web UI port | `8000` |
+| `APP_URL` | Full URL to Housarr | `http://localhost:8000` |
+| `TZ` | Timezone | `America/New_York` |
+| `APPDATA_PATH` | Data storage path | `/mnt/user/appdata/housarr` |
