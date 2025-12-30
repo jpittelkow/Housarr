@@ -1,57 +1,43 @@
-# Housarr - Single Container (nginx + PHP-FPM + Frontend)
+# Housarr - Optimized Single Container
+# SQLite + File cache (no MySQL/Redis needed)
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --prefer-offline
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: PHP + Nginx
+# Stage 2: PHP + Nginx (minimal)
 FROM php:8.3-fpm-alpine
 
-# Install system dependencies and nginx
+# Install only essential system deps
 RUN apk add --no-cache \
     nginx \
     supervisor \
-    libpng \
-    libzip \
-    oniguruma \
-    libxml2 \
-    icu-libs \
-    git \
     curl \
     sqlite \
-    postgresql-libs
+    libpng \
+    libzip \
+    icu-libs
 
-# Install PHP extensions (MySQL, PostgreSQL, SQLite)
+# Install only required PHP extensions (no mysql/postgres/redis)
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
     libpng-dev \
     libzip-dev \
-    oniguruma-dev \
-    libxml2-dev \
     icu-dev \
-    linux-headers \
     sqlite-dev \
-    postgresql-dev \
     && docker-php-ext-install -j$(nproc) \
-        pdo_mysql \
-        pdo_pgsql \
         pdo_sqlite \
-        mbstring \
-        exif \
-        pcntl \
-        bcmath \
         gd \
         zip \
         intl \
         opcache \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
+        bcmath \
     && apk del .build-deps \
-    && rm -rf /tmp/pear
+    && rm -rf /tmp/*
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -66,28 +52,28 @@ COPY docker/app/php.ini /usr/local/etc/php/conf.d/99-custom.ini
 # Configure supervisord
 COPY docker/app/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy entrypoint script
+# Copy entrypoint
 COPY docker/app/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy backend application
+# Copy backend
+COPY backend/composer.json backend/composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+
 COPY backend/ ./
+RUN composer dump-autoload --optimize
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-# Create storage directories
+# Setup directories
 RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache database
 
-# Copy built frontend
+# Copy frontend build
 COPY --from=frontend-builder /app/dist /var/www/frontend
 
-# Create storage link
+# Storage symlink
 RUN ln -sf /var/www/html/storage/app/public /var/www/html/public/storage
 
 EXPOSE 80
