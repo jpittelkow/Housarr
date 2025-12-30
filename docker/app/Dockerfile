@@ -73,12 +73,22 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Set working directory
 WORKDIR /var/www/html
 
-# Create storage directories
-RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html
+# Copy backend application
+COPY backend/ ./
 
-# Copy built frontend from builder stage to separate directory (not overwritten by volume mount)
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Create storage directories
+RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache database
+
+# Copy built frontend
 COPY --from=frontend-builder /app/dist /var/www/frontend
+
+# Create storage link
+RUN ln -sf /var/www/html/storage/app/public /var/www/html/public/storage
 
 EXPOSE 80
 
