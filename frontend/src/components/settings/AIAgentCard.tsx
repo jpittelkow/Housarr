@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { settings, type AIAgent, type AIAgentName } from '@/services/api'
+import { settings, type AIAgent, type AIAgentName, type AIAgentsResponse } from '@/services/api'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -71,15 +71,32 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
 
   const config = AGENT_CONFIG[agent.name]
 
-  // Update agent mutation
+  // Update agent mutation with optimistic updates
   const updateMutation = useMutation({
     mutationFn: (data: Parameters<typeof settings.updateAgent>[1]) =>
       settings.updateAgent(agent.name, data),
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['ai-agents'] })
+      const previousAgents = queryClient.getQueryData<AIAgentsResponse>(['ai-agents'])
+      // Optimistically update the agent in cache (preserve full structure)
+      queryClient.setQueryData<AIAgentsResponse>(['ai-agents'], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          agents: old.agents.map((a) =>
+            a.name === agent.name ? { ...a, ...data, enabled: data.enabled ?? a.enabled } : a
+          ),
+        }
+      })
+      return { previousAgents }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-agents'] })
       onRefresh()
     },
-    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+    onError: (error: Error & { response?: { data?: { message?: string } } }, _vars, context) => {
+      if (context?.previousAgents) {
+        queryClient.setQueryData(['ai-agents'], context.previousAgents)
+      }
       const message = error.response?.data?.message || error.message || 'Failed to update agent'
       toast.error(message)
     },
@@ -91,10 +108,30 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
     onSuccess: (data) => {
       if (data.success) {
         toast.success(`Connection successful! (${data.response_time_ms}ms)`)
+        // Optimistically update test status (preserve full structure)
+        queryClient.setQueryData<AIAgentsResponse>(['ai-agents'], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            agents: old.agents.map((a) =>
+              a.name === agent.name
+                ? {
+                    ...a,
+                    last_test: {
+                      success: true,
+                      tested_at: new Date().toISOString(),
+                      response_time_ms: data.response_time_ms,
+                      error: null,
+                    },
+                    configured: true,
+                  }
+                : a
+            ),
+          }
+        })
       } else {
         toast.error(data.message)
       }
-      queryClient.invalidateQueries({ queryKey: ['ai-agents'] })
       onRefresh()
     },
     onError: (error: Error) => {
@@ -102,13 +139,35 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
     },
   })
 
-  // Set as primary mutation
+  // Set as primary mutation with optimistic update
   const setPrimaryMutation = useMutation({
     mutationFn: () => settings.setPrimaryAgent(agent.name),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['ai-agents'] })
+      const previousAgents = queryClient.getQueryData<AIAgentsResponse>(['ai-agents'])
+      // Optimistically set as primary (preserve full structure)
+      queryClient.setQueryData<AIAgentsResponse>(['ai-agents'], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          primary_agent: agent.name,
+          agents: old.agents.map((a) => ({
+            ...a,
+            is_primary: a.name === agent.name,
+          })),
+        }
+      })
+      return { previousAgents }
+    },
     onSuccess: () => {
       toast.success(`${agent.display_name} is now the primary agent`)
-      queryClient.invalidateQueries({ queryKey: ['ai-agents'] })
       onRefresh()
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousAgents) {
+        queryClient.setQueryData(['ai-agents'], context.previousAgents)
+      }
+      toast.error('Failed to set primary agent')
     },
   })
 

@@ -4,6 +4,7 @@
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
@@ -13,6 +14,7 @@
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # User data
 data/

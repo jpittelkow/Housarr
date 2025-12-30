@@ -453,28 +453,15 @@ class AIAgentOrchestrator
             $responsesText .= "\n\n--- Response from {$agentName} ---\n{$result['response']}";
         }
 
-        $synthesisPrompt = <<<PROMPT
-You are synthesizing product identification responses from multiple AI assistants.
-Each assistant was asked to identify products from the same image or search query.
-
-Your task:
-1. Compare all responses and find consensus on make, model, and product type
-2. If agents disagree, use your knowledge to determine the most likely correct answer
-3. Combine confidence scores - if multiple agents agree, confidence should be higher
-4. Return a single consolidated JSON array of the best product matches
-
-Original analysis prompt: {$prompt}
-
-Responses from different AI assistants:
-{$responsesText}
-
-Return ONLY a valid JSON array with the synthesized best matches, ranked by confidence.
-Format:
-[
-  { "make": "Brand", "model": "Model", "type": "Category", "confidence": 0.95, "agents_agreed": 3 },
-  { "make": "Brand", "model": "Alt Model", "type": "Category", "confidence": 0.70, "agents_agreed": 2 }
-]
-PROMPT;
+        // Get synthesis prompt from settings or use default from AnalyzeItemImageAction
+        $synthesisTemplate = \App\Actions\Items\AnalyzeItemImageAction::getSynthesisPrompt($this->householdId);
+        
+        // Replace placeholders in the synthesis template
+        $synthesisPrompt = str_replace(
+            ['{original_prompt}', '{responses}'],
+            [$prompt, $responsesText],
+            $synthesisTemplate
+        );
 
         $synthesisResult = $this->callAgent($primary, $synthesisPrompt, array_merge($options, ['max_tokens' => 2048]));
         $results['synthesized'] = $synthesisResult['response'];

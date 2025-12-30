@@ -2,12 +2,85 @@
 
 namespace App\Actions\Items;
 
+use App\Models\Setting;
 use App\Services\AIAgentOrchestrator;
 use App\Services\ProductImageSearchService;
 use Illuminate\Http\UploadedFile;
 
 class AnalyzeItemImageAction
 {
+    /**
+     * Default prompt template for Smart Add analysis.
+     */
+    public const DEFAULT_SMART_ADD_PROMPT = <<<'PROMPT'
+{context}
+
+IMPORTANT INSTRUCTIONS:
+1. Make/Manufacturer - Identify the BRAND NAME visible on the product or recognize it by distinctive design features. 
+   - Look for logos, nameplates, badges, or text on the product
+   - If the brand is partially visible, use your best judgment
+   - Common appliance brands: GE, Samsung, LG, Whirlpool, Frigidaire, Bosch, KitchenAid, Maytag, Thermador, Viking, Wolf, Sub-Zero, Miele, Signature Kitchen Suite, etc.
+   - NEVER use "Unknown" or "N/A" - make your best educated guess based on the design
+
+2. Model number - Look for:
+   - Model plates, labels, or stickers (often on edges, back, or inside door)
+   - Model numbers in visible text
+   - If no model visible, describe key features (e.g., "48-inch 6-burner" or "French door")
+
+3. Product type/category
+
+{categories}
+
+Return up to 10 possible matches ranked by confidence.
+You MUST return ONLY a valid JSON array with no additional text, markdown, or explanation.
+
+RULES:
+- Do NOT use "Unknown", "N/A", "Not visible", or similar placeholder text
+- Make your BEST educated guess for the brand based on design style, features, and appearance
+- If you're 50% sure it's a Thermador but could be Viking, include BOTH as separate results with different confidence scores
+- Model can be a descriptive name if the actual model number isn't visible
+
+Format:
+[
+  { "make": "Brand Name", "model": "Model Number or Description", "type": "Category Name", "confidence": 0.95 },
+  { "make": "Alternative Brand", "model": "Model", "type": "Category Name", "confidence": 0.70 }
+]
+
+If you truly cannot identify ANY aspect of the product, return an empty array: []
+PROMPT;
+
+    /**
+     * Default prompt template for multi-agent synthesis.
+     */
+    public const DEFAULT_SYNTHESIS_PROMPT = <<<'PROMPT'
+You are synthesizing product identification responses from multiple AI assistants.
+Each assistant was asked to identify products from the same image or search query.
+
+Your task:
+1. Compare all responses and find consensus on make, model, and product type
+2. If agents disagree, use your knowledge to determine the most likely correct answer
+3. Combine confidence scores - if multiple agents agree, confidence should be higher
+4. Return a single consolidated JSON array of the best product matches
+
+IMPORTANT RULES:
+- Do NOT use "Unknown", "N/A", "Not visible", or any placeholder text
+- Always provide your best guess for the brand/make based on design characteristics
+- If model number is not visible, describe key features instead (e.g., "48-inch 6-burner")
+- Filter out any "Unknown" results from the source responses
+
+Original analysis prompt: {original_prompt}
+
+Responses from different AI assistants:
+{responses}
+
+Return ONLY a valid JSON array with the synthesized best matches, ranked by confidence.
+Format:
+[
+  { "make": "Brand", "model": "Model", "type": "Category", "confidence": 0.95, "agents_agreed": 3 },
+  { "make": "Brand", "model": "Alt Model", "type": "Category", "confidence": 0.70, "agents_agreed": 2 }
+]
+PROMPT;
+
     /**
      * Execute the product analysis using multiple AI agents.
      *
@@ -33,7 +106,7 @@ class AnalyzeItemImageAction
             $mimeType = $file->getMimeType();
         }
 
-        $prompt = $this->buildPrompt($file, $query, $categories);
+        $prompt = $this->buildPrompt($file, $query, $categories, $householdId);
 
         // Use multi-agent analysis with synthesis
         if ($base64Image) {
@@ -57,7 +130,7 @@ class AnalyzeItemImageAction
     /**
      * Build the analysis prompt.
      */
-    protected function buildPrompt(?UploadedFile $file, ?string $query, ?array $categories): string
+    protected function buildPrompt(?UploadedFile $file, ?string $query, ?array $categories, ?int $householdId = null): string
     {
         $categoryList = !empty($categories)
             ? "Available categories: " . implode(', ', $categories) . "\nChoose from these categories when possible, or suggest a new one if none fit."
@@ -72,26 +145,23 @@ class AnalyzeItemImageAction
             $context = "Identify the product based on the following search text: '$query'.";
         }
 
-        return <<<PROMPT
-$context
-Identify the following:
-1. Make/Manufacturer (e.g., Carrier, GE, Samsung, Whirlpool)
-2. Model number (look for model plates, labels, or distinctive features)
-3. Product type/category
+        // Get custom prompt from settings or use default
+        $promptTemplate = Setting::get('ai_prompt_smart_add', $householdId, self::DEFAULT_SMART_ADD_PROMPT);
 
-{$categoryList}
+        // Replace placeholders in the template
+        return str_replace(
+            ['{context}', '{categories}'],
+            [$context, $categoryList],
+            $promptTemplate
+        );
+    }
 
-Return up to 10 possible matches ranked by confidence.
-You MUST return ONLY a valid JSON array with no additional text, markdown, or explanation.
-
-Format:
-[
-  { "make": "Brand Name", "model": "Model Number", "type": "Category Name", "confidence": 0.95 },
-  { "make": "Brand Name", "model": "Alternative Model", "type": "Category Name", "confidence": 0.80 }
-]
-
-If you cannot identify the product, return an empty array: []
-PROMPT;
+    /**
+     * Get the synthesis prompt template.
+     */
+    public static function getSynthesisPrompt(?int $householdId = null): string
+    {
+        return Setting::get('ai_prompt_synthesis', $householdId, self::DEFAULT_SYNTHESIS_PROMPT);
     }
 
     /**
@@ -129,9 +199,19 @@ PROMPT;
         $results = [];
         $parseSource = null;
 
+        \Illuminate\Support\Facades\Log::debug('AnalyzeItemImage: Processing response', [
+            'has_synthesized' => !empty($synthesizedText),
+            'synthesized_preview' => $synthesizedText ? substr($synthesizedText, 0, 500) : null,
+            'agents_count' => count($response['agents'] ?? []),
+        ]);
+
         // Try to parse from synthesized response first
         if ($synthesizedText) {
             $results = $this->parseResults($synthesizedText);
+            \Illuminate\Support\Facades\Log::debug('AnalyzeItemImage: Parsed synthesized results', [
+                'parsed_count' => count($results ?? []),
+                'results_preview' => $results ? json_encode(array_slice($results, 0, 3)) : null,
+            ]);
             if (!empty($results)) {
                 $parseSource = 'synthesized';
             }
@@ -307,12 +387,30 @@ PROMPT;
     protected function normalizeResults(array $results): array
     {
         $normalizedResults = [];
+        
+        // Values to treat as empty/unknown
+        $unknownValues = ['unknown', 'n/a', 'na', 'not visible', 'not available', 'unidentified', 'none', ''];
+        
         foreach ($results as $result) {
             if (isset($result['make']) || isset($result['model']) || isset($result['type'])) {
+                $make = trim($result['make'] ?? '');
+                $model = trim($result['model'] ?? '');
+                $type = trim($result['type'] ?? '');
+                
+                // Skip results where make is unknown/empty (these aren't useful)
+                if (in_array(strtolower($make), $unknownValues)) {
+                    continue;
+                }
+                
+                // Clean up model if it's an unknown value - replace with empty string
+                if (in_array(strtolower($model), $unknownValues)) {
+                    $model = '';
+                }
+                
                 $normalized = [
-                    'make' => $result['make'] ?? '',
-                    'model' => $result['model'] ?? '',
-                    'type' => $result['type'] ?? '',
+                    'make' => $make,
+                    'model' => $model,
+                    'type' => $type,
                     'confidence' => (float) ($result['confidence'] ?? 0.5),
                     'image_url' => $result['image_url'] ?? null,
                 ];

@@ -19,15 +19,16 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use ZipArchive;
 
 class BackupController extends Controller
 {
     /**
-     * Export household data with memory-efficient streaming.
+     * Export household data as a ZIP file containing JSON manifest and all files.
      */
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request): BinaryFileResponse
     {
         $user = $request->user();
 
@@ -36,120 +37,93 @@ class BackupController extends Controller
         }
 
         $householdId = $user->household_id;
-        $filename = 'housarr-backup-' . Carbon::now()->format('Y-m-d-His') . '.json';
+        $timestamp = Carbon::now()->format('Y-m-d-His');
+        $zipFilename = "housarr-backup-{$timestamp}.zip";
+        $tempPath = storage_path("app/temp/{$zipFilename}");
 
-        return response()->stream(function () use ($householdId) {
-            // Start JSON object
-            echo '{';
-            echo '"version":"1.0",';
-            echo '"exported_at":"' . Carbon::now()->toIso8601String() . '",';
+        // Ensure temp directory exists
+        if (!is_dir(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0755, true);
+        }
 
-            // Export household (single record)
-            echo '"household":' . json_encode(Household::find($householdId)) . ',';
+        $zip = new ZipArchive();
+        if ($zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            abort(500, 'Could not create backup file');
+        }
 
-            // Export users with password visible
-            echo '"users":';
-            $this->streamCollection(
-                User::where('household_id', $householdId),
-                fn($u) => $u->makeVisible(['password'])->toArray()
-            );
-            echo ',';
+        // Build the manifest data
+        $manifest = [
+            'version' => '2.0',
+            'exported_at' => Carbon::now()->toIso8601String(),
+            'household' => Household::find($householdId),
+            'users' => User::where('household_id', $householdId)
+                ->get()
+                ->map(fn($u) => $u->makeVisible(['password'])->toArray())
+                ->toArray(),
+            'categories' => Category::where('household_id', $householdId)->get()->toArray(),
+            'locations' => Location::where('household_id', $householdId)->get()->toArray(),
+            'vendors' => Vendor::where('household_id', $householdId)->get()->toArray(),
+            'items' => Item::where('household_id', $householdId)->get()->toArray(),
+            'parts' => Part::select('parts.*')
+                ->join('items', 'parts.item_id', '=', 'items.id')
+                ->where('items.household_id', $householdId)
+                ->get()
+                ->toArray(),
+            'maintenance_logs' => MaintenanceLog::where('household_id', $householdId)->get()->toArray(),
+            'reminders' => Reminder::where('household_id', $householdId)->get()->toArray(),
+            'todos' => Todo::where('household_id', $householdId)->get()->toArray(),
+            'notifications' => Notification::select('notifications.*')
+                ->join('users', 'notifications.user_id', '=', 'users.id')
+                ->where('users.household_id', $householdId)
+                ->get()
+                ->toArray(),
+            'files' => [],
+        ];
 
-            // Export categories
-            echo '"categories":';
-            $this->streamCollection(Category::where('household_id', $householdId));
-            echo ',';
+        // Export files and add to ZIP
+        $files = File::where('household_id', $householdId)->get();
+        $fileIndex = 0;
+        
+        foreach ($files as $file) {
+            $fileData = $file->toArray();
+            
+            // Try to get the actual file content
+            try {
+                $disk = Storage::disk($file->disk);
+                if ($disk->exists($file->path)) {
+                    $content = $disk->get($file->path);
+                    
+                    // Store file in ZIP with a predictable path
+                    $zipPath = "files/{$fileIndex}_" . basename($file->path);
+                    $zip->addFromString($zipPath, $content);
+                    
+                    // Store the zip path reference in the manifest
+                    $fileData['backup_path'] = $zipPath;
+                    $fileIndex++;
+                }
+            } catch (\Exception $e) {
+                // Skip files that can't be read
+                $fileData['backup_path'] = null;
+                $fileData['backup_error'] = $e->getMessage();
+            }
+            
+            $manifest['files'][] = $fileData;
+        }
 
-            // Export locations
-            echo '"locations":';
-            $this->streamCollection(Location::where('household_id', $householdId));
-            echo ',';
+        // Add manifest to ZIP
+        $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
+        
+        $zip->close();
 
-            // Export vendors
-            echo '"vendors":';
-            $this->streamCollection(Vendor::where('household_id', $householdId));
-            echo ',';
-
-            // Export items
-            echo '"items":';
-            $this->streamCollection(Item::where('household_id', $householdId));
-            echo ',';
-
-            // Export parts (use join instead of whereHas for efficiency)
-            echo '"parts":';
-            $this->streamCollection(
-                Part::select('parts.*')
-                    ->join('items', 'parts.item_id', '=', 'items.id')
-                    ->where('items.household_id', $householdId)
-            );
-            echo ',';
-
-            // Export maintenance logs
-            echo '"maintenance_logs":';
-            $this->streamCollection(MaintenanceLog::where('household_id', $householdId));
-            echo ',';
-
-            // Export reminders
-            echo '"reminders":';
-            $this->streamCollection(Reminder::where('household_id', $householdId));
-            echo ',';
-
-            // Export todos
-            echo '"todos":';
-            $this->streamCollection(Todo::where('household_id', $householdId));
-            echo ',';
-
-            // Export notifications (use join instead of whereHas)
-            echo '"notifications":';
-            $this->streamCollection(
-                Notification::select('notifications.*')
-                    ->join('users', 'notifications.user_id', '=', 'users.id')
-                    ->where('users.household_id', $householdId)
-            );
-            echo ',';
-
-            // Export files
-            echo '"files":';
-            $this->streamCollection(File::where('household_id', $householdId));
-
-            // End JSON object
-            echo '}';
-        }, 200, [
-            'Content-Type' => 'application/json',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ]);
+        // Return the ZIP file as download and delete after sending
+        return response()->download($tempPath, $zipFilename, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 
     /**
-     * Stream a collection in chunks to avoid memory issues.
+     * Import household data from a ZIP backup file.
      */
-    protected function streamCollection($query, ?callable $transform = null): void
-    {
-        echo '[';
-        $first = true;
-
-        $query->orderBy($query->getModel()->getKeyName())
-            ->chunk(100, function ($records) use (&$first, $transform) {
-                foreach ($records as $record) {
-                    if (!$first) {
-                        echo ',';
-                    }
-                    $first = false;
-
-                    $data = $transform ? $transform($record) : $record->toArray();
-                    echo json_encode($data);
-
-                    // Flush output buffer periodically
-                    if (ob_get_level() > 0) {
-                        ob_flush();
-                    }
-                    flush();
-                }
-            });
-
-        echo ']';
-    }
-
     public function import(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -159,18 +133,41 @@ class BackupController extends Controller
         }
 
         $request->validate([
-            'backup' => ['required', 'file', 'mimetypes:application/json,text/plain'],
+            'backup' => ['required', 'file', 'mimetypes:application/zip,application/x-zip-compressed,application/json,text/plain'],
         ]);
 
-        $file = $request->file('backup');
-        $content = file_get_contents($file->getRealPath());
-        $data = json_decode($content, true);
+        $uploadedFile = $request->file('backup');
+        $mimeType = $uploadedFile->getMimeType();
+        
+        // Handle legacy JSON-only backups
+        if (in_array($mimeType, ['application/json', 'text/plain']) || 
+            str_ends_with($uploadedFile->getClientOriginalName(), '.json')) {
+            return $this->importLegacyJson($request);
+        }
 
+        // Handle ZIP backups
+        $tempPath = $uploadedFile->getRealPath();
+        
+        $zip = new ZipArchive();
+        if ($zip->open($tempPath) !== true) {
+            return response()->json(['message' => 'Could not open backup file'], 422);
+        }
+
+        // Read manifest
+        $manifestContent = $zip->getFromName('manifest.json');
+        if ($manifestContent === false) {
+            $zip->close();
+            return response()->json(['message' => 'Invalid backup file: missing manifest.json'], 422);
+        }
+
+        $data = json_decode($manifestContent, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            return response()->json(['message' => 'Invalid JSON file'], 422);
+            $zip->close();
+            return response()->json(['message' => 'Invalid manifest.json'], 422);
         }
 
         if (!isset($data['version']) || !isset($data['household'])) {
+            $zip->close();
             return response()->json(['message' => 'Invalid backup file format'], 422);
         }
 
@@ -179,6 +176,10 @@ class BackupController extends Controller
         DB::beginTransaction();
 
         try {
+            // Note: We don't delete files from storage during import.
+            // The import will overwrite files at the same paths, and orphaned files
+            // can be cleaned up separately. This prevents data loss if import fails.
+
             // Clear existing data (in reverse order of dependencies)
             Notification::whereHas('user', fn($q) => $q->where('household_id', $householdId))->delete();
             File::where('household_id', $householdId)->delete();
@@ -197,11 +198,11 @@ class BackupController extends Controller
             }
 
             // Build ID mappings for relationships
-            $userIdMap = [];
             $categoryIdMap = [];
             $locationIdMap = [];
             $vendorIdMap = [];
             $itemIdMap = [];
+            $partIdMap = [];
 
             // Import categories
             foreach ($data['categories'] ?? [] as $category) {
@@ -250,10 +251,14 @@ class BackupController extends Controller
 
             // Import parts
             foreach ($data['parts'] ?? [] as $part) {
+                $oldId = $part['id'] ?? null;
                 unset($part['id'], $part['created_at'], $part['updated_at']);
                 if (isset($part['item_id']) && isset($itemIdMap[$part['item_id']])) {
                     $part['item_id'] = $itemIdMap[$part['item_id']];
-                    Part::create($part);
+                    $new = Part::create($part);
+                    if ($oldId) {
+                        $partIdMap[$oldId] = $new->id;
+                    }
                 }
             }
 
@@ -284,7 +289,202 @@ class BackupController extends Controller
                 if (isset($todo['item_id']) && isset($itemIdMap[$todo['item_id']])) {
                     $todo['item_id'] = $itemIdMap[$todo['item_id']];
                 }
-                // Reset user_id to current user since users may differ
+                $todo['user_id'] = $user->id;
+                Todo::create($todo);
+            }
+
+            // Import files with actual content from ZIP
+            $filesRestored = 0;
+            foreach ($data['files'] ?? [] as $fileData) {
+                $backupPath = $fileData['backup_path'] ?? null;
+                unset($fileData['id'], $fileData['created_at'], $fileData['updated_at'], 
+                      $fileData['url'], $fileData['backup_path'], $fileData['backup_error']);
+                
+                $fileData['household_id'] = $householdId;
+                
+                // Map fileable_id to new IDs
+                if ($fileData['fileable_type'] === 'App\\Models\\Item' && isset($itemIdMap[$fileData['fileable_id']])) {
+                    $fileData['fileable_id'] = $itemIdMap[$fileData['fileable_id']];
+                } elseif ($fileData['fileable_type'] === 'App\\Models\\Location' && isset($locationIdMap[$fileData['fileable_id']])) {
+                    $fileData['fileable_id'] = $locationIdMap[$fileData['fileable_id']];
+                } elseif ($fileData['fileable_type'] === 'App\\Models\\Part' && isset($partIdMap[$fileData['fileable_id']])) {
+                    $fileData['fileable_id'] = $partIdMap[$fileData['fileable_id']];
+                } elseif ($fileData['fileable_type'] === 'App\\Models\\User') {
+                    // Skip user files or map to current user
+                    $fileData['fileable_id'] = $user->id;
+                }
+
+                // Restore file content from ZIP if available
+                if ($backupPath) {
+                    $fileContent = $zip->getFromName($backupPath);
+                    if ($fileContent !== false) {
+                        // Preserve the original path structure, just update household ID
+                        // Original path format: households/{oldId}/item/{itemId}/file.jpg
+                        $originalPath = $fileData['path'];
+                        
+                        // Replace the old household ID with new one in the path
+                        if (preg_match('#^households/\d+/(.+)$#', $originalPath, $matches)) {
+                            $newPath = "households/{$householdId}/{$matches[1]}";
+                        } else {
+                            // Fallback: use original path
+                            $newPath = $originalPath;
+                        }
+                        
+                        // Store file
+                        Storage::disk($fileData['disk'])->put($newPath, $fileContent);
+                        $fileData['path'] = $newPath;
+                        $filesRestored++;
+                    }
+                }
+
+                File::create($fileData);
+            }
+
+            DB::commit();
+            $zip->close();
+
+            return response()->json([
+                'message' => 'Backup restored successfully',
+                'stats' => [
+                    'categories' => count($data['categories'] ?? []),
+                    'locations' => count($data['locations'] ?? []),
+                    'vendors' => count($data['vendors'] ?? []),
+                    'items' => count($data['items'] ?? []),
+                    'parts' => count($data['parts'] ?? []),
+                    'maintenance_logs' => count($data['maintenance_logs'] ?? []),
+                    'reminders' => count($data['reminders'] ?? []),
+                    'todos' => count($data['todos'] ?? []),
+                    'files' => count($data['files'] ?? []),
+                    'files_restored' => $filesRestored,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $zip->close();
+
+            return response()->json([
+                'message' => 'Failed to restore backup: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle legacy JSON-only backups (version 1.0).
+     */
+    protected function importLegacyJson(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $householdId = $user->household_id;
+
+        $file = $request->file('backup');
+        $content = file_get_contents($file->getRealPath());
+        $data = json_decode($content, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return response()->json(['message' => 'Invalid JSON file'], 422);
+        }
+
+        if (!isset($data['version']) || !isset($data['household'])) {
+            return response()->json(['message' => 'Invalid backup file format'], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Clear existing data
+            Notification::whereHas('user', fn($q) => $q->where('household_id', $householdId))->delete();
+            File::where('household_id', $householdId)->delete();
+            Todo::where('household_id', $householdId)->delete();
+            Reminder::where('household_id', $householdId)->delete();
+            MaintenanceLog::where('household_id', $householdId)->delete();
+            Part::whereHas('item', fn($q) => $q->where('household_id', $householdId))->delete();
+            Item::where('household_id', $householdId)->delete();
+            Vendor::where('household_id', $householdId)->delete();
+            Location::where('household_id', $householdId)->delete();
+            Category::where('household_id', $householdId)->delete();
+
+            if (isset($data['household']['name'])) {
+                Household::where('id', $householdId)->update(['name' => $data['household']['name']]);
+            }
+
+            $categoryIdMap = [];
+            $locationIdMap = [];
+            $vendorIdMap = [];
+            $itemIdMap = [];
+
+            foreach ($data['categories'] ?? [] as $category) {
+                $oldId = $category['id'];
+                unset($category['id'], $category['created_at'], $category['updated_at']);
+                $category['household_id'] = $householdId;
+                $new = Category::create($category);
+                $categoryIdMap[$oldId] = $new->id;
+            }
+
+            foreach ($data['locations'] ?? [] as $location) {
+                $oldId = $location['id'];
+                unset($location['id'], $location['created_at'], $location['updated_at']);
+                $location['household_id'] = $householdId;
+                $new = Location::create($location);
+                $locationIdMap[$oldId] = $new->id;
+            }
+
+            foreach ($data['vendors'] ?? [] as $vendor) {
+                $oldId = $vendor['id'];
+                unset($vendor['id'], $vendor['created_at'], $vendor['updated_at']);
+                $vendor['household_id'] = $householdId;
+                $new = Vendor::create($vendor);
+                $vendorIdMap[$oldId] = $new->id;
+            }
+
+            foreach ($data['items'] ?? [] as $item) {
+                $oldId = $item['id'];
+                unset($item['id'], $item['created_at'], $item['updated_at']);
+                $item['household_id'] = $householdId;
+                if (isset($item['category_id']) && isset($categoryIdMap[$item['category_id']])) {
+                    $item['category_id'] = $categoryIdMap[$item['category_id']];
+                }
+                if (isset($item['location_id']) && isset($locationIdMap[$item['location_id']])) {
+                    $item['location_id'] = $locationIdMap[$item['location_id']];
+                }
+                if (isset($item['vendor_id']) && isset($vendorIdMap[$item['vendor_id']])) {
+                    $item['vendor_id'] = $vendorIdMap[$item['vendor_id']];
+                }
+                $new = Item::create($item);
+                $itemIdMap[$oldId] = $new->id;
+            }
+
+            foreach ($data['parts'] ?? [] as $part) {
+                unset($part['id'], $part['created_at'], $part['updated_at']);
+                if (isset($part['item_id']) && isset($itemIdMap[$part['item_id']])) {
+                    $part['item_id'] = $itemIdMap[$part['item_id']];
+                    Part::create($part);
+                }
+            }
+
+            foreach ($data['maintenance_logs'] ?? [] as $log) {
+                unset($log['id'], $log['created_at'], $log['updated_at']);
+                $log['household_id'] = $householdId;
+                if (isset($log['item_id']) && isset($itemIdMap[$log['item_id']])) {
+                    $log['item_id'] = $itemIdMap[$log['item_id']];
+                }
+                MaintenanceLog::create($log);
+            }
+
+            foreach ($data['reminders'] ?? [] as $reminder) {
+                unset($reminder['id'], $reminder['created_at'], $reminder['updated_at']);
+                $reminder['household_id'] = $householdId;
+                if (isset($reminder['item_id']) && isset($itemIdMap[$reminder['item_id']])) {
+                    $reminder['item_id'] = $itemIdMap[$reminder['item_id']];
+                }
+                Reminder::create($reminder);
+            }
+
+            foreach ($data['todos'] ?? [] as $todo) {
+                unset($todo['id'], $todo['created_at'], $todo['updated_at']);
+                $todo['household_id'] = $householdId;
+                if (isset($todo['item_id']) && isset($itemIdMap[$todo['item_id']])) {
+                    $todo['item_id'] = $itemIdMap[$todo['item_id']];
+                }
                 $todo['user_id'] = $user->id;
                 Todo::create($todo);
             }
@@ -292,7 +492,7 @@ class BackupController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Backup restored successfully',
+                'message' => 'Legacy backup restored successfully (without files)',
                 'stats' => [
                     'categories' => count($data['categories'] ?? []),
                     'locations' => count($data['locations'] ?? []),
@@ -306,7 +506,6 @@ class BackupController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-
             return response()->json([
                 'message' => 'Failed to restore backup: ' . $e->getMessage(),
             ], 500);

@@ -44,6 +44,9 @@ class SettingController extends Controller
             'gemini_base_url',
             'local_base_url',
             'local_model',
+            // AI Prompts
+            'ai_prompt_smart_add',
+            'ai_prompt_synthesis',
         ];
 
         // Fetch all settings in a single query (including encrypted keys for flag checking)
@@ -121,6 +124,9 @@ class SettingController extends Controller
             'settings.local_base_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'settings.local_model' => ['sometimes', 'nullable', 'string', 'max:255'],
             'settings.local_api_key' => ['sometimes', 'nullable', 'string', 'max:255'],
+            // AI Prompts (long text)
+            'settings.ai_prompt_smart_add' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'settings.ai_prompt_synthesis' => ['sometimes', 'nullable', 'string', 'max:10000'],
         ]);
 
         $householdId = $request->user()->household_id;

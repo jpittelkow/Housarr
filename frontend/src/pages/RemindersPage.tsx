@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
+import { TabsRoot, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
 import { Icon, Plus, Bell, Check, Clock, Calendar, Pencil, Trash2, HelpTooltip } from '@/components/ui'
 import { toast } from 'sonner'
@@ -274,7 +274,7 @@ export default function RemindersPage() {
       </div>
 
       {/* Tabs Filter - Untitled UI style */}
-      <Tabs defaultValue="pending" onChange={setFilter}>
+      <TabsRoot defaultValue="pending" onChange={setFilter}>
         <TabList>
           <Tab value="pending">Pending</Tab>
           <Tab value="all">All</Tab>
@@ -285,7 +285,7 @@ export default function RemindersPage() {
         <TabPanel value="all">
           {renderRemindersList(allReminders)}
         </TabPanel>
-      </Tabs>
+      </TabsRoot>
 
       {/* Create Modal */}
       <Modal

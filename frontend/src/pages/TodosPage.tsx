@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Tabs, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
+import { TabsRoot, TabList, Tab, TabPanel } from '@/components/ui/Tabs'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { Icon, Plus, CheckSquare, Circle, CheckCircle, Pencil, Trash2, HelpTooltip } from '@/components/ui'
@@ -246,7 +246,7 @@ export default function TodosPage() {
       </div>
 
       {/* Tabs Filter - Untitled UI style */}
-      <Tabs defaultValue="incomplete" onChange={setFilter}>
+      <TabsRoot defaultValue="incomplete" onChange={setFilter}>
         <TabList>
           <Tab value="incomplete">Open</Tab>
           <Tab value="completed">Completed</Tab>
@@ -261,7 +261,7 @@ export default function TodosPage() {
         <TabPanel value="all">
           {renderTodosList(allTodos)}
         </TabPanel>
-      </Tabs>
+      </TabsRoot>
 
       {/* Create Modal */}
       <Modal
