@@ -13,6 +13,7 @@ use App\Models\Item;
 use App\Services\AIAgentOrchestrator;
 use App\Services\AIService;
 use App\Services\ManualSearchService;
+use App\Services\PdfTextService;
 use App\Services\ProductImageSearchService;
 use App\Services\StorageService;
 use Illuminate\Http\JsonResponse;
@@ -596,6 +597,7 @@ class ItemController extends Controller
 
     /**
      * Get AI-suggested replacement and consumable parts for an item using multi-agent orchestration.
+     * Enhanced to extract parts from uploaded PDF manuals when available.
      */
     public function suggestParts(Request $request, Item $item): JsonResponse
     {
@@ -623,10 +625,33 @@ class ItemController extends Controller
 
         $categoryContext = $validated['category'] ? " ({$validated['category']})" : '';
 
+        // Extract text from uploaded PDF manuals
+        $pdfService = new PdfTextService();
+        $item->load('files');
+        $manualData = $pdfService->extractFromFiles($item->files);
+        $manualsUsed = $manualData['files_processed'];
+        
+        // Build manual context if we have PDF content
+        $manualContext = '';
+        if ($manualData['text']) {
+            // Limit manual text to avoid exceeding context limits
+            $manualText = substr($manualData['text'], 0, 80000);
+            $manualContext = <<<MANUAL
+
+=== PRODUCT MANUAL CONTENT ===
+The following text was extracted from the product manual(s). Use this to find EXACT part numbers and official replacement parts:
+
+{$manualText}
+
+IMPORTANT: Prioritize part numbers and names found in the manual above. These are the correct, official parts for this specific product.
+MANUAL;
+        }
+
         $prompt = <<<PROMPT
 You are a home maintenance expert. Given the following product, suggest common replacement parts and consumable parts that homeowners typically need.
 
 Product: {$validated['make']} {$validated['model']}{$categoryContext}
+{$manualContext}
 
 For each part, provide:
 1. name: A clear, descriptive name
@@ -701,6 +726,7 @@ PROMPT;
                     'agent_errors' => $agentErrors,
                     'synthesis_agent' => $result['summary_agent'] ?? null,
                     'total_duration_ms' => $totalDuration,
+                    'manuals_used' => $manualsUsed,
                 ]);
             }
         }
@@ -720,6 +746,7 @@ PROMPT;
                         'synthesis_agent' => null,
                         'fallback_agent' => $agentName,
                         'total_duration_ms' => $totalDuration,
+                        'manuals_used' => $manualsUsed,
                     ]);
                 }
             }
@@ -734,6 +761,7 @@ PROMPT;
             'agent_errors' => $agentErrors,
             'total_duration_ms' => $totalDuration,
             'raw_response' => $response ? substr($response, 0, 500) : null,
+            'manuals_used' => $manualsUsed,
         ]);
     }
 

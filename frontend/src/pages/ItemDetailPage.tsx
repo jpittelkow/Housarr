@@ -273,6 +273,7 @@ export default function ItemDetailPage() {
     agent_details: Record<string, { success: boolean; duration_ms: number }>
     synthesis_agent: string | null
     total_duration_ms: number
+    manuals_used: number
   } | null>(null)
 
   // Part images (lazy loaded)
@@ -683,6 +684,7 @@ export default function ItemDetailPage() {
           agent_details: result.agent_details || {},
           synthesis_agent: result.synthesis_agent || null,
           total_duration_ms: result.total_duration_ms || 0,
+          manuals_used: result.manuals_used || 0,
         })
 
         // Update step with agent info
@@ -2556,8 +2558,20 @@ export default function ItemDetailPage() {
                   <Icon icon={Wrench} size="sm" className="text-gray-600 dark:text-gray-300" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-50">Suggest Parts</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Find replacement & consumable parts</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900 dark:text-gray-50">Suggest Parts</p>
+                    {partsAgentMeta?.manuals_used && partsAgentMeta.manuals_used > 0 && (
+                      <Badge size="sm" variant="primary">
+                        <Icon icon={FileText} size="xs" className="mr-1" />
+                        {partsAgentMeta.manuals_used} manual{partsAgentMeta.manuals_used > 1 ? 's' : ''} used
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {item?.files?.some(f => f.mime_type === 'application/pdf') 
+                      ? 'AI will use uploaded manuals for accurate parts' 
+                      : 'Find replacement & consumable parts'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

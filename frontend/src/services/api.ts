@@ -413,6 +413,7 @@ export const items = {
     total_duration_ms?: number
     error?: string
     raw_response?: string
+    manuals_used?: number
   }> => {
     const response = await api.post(`/items/${itemId}/suggest-parts`, { make, model, category }, { timeout: 120000 })
     return response.data
