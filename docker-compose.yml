@@ -1,4 +1,4 @@
-﻿# Housarr Docker Compose - Development
+# Housarr Docker Compose - Development
 # Usage: docker compose up -d
 # Production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 

@@ -69,7 +69,11 @@ class BackupController extends Controller
                 ->where('items.household_id', $householdId)
                 ->get()
                 ->toArray(),
-            'maintenance_logs' => MaintenanceLog::where('household_id', $householdId)->get()->toArray(),
+            'maintenance_logs' => MaintenanceLog::select('maintenance_logs.*')
+                ->join('items', 'maintenance_logs.item_id', '=', 'items.id')
+                ->where('items.household_id', $householdId)
+                ->get()
+                ->toArray(),
             'reminders' => Reminder::where('household_id', $householdId)->get()->toArray(),
             'todos' => Todo::where('household_id', $householdId)->get()->toArray(),
             'notifications' => Notification::select('notifications.*')
@@ -185,7 +189,7 @@ class BackupController extends Controller
             File::where('household_id', $householdId)->delete();
             Todo::where('household_id', $householdId)->delete();
             Reminder::where('household_id', $householdId)->delete();
-            MaintenanceLog::where('household_id', $householdId)->delete();
+            MaintenanceLog::whereHas('item', fn($q) => $q->where('household_id', $householdId))->delete();
             Part::whereHas('item', fn($q) => $q->where('household_id', $householdId))->delete();
             Item::where('household_id', $householdId)->delete();
             Vendor::where('household_id', $householdId)->delete();
@@ -264,12 +268,16 @@ class BackupController extends Controller
 
             // Import maintenance logs
             foreach ($data['maintenance_logs'] ?? [] as $log) {
-                unset($log['id'], $log['created_at'], $log['updated_at']);
-                $log['household_id'] = $householdId;
+                unset($log['id'], $log['created_at'], $log['updated_at'], $log['household_id']);
                 if (isset($log['item_id']) && isset($itemIdMap[$log['item_id']])) {
                     $log['item_id'] = $itemIdMap[$log['item_id']];
+                    if (isset($log['vendor_id']) && isset($vendorIdMap[$log['vendor_id']])) {
+                        $log['vendor_id'] = $vendorIdMap[$log['vendor_id']];
+                    } else {
+                        $log['vendor_id'] = null;
+                    }
+                    MaintenanceLog::create($log);
                 }
-                MaintenanceLog::create($log);
             }
 
             // Import reminders
@@ -396,7 +404,7 @@ class BackupController extends Controller
             File::where('household_id', $householdId)->delete();
             Todo::where('household_id', $householdId)->delete();
             Reminder::where('household_id', $householdId)->delete();
-            MaintenanceLog::where('household_id', $householdId)->delete();
+            MaintenanceLog::whereHas('item', fn($q) => $q->where('household_id', $householdId))->delete();
             Part::whereHas('item', fn($q) => $q->where('household_id', $householdId))->delete();
             Item::where('household_id', $householdId)->delete();
             Vendor::where('household_id', $householdId)->delete();
@@ -462,12 +470,16 @@ class BackupController extends Controller
             }
 
             foreach ($data['maintenance_logs'] ?? [] as $log) {
-                unset($log['id'], $log['created_at'], $log['updated_at']);
-                $log['household_id'] = $householdId;
+                unset($log['id'], $log['created_at'], $log['updated_at'], $log['household_id']);
                 if (isset($log['item_id']) && isset($itemIdMap[$log['item_id']])) {
                     $log['item_id'] = $itemIdMap[$log['item_id']];
+                    if (isset($log['vendor_id']) && isset($vendorIdMap[$log['vendor_id']])) {
+                        $log['vendor_id'] = $vendorIdMap[$log['vendor_id']];
+                    } else {
+                        $log['vendor_id'] = null;
+                    }
+                    MaintenanceLog::create($log);
                 }
-                MaintenanceLog::create($log);
             }
 
             foreach ($data['reminders'] ?? [] as $reminder) {

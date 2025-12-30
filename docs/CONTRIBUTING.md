@@ -2,6 +2,98 @@
 
 This document outlines critical architectural patterns and rules that **MUST** be followed when making changes to Housarr. Breaking these patterns can cause data leaks, security vulnerabilities, or application failures.
 
+---
+
+## ⚠️ Mandatory Requirements
+
+Before ANY code is merged, the following requirements **MUST** be met:
+
+### 1. Tests Are Required
+
+**Every new feature, bug fix, or change MUST include tests.**
+
+| Change Type | Required Tests |
+|-------------|----------------|
+| New API endpoint | Pest PHP feature test |
+| New React component | Vitest + React Testing Library test |
+| New page | Page component test + E2E test (Playwright) |
+| Bug fix | Regression test proving the fix |
+| New Zustand store | Store unit test |
+| New utility function | Unit test |
+
+```bash
+# Run all tests before submitting changes
+# Frontend
+cd frontend && npm run test:run
+
+# Backend
+cd backend && ./vendor/bin/pest
+
+# E2E (requires running app)
+cd frontend && npm run test:e2e
+```
+
+**Tests MUST pass before merging. CI/CD will automatically reject PRs with failing tests.**
+
+See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) for complete testing guide.
+
+### 2. ADRs Are Required for Significant Changes
+
+**Architecture Decision Records (ADRs) MUST be written for:**
+
+- New features that introduce new patterns
+- Changes to authentication/authorization
+- Database schema changes
+- New external integrations (APIs, services)
+- Changes to the AI system
+- Infrastructure changes
+- Any decision that future developers would question "why was this done this way?"
+
+**ADR Location**: `docs/adr/`
+
+**ADR Template**: See [docs/adr/README.md](adr/README.md)
+
+```markdown
+# ADR [NUMBER]: [TITLE]
+
+## Status
+Accepted
+
+## Date
+YYYY-MM-DD
+
+## Context
+[Why are we making this change? What problem are we solving?]
+
+## Decision
+[What did we decide to do? Include code examples if helpful.]
+
+## Consequences
+
+### Positive
+- [Benefits of this decision]
+
+### Negative
+- [Trade-offs or downsides]
+```
+
+### 3. Run Full Test Suite Before Submitting
+
+```bash
+# From project root, run the full test suite:
+
+# Frontend unit/component tests
+cd frontend && npm run test:run
+
+# Backend tests
+cd backend && ./vendor/bin/pest
+
+# E2E tests (start the app first)
+cd frontend && npm run test:e2e
+```
+
+---
+
 ## Architecture Overview
 
 ```
@@ -387,10 +479,11 @@ Changes to Resource classes affect the frontend. Coordinate changes.
 
 ---
 
-## Testing Checklist
+## Pre-Submission Checklist
 
-Before submitting changes:
+Before submitting changes, verify ALL items:
 
+### Security & Architecture
 - [ ] Household isolation is maintained (no cross-household data access)
 - [ ] New resources have appropriate Policy
 - [ ] Controllers call `Gate::authorize()` for protected actions
@@ -398,6 +491,115 @@ Before submitting changes:
 - [ ] File uploads use household-scoped paths
 - [ ] File deletions clean up storage
 - [ ] No N+1 queries (use eager loading)
+
+### Testing (MANDATORY)
+- [ ] **Backend tests pass**: `cd backend && ./vendor/bin/pest`
+- [ ] **Frontend tests pass**: `cd frontend && npm run test:run`
+- [ ] **New features have tests**: Every new endpoint, component, or function has corresponding tests
+- [ ] **E2E tests pass** (for UI changes): `cd frontend && npm run test:e2e`
+- [ ] **Bug fixes include regression test**: Test proving the bug is fixed
+
+### Documentation (MANDATORY for significant changes)
+- [ ] **ADR created** for architectural decisions (see `docs/adr/`)
+- [ ] **TypeScript types updated** if API response changed
+- [ ] **API documentation updated** if endpoints changed
+- [ ] **README updated** if setup process changed
+
+### Code Quality
+- [ ] Code follows existing patterns in the codebase
+- [ ] No debug/console.log statements left in code
+- [ ] Error handling is consistent with existing code
+- [ ] Loading/error states handled in UI
+
+---
+
+## Testing Patterns
+
+### Backend Feature Test Example
+
+```php
+// tests/Feature/ItemTest.php
+use App\Models\Item;
+use App\Models\User;
+
+test('user can create item', function () {
+    $user = User::factory()->create();
+    
+    $response = $this->actingAs($user)
+        ->postJson('/api/items', [
+            'name' => 'Test Item',
+            'brand' => 'Test Brand',
+        ]);
+    
+    $response->assertStatus(201)
+        ->assertJsonPath('item.name', 'Test Item');
+    
+    $this->assertDatabaseHas('items', [
+        'name' => 'Test Item',
+        'household_id' => $user->household_id,
+    ]);
+});
+
+test('user cannot access other household items', function () {
+    $user = User::factory()->create();
+    $otherItem = Item::factory()->create(); // Different household
+    
+    $response = $this->actingAs($user)
+        ->getJson("/api/items/{$otherItem->id}");
+    
+    $response->assertStatus(403);
+});
+```
+
+### Frontend Component Test Example
+
+```tsx
+// src/components/ui/__tests__/Button.test.tsx
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Button } from '../Button'
+
+describe('Button', () => {
+  it('renders correctly', () => {
+    render(<Button>Click me</Button>)
+    expect(screen.getByRole('button', { name: /click me/i })).toBeInTheDocument()
+  })
+
+  it('calls onClick when clicked', async () => {
+    const handleClick = vi.fn()
+    render(<Button onClick={handleClick}>Click me</Button>)
+    
+    await userEvent.click(screen.getByRole('button'))
+    expect(handleClick).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+### E2E Test Example
+
+```typescript
+// e2e/items.spec.ts
+import { test, expect } from '@playwright/test'
+
+test('user can add a new item', async ({ page }) => {
+  // Login first
+  await page.goto('/login')
+  await page.fill('input[name="email"]', 'test@example.com')
+  await page.fill('input[name="password"]', 'password')
+  await page.click('button[type="submit"]')
+  
+  // Navigate to items
+  await page.goto('/items')
+  await page.click('text=Add Item')
+  
+  // Fill form
+  await page.fill('input[name="name"]', 'New Test Item')
+  await page.click('button[type="submit"]')
+  
+  // Verify
+  await expect(page.locator('text=New Test Item')).toBeVisible()
+})
+```
 
 ---
 
@@ -414,6 +616,27 @@ Before submitting changes:
 7. Add TypeScript types
 8. Add API service methods
 9. Register Policy in `AuthServiceProvider` (if not auto-discovered)
+10. **Write Pest feature tests** (`backend/tests/Feature/`)
+11. **Write frontend tests** if UI components added
+12. **Create ADR** if introducing new patterns
+
+### Adding a New Frontend Page
+
+1. Create page component in `frontend/src/pages/`
+2. Add route in `frontend/src/App.tsx`
+3. Add navigation link in `frontend/src/components/Layout.tsx`
+4. Create API methods in `frontend/src/services/api.ts`
+5. Update types in `frontend/src/types/index.ts`
+6. **Write page tests** (`frontend/src/pages/__tests__/`)
+7. **Write E2E tests** (`frontend/e2e/`)
+8. Add `HelpTooltip` for contextual help where appropriate
+
+### Adding a New Component
+
+1. Create component in `frontend/src/components/`
+2. Export from index file if in `/ui/`
+3. **Write component tests** (`frontend/src/components/ui/__tests__/`)
+4. Document props with JSDoc comments
 
 ### Adding a Field to Existing Resource
 
@@ -423,6 +646,50 @@ Before submitting changes:
 4. Request: Add validation rule
 5. TypeScript: Update interface
 6. Frontend: Update forms/displays
+7. **Update existing tests** to cover new field
+
+### Creating Tests for Existing Code
+
+When adding tests for code that doesn't have them:
+
+```bash
+# Backend: Create feature test
+touch backend/tests/Feature/NewFeatureTest.php
+
+# Frontend: Create component test
+touch frontend/src/components/ui/__tests__/ComponentName.test.tsx
+
+# Frontend: Create store test
+touch frontend/src/stores/__tests__/storeName.test.ts
+
+# E2E: Create flow test
+touch frontend/e2e/feature.spec.ts
+```
+
+---
+
+## CI/CD Integration
+
+All pushes and pull requests automatically run:
+
+1. **Frontend Tests** (Vitest) - Unit & component tests
+2. **Backend Tests** (Pest PHP) - Feature & unit tests
+3. **E2E Tests** (Playwright) - Full browser tests
+
+See `.github/workflows/test.yml` for configuration.
+
+### Running Tests Locally (Before Push)
+
+```bash
+# Quick check - run all tests
+npm run test:run --prefix frontend && \
+  cd backend && ./vendor/bin/pest && cd ..
+
+# Full check including E2E (app must be running)
+npm run test:run --prefix frontend && \
+  cd backend && ./vendor/bin/pest && cd .. && \
+  npm run test:e2e --prefix frontend
+```
 
 ---
 
@@ -434,3 +701,5 @@ If you're unsure whether a change is safe:
 2. Look for the `household_id` filtering pattern
 3. Verify Policy authorization is in place
 4. Ensure TypeScript types match API responses
+5. **Run tests** - they will catch many issues
+6. **Review existing tests** for similar functionality as examples

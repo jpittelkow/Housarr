@@ -270,7 +270,7 @@ class ItemController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
-            ]);
+            ], 422);
         }
     }
 
@@ -368,7 +368,7 @@ class ItemController extends Controller
                     : 'Could not download from this source. The site may require login or have bot protection.',
                 'is_search_url' => $isSearchUrl,
                 'open_url' => $url, // Frontend can offer to open this
-            ]);
+            ], 422);
         }
 
         // Save the PDF to storage
@@ -568,7 +568,7 @@ class ItemController extends Controller
             'agent_errors' => $agentErrors,
             'total_duration_ms' => $totalDuration,
             'raw_response' => $response ? substr($response, 0, 500) : null,
-        ]);
+        ], 422);
     }
 
     /**
@@ -762,7 +762,7 @@ PROMPT;
             'total_duration_ms' => $totalDuration,
             'raw_response' => $response ? substr($response, 0, 500) : null,
             'manuals_used' => $manualsUsed,
-        ]);
+        ], 422);
     }
 
     /**

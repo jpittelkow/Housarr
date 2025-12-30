@@ -48,12 +48,6 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        // #region agent log
-        $loginStart = microtime(true);
-        $logPath = storage_path('logs/debug.log');
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:login','message'=>'login started','data'=>[],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'E'])."\n", FILE_APPEND);
-        // #endregion
-
         $validated = $request->validated();
         $key = 'login:' . $request->ip();
 
@@ -64,32 +58,17 @@ class AuthController extends Controller
             ], 429);
         }
 
-        // #region agent log
-        $authAttemptStart = microtime(true);
-        // #endregion
         if (!Auth::attempt($validated)) {
             RateLimiter::hit($key, 60);
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
         }
-        // #region agent log
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:login','message'=>'Auth::attempt completed','data'=>['durationMs'=>round((microtime(true)-$authAttemptStart)*1000)],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'E'])."\n", FILE_APPEND);
-        // #endregion
 
         RateLimiter::clear($key);
-        // #region agent log
-        $sessionStart = microtime(true);
-        // #endregion
         $request->session()->regenerate();
-        // #region agent log
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:login','message'=>'session regenerate completed','data'=>['durationMs'=>round((microtime(true)-$sessionStart)*1000)],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'E'])."\n", FILE_APPEND);
-        // #endregion
         $user = $request->user();
 
-        // #region agent log
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:login','message'=>'login completed','data'=>['totalDurationMs'=>round((microtime(true)-$loginStart)*1000)],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'E'])."\n", FILE_APPEND);
-        // #endregion
         return response()->json([
             'user' => new UserResource($user->load('household')),
         ]);
@@ -108,15 +87,8 @@ class AuthController extends Controller
 
     public function user(Request $request): JsonResponse
     {
-        // #region agent log
-        $userStart = microtime(true);
-        $logPath = storage_path('logs/debug.log');
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:user','message'=>'user endpoint started','data'=>[],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'C'])."\n", FILE_APPEND);
-        // #endregion
         $user = $request->user()->load('household');
-        // #region agent log
-        file_put_contents($logPath, json_encode(['location'=>'AuthController:user','message'=>'user endpoint completed','data'=>['durationMs'=>round((microtime(true)-$userStart)*1000)],'timestamp'=>round(microtime(true)*1000),'sessionId'=>'debug-session','hypothesisId'=>'C'])."\n", FILE_APPEND);
-        // #endregion
+
         return response()->json([
             'user' => new UserResource($user),
         ]);

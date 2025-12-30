@@ -83,6 +83,7 @@ export {
   List,
   Sparkles,
   MessageCircle,
+  MessageSquare,
   Send,
 } from './Icon'
 export { Button, type ButtonProps } from './Button'

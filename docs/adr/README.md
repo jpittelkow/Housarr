@@ -19,6 +19,8 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 | [007](007-part-image-management.md) | Part Image Management | Accepted | 2024-12-30 |
 | [008](008-configurable-ai-prompts.md) | Configurable AI Prompts | Accepted | 2024-12-30 |
 | [009](009-zip-backup-with-files.md) | ZIP Backup with Files | Accepted | 2024-12-30 |
+| [010](010-ai-chatbot-manual-extraction.md) | AI Chatbot & Manual Extraction | Accepted | 2024-12-30 |
+| [011](011-comprehensive-testing-strategy.md) | Comprehensive Testing Strategy | Accepted | 2024-12-30 |
 
 ## ADR Template
 

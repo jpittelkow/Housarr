@@ -107,6 +107,21 @@ Complete documentation of the Docker setup including:
 - Volume mounts and data persistence
 - Environment variables
 
+### [Testing Documentation](DOCUMENTATION_TESTING.md)
+Complete testing guide covering:
+- Frontend testing (Vitest, React Testing Library, Playwright)
+- Backend testing (Pest PHP)
+- Writing unit, component, integration, and E2E tests
+- CI/CD integration
+- Best practices and examples
+
+### [Contributing Guidelines](CONTRIBUTING.md)
+Development guidelines including:
+- Mandatory testing requirements
+- Architecture Decision Records (ADR) requirements
+- Security patterns (household multi-tenancy)
+- Code patterns and checklists
+
 ## Key Features
 
 - **Household Management**: Multi-user households with role-based access

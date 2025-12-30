@@ -10,6 +10,7 @@ This folder contains all project documentation.
 | [DOCUMENTATION_REACT.md](DOCUMENTATION_REACT.md) | Frontend React/TypeScript documentation |
 | [DOCUMENTATION_LARAVEL.md](DOCUMENTATION_LARAVEL.md) | Backend Laravel/PHP documentation |
 | [DOCUMENTATION_DOCKER.md](DOCUMENTATION_DOCKER.md) | Docker setup and deployment guide |
+| [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) | Testing guide for frontend & backend |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
 
 ## Architecture Decision Records (ADR)
@@ -28,10 +29,12 @@ The [adr/](adr/) folder contains Architecture Decision Records documenting signi
 | [008](adr/008-configurable-ai-prompts.md) | Configurable AI Prompts |
 | [009](adr/009-zip-backup-with-files.md) | ZIP Backup with Files |
 | [010](adr/010-ai-chatbot-manual-extraction.md) | AI Chatbot & Manual Extraction |
+| [011](adr/011-comprehensive-testing-strategy.md) | Comprehensive Testing Strategy |
 
 ## Quick Links
 
 - **Getting Started**: See [DOCUMENTATION_DOCKER.md](DOCUMENTATION_DOCKER.md) for setup instructions
 - **Frontend Development**: See [DOCUMENTATION_REACT.md](DOCUMENTATION_REACT.md)
 - **Backend Development**: See [DOCUMENTATION_LARAVEL.md](DOCUMENTATION_LARAVEL.md)
+- **Testing**: See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md)
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)

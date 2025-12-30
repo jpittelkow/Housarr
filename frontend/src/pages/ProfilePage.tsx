@@ -5,7 +5,7 @@ import { profile } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Icon, User, Lock } from '@/components/ui'
+import { Icon, User, Lock, HelpTooltip } from '@/components/ui'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { toast } from 'sonner'
 
@@ -100,7 +100,12 @@ export default function ProfilePage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="pb-5 border-b border-gray-200 dark:border-gray-800">
-        <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50">Profile</h1>
+        <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
+          Profile
+          <HelpTooltip position="right">
+            Update your name, email, profile photo, and password. Your role and household are shown for reference.
+          </HelpTooltip>
+        </h1>
         <p className="mt-1 text-text-md text-gray-500 dark:text-gray-400">
           Manage your account settings and change your password.
         </p>
@@ -212,9 +217,9 @@ export default function ProfilePage() {
 
         {/* Change Password */}
         <Card>
-          <CardHeader className="border-b border-gray-200">
+          <CardHeader className="border-b border-gray-200 dark:border-gray-800">
             <CardTitle className="flex items-center gap-2">
-              <Icon icon={Lock} size="sm" className="text-gray-400" />
+              <Icon icon={Lock} size="sm" className="text-gray-400 dark:text-gray-500" />
               Change Password
             </CardTitle>
           </CardHeader>

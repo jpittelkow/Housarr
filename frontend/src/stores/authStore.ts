@@ -58,42 +58,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      // #region agent log
-      const checkAuthStart = Date.now();
-      const redirectStart = sessionStorage.getItem('login_redirect_start');
-      if (redirectStart) {
-        console.log('[DEBUG] Time from login redirect to checkAuth:', Date.now() - parseInt(redirectStart), 'ms');
-        sessionStorage.removeItem('login_redirect_start');
-      }
-      console.log('[DEBUG] checkAuth started');
-      // #endregion
-      
-      // #region agent log
-      const getUserStart = Date.now();
-      // #endregion
       const response = await auth.getUser()
-      // #region agent log
-      console.log('[DEBUG] auth.getUser completed in', Date.now() - getUserStart, 'ms');
-      // #endregion
       
       // User is authenticated, start preloading
       set({ user: response.user, isAuthenticated: true, isLoading: false, isPreloading: true })
       
       // Wait for all pages to preload before showing app
-      // #region agent log
-      const preloadStart = Date.now();
-      // #endregion
       await preloadProtectedPages()
-      // #region agent log
-      console.log('[DEBUG] preloadProtectedPages completed in', Date.now() - preloadStart, 'ms');
-      // #endregion
       
-      // FIX: Removed artificial 800ms minimum delay that was causing slow login transition
-      // The preloading is already fast enough; no need to artificially slow down the UX
-      
-      // #region agent log
-      console.log('[DEBUG] checkAuth total time:', Date.now() - checkAuthStart, 'ms');
-      // #endregion
       set({ isPreloading: false })
     } catch {
       set({ user: null, isAuthenticated: false, isLoading: false, isPreloading: false })

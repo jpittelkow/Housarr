@@ -23,6 +23,7 @@ import {
   Zap,
   CheckCircle,
   XCircle,
+  HelpTooltip,
 } from '@/components/ui'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -401,6 +402,9 @@ export default function SmartAddPage() {
         <h1 className="text-display-sm font-semibold text-gray-900 dark:text-gray-50 flex items-center gap-2">
           <Icon icon={Sparkles} size="lg" className="text-primary-600 dark:text-primary-400" />
           Smart Add
+          <HelpTooltip position="right">
+            Use AI to identify products from photos or text searches. Multiple AI agents work together for better accuracy. Select a result to create a new item.
+          </HelpTooltip>
         </h1>
         <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">
           Search for a product or upload a photo and AI will identify it for you
