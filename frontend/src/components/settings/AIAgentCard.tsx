@@ -78,18 +78,24 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
   // Try to fetch even if not fully configured - API will return defaults if needed
   const { data: modelsData, isLoading: isLoadingModels, error: modelsError } = useQuery({
     queryKey: ['ai-models', agent.name],
-    queryFn: () => settings.getAvailableModels(agent.name),
+    queryFn: async (): Promise<{ models: string[] }> => {
+      return await settings.getAvailableModels(agent.name)
+    },
     enabled: isExpanded && hasApiKey,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1, // Only retry once on failure
-    onError: (error) => {
-      console.error(`Failed to fetch models for ${agent.name}:`, error)
-    },
   })
+
+  // Handle errors (React Query v5 doesn't support onError in useQuery)
+  useEffect(() => {
+    if (modelsError) {
+      console.error(`Failed to fetch models for ${agent.name}:`, modelsError)
+    }
+  }, [modelsError, agent.name])
 
   // Always include default model in the list
   const defaultModel = agent.default_model || config.modelPlaceholder
-  const fetchedModels = modelsData?.models || []
+  const fetchedModels = modelsData?.models ?? []
   // Build model list: always include default, then add fetched models, remove duplicates
   const allModels = fetchedModels.length > 0
     ? Array.from(new Set([defaultModel, ...fetchedModels]))

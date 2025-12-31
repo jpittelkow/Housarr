@@ -172,3 +172,10 @@ On desktop, only the standard file picker is shown.
 
 - ADR 001: Multi-Agent AI Orchestration
 - ADR 002: Part Image Search Strategy
+- ADR 014: Smart Add Product Image Search
+
+## Recent Enhancements (2024-12-31)
+
+**Image Gallery Import**: Product images from search results are now automatically imported to the item's image gallery when creating an item, providing visual reference even if not set as featured.
+
+**Try Again Button**: Users can now request new AI suggestions when none of the initial results match, with the AI receiving feedback that previous results were incorrect.
