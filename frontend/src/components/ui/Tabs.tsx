@@ -22,7 +22,11 @@ export interface TabsProps {
 export function Tabs({ tabs, activeTab, onTabChange, className }: TabsProps) {
   return (
     <div className={cn('border-b border-gray-200 dark:border-gray-700', className)}>
-      <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+      <nav 
+        className="-mb-px flex space-x-6 overflow-x-auto scrollbar-hide flex-nowrap" 
+        style={{ WebkitOverflowScrolling: 'touch' }}
+        aria-label="Tabs"
+      >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab
           return (
@@ -30,7 +34,7 @@ export function Tabs({ tabs, activeTab, onTabChange, className }: TabsProps) {
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                'group inline-flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors',
+                'group inline-flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors flex-shrink-0 min-h-[44px]',
                 isActive
                   ? 'border-primary-500 text-primary-600 dark:text-primary-400'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
@@ -116,7 +120,11 @@ interface TabListProps {
 export function TabList({ children, className }: TabListProps) {
   return (
     <div className={cn('border-b border-gray-200 dark:border-gray-700', className)}>
-      <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+      <nav 
+        className="-mb-px flex space-x-6 overflow-x-auto scrollbar-hide flex-nowrap" 
+        style={{ WebkitOverflowScrolling: 'touch' }}
+        aria-label="Tabs"
+      >
         {children}
       </nav>
     </div>
@@ -137,7 +145,7 @@ export function Tab({ children, value, className }: TabProps) {
     <button
       onClick={() => setActiveTab(value)}
       className={cn(
-        'border-b-2 py-3 px-1 text-sm font-medium transition-colors',
+        'border-b-2 py-3 px-1 text-sm font-medium transition-colors flex-shrink-0 min-h-[44px]',
         isActive
           ? 'border-primary-500 text-primary-600 dark:text-primary-400'
           : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',

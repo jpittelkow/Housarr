@@ -436,6 +436,7 @@ All controllers are in `app/Http/Controllers/Api/` namespace.
 - `update(UpdateItemRequest, Item)`: Updates item
 - `destroy(Request, Item)`: Deletes item
 - `analyzeImage(Request)`: Analyzes uploaded image using AI
+- `searchProductImage(Request)`: Searches for product images (make, model, type) - Returns image URL for Smart Add results
 - `uploadManual(Request, Item)`: Uploads manual file
 - `downloadManual(Request, Item)`: Searches and downloads manual
 - `searchManualUrls(Request, Item)`: Searches for manual URLs (repositories/ai/web)
@@ -564,7 +565,8 @@ All API routes are defined in `routes/api.php`.
 - `DELETE /api/vendors/{vendor}`
 
 **Items**:
-- `POST /api/items/analyze-image`
+- `POST /api/items/analyze-image` - Analyzes uploaded image using AI
+- `POST /api/items/search-product-image` - Searches for product images (make, model, type)
 - `GET /api/items`
 - `POST /api/items`
 - `GET /api/items/{item}`
@@ -736,6 +738,36 @@ All policies use `Gate::authorize()` in controllers.
 1. Manual repositories (Manualslib, manufacturer sites)
 2. AI-assisted URL suggestions
 3. DuckDuckGo search with multiple query formats
+
+### ProductImageSearchService (`app/Services/ProductImageSearchService.php`)
+
+**Purpose**: Searches for product images using DuckDuckGo and Google Images
+
+**Implementation Strategy**:
+1. **Primary**: DuckDuckGo Image Search - Extracts image URLs directly from HTML results
+2. **Fallback**: Google Images - Used when DuckDuckGo doesn't return results
+
+**Important**: Does NOT construct Amazon URLs from ASINs (which would fail with 400 errors). Instead, extracts actual working image URLs from search engine results.
+
+**Public Methods**:
+- `getBestImage(string $make, string $model, string $type = '')`: Returns best image URL for product
+- `searchForImages(string $make, string $model, string $type = '')`: Returns array of image URLs
+
+**Protected Methods**:
+- `searchAmazonForImage(string $searchTerm)`: Orchestrates search (DuckDuckGo → Google fallback)
+- `searchDuckDuckGoImages(string $searchTerm)`: Searches DuckDuckGo images
+- `searchGoogleImages(string $searchTerm)`: Searches Google Images (fallback)
+- `buildSearchTerm(string $make, string $model, string $type)`: Constructs search query
+
+**URL Extraction**:
+- Uses regex patterns to extract image URLs from HTML
+- Validates URLs using `filter_var()` before returning
+- Prefers product/e-commerce images but accepts any valid image URL
+- Filters out data URLs, base64, and relative URLs
+
+**Timeout**: 10 seconds per search engine request
+
+**See Also**: [ADR-014: Smart Add Product Image Search](../adr/014-smart-add-product-image-search.md)
 
 ## Actions
 

@@ -136,6 +136,87 @@ describe('AI settings', function () {
 
         $response->assertForbidden();
     });
+
+    it('gets available models for Claude agent', function () {
+        Setting::factory()->create([
+            'household_id' => $this->household->id,
+            'key' => 'anthropic_api_key',
+            'value' => encrypt('test-key'),
+        ]);
+
+        $response = $this->getJson('/api/settings/ai/agents/claude/models');
+
+        $response->assertOk()
+            ->assertJsonStructure(['models'])
+            ->assertJson(fn ($json) => $json->has('models')
+                ->whereType('models', 'array')
+            );
+    });
+
+    it('gets available models for OpenAI agent', function () {
+        Setting::factory()->create([
+            'household_id' => $this->household->id,
+            'key' => 'openai_api_key',
+            'value' => encrypt('test-key'),
+        ]);
+
+        $response = $this->getJson('/api/settings/ai/agents/openai/models');
+
+        $response->assertOk()
+            ->assertJsonStructure(['models'])
+            ->assertJson(fn ($json) => $json->has('models')
+                ->whereType('models', 'array')
+            );
+    });
+
+    it('gets available models for Gemini agent', function () {
+        Setting::factory()->create([
+            'household_id' => $this->household->id,
+            'key' => 'gemini_api_key',
+            'value' => encrypt('test-key'),
+        ]);
+
+        $response = $this->getJson('/api/settings/ai/agents/gemini/models');
+
+        $response->assertOk()
+            ->assertJsonStructure(['models'])
+            ->assertJson(fn ($json) => $json->has('models')
+                ->whereType('models', 'array')
+            );
+    });
+
+    it('gets available models for Local agent', function () {
+        Setting::factory()->create([
+            'household_id' => $this->household->id,
+            'key' => 'local_base_url',
+            'value' => 'http://localhost:11434',
+        ]);
+
+        $response = $this->getJson('/api/settings/ai/agents/local/models');
+
+        $response->assertOk()
+            ->assertJsonStructure(['models'])
+            ->assertJson(fn ($json) => $json->has('models')
+                ->whereType('models', 'array')
+            );
+    });
+
+    it('returns default models when API key is missing', function () {
+        $response = $this->getJson('/api/settings/ai/agents/claude/models');
+
+        $response->assertOk()
+            ->assertJsonStructure(['models'])
+            ->assertJson(fn ($json) => $json->has('models')
+                ->whereType('models', 'array')
+                ->where('models', fn ($models) => count($models) > 0)
+            );
+    });
+
+    it('returns 404 for invalid agent name', function () {
+        $response = $this->getJson('/api/settings/ai/agents/invalid/models');
+
+        $response->assertNotFound();
+    });
 });
 
 describe('storage settings', function () {

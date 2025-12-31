@@ -22,10 +22,21 @@ IMPORTANT INSTRUCTIONS:
    - Common appliance brands: GE, Samsung, LG, Whirlpool, Frigidaire, Bosch, KitchenAid, Maytag, Thermador, Viking, Wolf, Sub-Zero, Miele, Signature Kitchen Suite, etc.
    - NEVER use "Unknown" or "N/A" - make your best educated guess based on the design
 
-2. Model number - Look for:
-   - Model plates, labels, or stickers (often on edges, back, or inside door)
-   - Model numbers in visible text
-   - If no model visible, describe key features (e.g., "48-inch 6-burner" or "French door")
+2. Model number - CRITICAL: Extract the EXACT model number from labels, stickers, or nameplates on the product.
+   
+   WHERE TO LOOK: Check the back panel, inside door frames, bottom edge, side panels, and any visible labels/stickers.
+   
+   WHAT TO EXTRACT:
+   - Look for alphanumeric codes like "24ACC636A003", "WF45R6100AW", "GDF570PSMSS"
+   - Model numbers are typically 6-20 characters (letters and numbers, may include dashes/slashes)
+   - Extract EXACTLY as shown (case-sensitive)
+   - May be labeled as "Model:", "Model No.:", "MODEL", or just the code
+   
+   RULES:
+   - If you see a model number anywhere in the image, extract it EXACTLY - do NOT use a description
+   - If NO model number is visible after checking all locations, you may use a brief descriptive text (e.g., "French door 36-inch")
+   - NEVER make up or invent a model number
+   - NEVER use generic descriptions like "48-inch refrigerator" if a model number is visible
 
 3. Product type/category
 
@@ -38,7 +49,7 @@ RULES:
 - Do NOT use "Unknown", "N/A", "Not visible", or similar placeholder text
 - Make your BEST educated guess for the brand based on design style, features, and appearance
 - If you're 50% sure it's a Thermador but could be Viking, include BOTH as separate results with different confidence scores
-- Model can be a descriptive name if the actual model number isn't visible
+- Model number: ALWAYS prioritize extracting the exact model number from labels/stickers. Only use descriptive text if NO model number is visible anywhere in the image after thorough search. NEVER make up or invent model numbers.
 
 Format:
 [
@@ -65,7 +76,11 @@ Your task:
 IMPORTANT RULES:
 - Do NOT use "Unknown", "N/A", "Not visible", or any placeholder text
 - Always provide your best guess for the brand/make based on design characteristics
-- If model number is not visible, describe key features instead (e.g., "48-inch 6-burner")
+- MODEL NUMBER PRIORITY: When synthesizing results, ALWAYS prefer actual model numbers over descriptions
+  - If one agent found a model number (e.g., "24ACC636A003") and another used a description (e.g., "48-inch refrigerator"), use the model number
+  - If multiple agents found model numbers, use the one with highest confidence or consensus
+  - NEVER synthesize a made-up model number from descriptions
+  - Only use descriptive text if NO agent found a model number
 - Filter out any "Unknown" results from the source responses
 
 Original analysis prompt: {original_prompt}
@@ -444,7 +459,15 @@ PROMPT;
      */
     protected function enrichWithProductImages(array $results): array
     {
-        \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Starting', ['results_count' => count($results)]);
+        \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Starting', [
+            'results_count' => count($results),
+            'results_preview' => array_map(fn($r) => [
+                'make' => $r['make'] ?? '',
+                'model' => $r['model'] ?? '',
+                'type' => $r['type'] ?? '',
+                'has_image_url' => !empty($r['image_url']),
+            ], array_slice($results, 0, 3)),
+        ]);
 
         $imageService = new ProductImageSearchService();
         $searchCount = 0;
@@ -453,11 +476,19 @@ PROMPT;
         foreach ($results as $index => $result) {
             // Limit searches for speed
             if ($searchCount >= $maxSearches) {
+                \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Reached max searches', [
+                    'max_searches' => $maxSearches,
+                    'searches_done' => $searchCount,
+                ]);
                 break;
             }
 
             // Skip if already has a valid image URL
             if (!empty($result['image_url'])) {
+                \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Skipping - already has image', [
+                    'index' => $index,
+                    'image_url' => $result['image_url'],
+                ]);
                 continue;
             }
 
@@ -466,22 +497,42 @@ PROMPT;
             $type = $result['type'] ?? '';
 
             if (empty($make) && empty($model)) {
+                \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Skipping - no make or model', [
+                    'index' => $index,
+                ]);
                 continue;
             }
 
             // Search for product image
+            \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Searching for image', [
+                'index' => $index,
+                'make' => $make,
+                'model' => $model,
+                'type' => $type,
+            ]);
+
             $imageUrl = $imageService->getBestImage($make, $model, $type);
             $searchCount++;
 
-            \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Image result', [
+            \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Image search result', [
                 'index' => $index,
-                'imageUrl' => $imageUrl
+                'make' => $make,
+                'model' => $model,
+                'image_url' => $imageUrl,
+                'found' => $imageUrl !== null,
             ]);
 
             if ($imageUrl) {
                 $results[$index]['image_url'] = $imageUrl;
             }
         }
+
+        $imagesFound = count(array_filter($results, fn($r) => !empty($r['image_url'])));
+        \Illuminate\Support\Facades\Log::debug('enrichWithProductImages: Completed', [
+            'total_results' => count($results),
+            'images_found' => $imagesFound,
+            'searches_performed' => $searchCount,
+        ]);
 
         return $results;
     }

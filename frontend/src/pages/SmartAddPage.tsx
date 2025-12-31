@@ -154,6 +154,9 @@ export default function SmartAddPage() {
       // Don't search if result already has an image_url from backend
       if (!results[index].image_url) {
         initialLoadingStates[index] = true
+      } else {
+        // If backend already provided an image, set it immediately
+        setProductImages(prev => ({ ...prev, [index]: results[index].image_url ?? null }))
       }
     })
     setImageLoadingStates(initialLoadingStates)
@@ -162,7 +165,15 @@ export default function SmartAddPage() {
     resultsToSearch.forEach(async (result, index) => {
       // Skip if result already has an image from backend
       if (result.image_url) {
-        setProductImages(prev => ({ ...prev, [index]: result.image_url ?? null }))
+        // Already set above, just ensure loading state is cleared
+        setImageLoadingStates(prev => ({ ...prev, [index]: false }))
+        return
+      }
+
+      // Skip if no make or model to search with
+      if (!result.make && !result.model) {
+        setImageLoadingStates(prev => ({ ...prev, [index]: false }))
+        setProductImages(prev => ({ ...prev, [index]: null }))
         return
       }
 
@@ -172,8 +183,14 @@ export default function SmartAddPage() {
           result.model,
           result.type
         )
-        setProductImages(prev => ({ ...prev, [index]: response.image_url }))
-      } catch {
+        
+        if (response.image_url) {
+          setProductImages(prev => ({ ...prev, [index]: response.image_url }))
+        } else {
+          setProductImages(prev => ({ ...prev, [index]: null }))
+        }
+      } catch (error) {
+        console.error('Failed to load product image:', error)
         setProductImages(prev => ({ ...prev, [index]: null }))
       } finally {
         setImageLoadingStates(prev => ({ ...prev, [index]: false }))
@@ -243,6 +260,28 @@ export default function SmartAddPage() {
           }
         } catch {
           toast.error('Item created but failed to attach photo')
+        }
+      }
+
+      // Import product image to gallery (if different from uploaded photo)
+      if (selectedImageUrl && newItem?.id) {
+        try {
+          // Import product image to gallery in these cases:
+          // 1. User uploaded a photo (wasPhotoSearch) - import product image as additional gallery image
+          // 2. Text search without attachPhoto - import product image to gallery (not featured)
+          // 3. Text search with attachPhoto - already uploaded as featured above, so skip to avoid duplicate
+          if (wasPhotoSearch || !attachPhoto) {
+            // Upload product image to gallery (not as featured since we either have user's photo or didn't check the box)
+            await files.uploadFromUrl(
+              selectedImageUrl,
+              'item',
+              newItem.id,
+              false, // Never featured - either user's photo is featured or user didn't want featured
+              `${formData.make} ${formData.model}`.trim() || 'Product Image'
+            )
+          }
+        } catch {
+          // Silent fail - image gallery import is best effort
         }
       }
 
@@ -421,6 +460,30 @@ export default function SmartAddPage() {
     setShowAgentDetails(false)
     setAnalysisState('analyzing')
     analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
+  }
+
+  // Try again with feedback that previous results were incorrect
+  const handleTryAgainWithFeedback = () => {
+    const feedbackQuery = searchQuery 
+      ? `${searchQuery} - None of the previous results were correct. Please try again with different suggestions.`
+      : 'None of the previous results were correct. Please try again with different suggestions.'
+    
+    setResults([])
+    setSelectedIndex(null)
+    setFormData({})
+    setErrorMessage(null)
+    setShowAllResults(false)
+    setSelectedImageUrl(null)
+    setProductImages({})
+    setImageLoadingStates({})
+    setAgentMetadata(null)
+    setShowAgentDetails(false)
+    setAnalysisState('analyzing')
+    
+    analyzeMutation.mutate({ 
+      file: uploadedImage || undefined, 
+      query: feedbackQuery 
+    })
   }
 
   // Get consensus badge variant and label
@@ -825,12 +888,15 @@ export default function SmartAddPage() {
                           <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                             {imageLoadingStates[index] ? (
                               <div className="w-full h-full animate-pulse bg-gray-200 dark:bg-gray-700" />
-                            ) : productImages[index] ? (
+                            ) : (productImages[index] || result.image_url) ? (
                               <img
-                                src={productImages[index]!}
+                                src={productImages[index] || result.image_url || ''}
                                 alt={`${result.make} ${result.model}`}
                                 className="w-full h-full object-cover"
-                                onError={() => setProductImages(prev => ({ ...prev, [index]: null }))}
+                                onError={() => {
+                                  // Remove failed image from state
+                                  setProductImages(prev => ({ ...prev, [index]: null }))
+                                }}
                               />
                             ) : (
                               <div className="w-full h-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
@@ -855,7 +921,7 @@ export default function SmartAddPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-gray-900 dark:text-gray-50">
-                              {result.make} {result.model}
+                              {result.make}{result.model ? ` ${result.model}` : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 mt-1">
                               <Badge size="sm" variant="gray">
@@ -893,6 +959,20 @@ export default function SmartAddPage() {
                     >
                       <Icon icon={showAllResults ? ChevronUp : ChevronDown} size="xs" />
                       {showAllResults ? 'Show Less' : `See More (${results.length - 5} more)`}
+                    </Button>
+                  )}
+
+                  {/* Try Again button - shown when no result is selected */}
+                  {selectedIndex === null && results.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full mt-4"
+                      onClick={handleTryAgainWithFeedback}
+                      disabled={analyzeMutation.isPending}
+                    >
+                      <Icon icon={RefreshCw} size="xs" />
+                      {analyzeMutation.isPending ? 'Searching...' : 'Try Again'}
                     </Button>
                   )}
                 </CardContent>

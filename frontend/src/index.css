@@ -215,6 +215,16 @@
     mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
   }
 
+  /* Hide scrollbar but maintain scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+
   /* Fade in animation for loading messages */
   .animate-fade-in {
     animation: fadeIn 0.3s ease-in-out;

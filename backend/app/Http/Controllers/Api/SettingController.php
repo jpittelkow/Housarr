@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\AIAgent;
 use App\Services\AIAgentOrchestrator;
+use App\Services\AIModelService;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -451,5 +452,39 @@ class SettingController extends Controller
         $orchestrator->setPrimaryAgent($validated['agent']);
 
         return response()->json(['message' => 'Primary agent updated']);
+    }
+
+    /**
+     * Get available models for an AI agent.
+     */
+    public function getAvailableModels(Request $request, string $agent): JsonResponse
+    {
+        if (!in_array($agent, AIAgent::AGENTS)) {
+            abort(404, 'Unknown agent');
+        }
+
+        $householdId = $request->user()->household_id;
+        $modelService = new AIModelService();
+
+        // Get settings for this agent
+        $settings = Setting::getMany([
+            AIAgent::getApiKeySettingName($agent),
+            AIAgent::getBaseUrlSettingName($agent),
+        ], $householdId);
+
+        $apiKey = $settings[AIAgent::getApiKeySettingName($agent)] ?? null;
+        $baseUrl = $settings[AIAgent::getBaseUrlSettingName($agent)] ?? null;
+
+        $models = match ($agent) {
+            'claude' => $modelService->getClaudeModels($apiKey),
+            'openai' => $modelService->getOpenAIModels($apiKey, $baseUrl),
+            'gemini' => $modelService->getGeminiModels($apiKey, $baseUrl),
+            'local' => $modelService->getLocalModels($baseUrl, $apiKey),
+            default => [],
+        };
+
+        return response()->json([
+            'models' => $models,
+        ]);
     }
 }

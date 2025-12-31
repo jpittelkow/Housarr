@@ -116,6 +116,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // AI Agent Management
     Route::get('/settings/ai/agents', [SettingController::class, 'getAgentsStatus']);
+    Route::get('/settings/ai/agents/{agent}/models', [SettingController::class, 'getAvailableModels']);
     Route::patch('/settings/ai/agents/{agent}', [SettingController::class, 'updateAgent']);
     Route::post('/settings/ai/agents/{agent}/test', [SettingController::class, 'testAgentConnection']);
     Route::post('/settings/ai/primary', [SettingController::class, 'setPrimaryAgent']);

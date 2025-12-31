@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { settings, type AIAgent, type AIAgentName, type AIAgentsResponse } from '@/services/api'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Toggle } from '@/components/ui/Toggle'
 import { Icon, ChevronDown, ChevronUp, Star, Trash2, Check, AlertCircle, Zap } from '@/components/ui'
 import { toast } from 'sonner'
@@ -69,8 +70,70 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState(agent.model || '')
   const [baseUrl, setBaseUrl] = useState('')
+  const [useCustomModel, setUseCustomModel] = useState(false)
 
   const config = AGENT_CONFIG[agent.name]
+
+  // Fetch available models when card is expanded and has API key
+  // Try to fetch even if not fully configured - API will return defaults if needed
+  const { data: modelsData, isLoading: isLoadingModels, error: modelsError } = useQuery({
+    queryKey: ['ai-models', agent.name],
+    queryFn: () => settings.getAvailableModels(agent.name),
+    enabled: isExpanded && hasApiKey,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1, // Only retry once on failure
+    onError: (error) => {
+      console.error(`Failed to fetch models for ${agent.name}:`, error)
+    },
+  })
+
+  // Always include default model in the list
+  const defaultModel = agent.default_model || config.modelPlaceholder
+  const fetchedModels = modelsData?.models || []
+  // Build model list: always include default, then add fetched models, remove duplicates
+  const allModels = fetchedModels.length > 0
+    ? Array.from(new Set([defaultModel, ...fetchedModels]))
+    : [defaultModel]
+
+  // Debug logging
+  useEffect(() => {
+    if (isExpanded) {
+      console.log('AIAgentCard expanded:', {
+        agentName: agent.name,
+        hasApiKey,
+        configured: agent.configured,
+        isLoadingModels,
+        modelsData,
+        modelsError,
+        fetchedModels,
+        allModels,
+        defaultModel,
+      })
+    }
+  }, [isExpanded, hasApiKey, agent.configured, isLoadingModels, modelsData, modelsError, agent.name, fetchedModels, allModels, defaultModel])
+
+  // Sync model state when agent prop changes
+  useEffect(() => {
+    setModel(agent.model || '')
+    setUseCustomModel(false)
+  }, [agent.model])
+
+  // Debug logging
+  useEffect(() => {
+    if (isExpanded) {
+      console.log('AIAgentCard expanded:', {
+        agentName: agent.name,
+        hasApiKey,
+        configured: agent.configured,
+        isLoadingModels,
+        modelsData,
+        modelsError,
+        fetchedModels,
+        allModels,
+        defaultModel,
+      })
+    }
+  }, [isExpanded, hasApiKey, agent.configured, isLoadingModels, modelsData, modelsError, agent.name, fetchedModels, allModels, defaultModel])
 
   // Update agent mutation with optimistic updates
   const updateMutation = useMutation({
@@ -220,6 +283,7 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
       {
         onSuccess: () => {
           toast.success('Model updated')
+          setUseCustomModel(false)
         },
       }
     )
@@ -419,22 +483,79 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
 
           {/* Model */}
           <div>
-            <Input
-              label="Model"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={agent.default_model || config.modelPlaceholder}
-              hint={`Leave blank for default (${agent.default_model || config.modelPlaceholder})`}
-            />
-            {model !== (agent.model || '') && (
-              <Button
-                type="button"
-                size="sm"
-                className="mt-2"
-                onClick={handleSaveModel}
-              >
-                Save Model
-              </Button>
+            {isLoadingModels ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Model
+                </label>
+                <div className="px-3.5 py-2.5 text-sm text-gray-500 dark:text-gray-400">
+                  Loading available models...
+                </div>
+              </div>
+            ) : !useCustomModel ? (
+              <>
+                <Select
+                  label="Model"
+                  value={model || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (value === '__CUSTOM__') {
+                      setUseCustomModel(true)
+                      setModel('')
+                    } else {
+                      setModel(value)
+                    }
+                  }}
+                  options={[
+                    { value: '', label: `Default (${defaultModel})` },
+                    ...allModels.filter(m => m !== defaultModel).map((m) => ({ value: m, label: m })),
+                    { value: '__CUSTOM__', label: 'Custom model...' },
+                  ]}
+                  placeholder="Select a model"
+                />
+                {model && model !== (agent.model || '') && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-2"
+                    onClick={handleSaveModel}
+                  >
+                    Save Model
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Input
+                  label="Custom Model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={defaultModel}
+                  hint="Enter a custom model name"
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setUseCustomModel(false)
+                      setModel(agent.model || '')
+                    }}
+                  >
+                    Use Dropdown
+                  </Button>
+                  {model && model !== (agent.model || '') && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveModel}
+                    >
+                      Save Model
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
           </div>
 

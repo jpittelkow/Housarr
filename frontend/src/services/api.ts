@@ -857,6 +857,11 @@ export const settings = {
     return response.data
   },
 
+  getAvailableModels: async (agent: AIAgentName): Promise<{ models: string[] }> => {
+    const response = await api.get(`/settings/ai/agents/${agent}/models`)
+    return response.data
+  },
+
   updateAgent: async (agent: AIAgentName, data: AIAgentUpdateData): Promise<{ message: string }> => {
     const response = await api.patch(`/settings/ai/agents/${agent}`, data)
     return response.data

@@ -215,7 +215,7 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 **Navigation Items**:
 - Dashboard (/)
 - Items (/items)
-- Smart Add (/smart-add)
+- Smart Add (/smart-add) - AI-powered product identification with image gallery import and try again feature
 - Vendors (/vendors)
 - Reminders (/reminders)
 - Todos (/todos)
