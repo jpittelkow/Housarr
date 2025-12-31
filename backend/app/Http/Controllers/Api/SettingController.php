@@ -467,10 +467,12 @@ class SettingController extends Controller
         $modelService = new AIModelService();
 
         // Get settings for this agent
-        $settings = Setting::getMany([
+        $settingKeys = array_filter([
             AIAgent::getApiKeySettingName($agent),
             AIAgent::getBaseUrlSettingName($agent),
-        ], $householdId);
+        ], fn($key) => $key !== null);
+
+        $settings = Setting::getMany($settingKeys, $householdId);
 
         $apiKey = $settings[AIAgent::getApiKeySettingName($agent)] ?? null;
         $baseUrl = $settings[AIAgent::getBaseUrlSettingName($agent)] ?? null;

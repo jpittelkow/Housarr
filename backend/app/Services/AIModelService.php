@@ -105,14 +105,17 @@ class AIModelService
             return $this->getDefaultGeminiModels();
         }
 
-        $baseUrl = rtrim($baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta', '/');
+        // Default base URL should not include version path - it's added in the endpoint
+        $baseUrl = rtrim($baseUrl ?? 'https://generativelanguage.googleapis.com', '/');
         $cacheKey = "ai_models_gemini_{$baseUrl}_{$apiKey}";
 
         return Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($apiKey, $baseUrl) {
             try {
+                // Use v1beta endpoint for models list
+                $endpoint = "{$baseUrl}/v1beta/models?key={$apiKey}";
                 $response = Http::withHeaders([
                     'Content-Type' => 'application/json',
-                ])->timeout(10)->get("{$baseUrl}/models?key={$apiKey}");
+                ])->timeout(10)->get($endpoint);
 
                 if ($response->successful()) {
                     $data = $response->json();
