@@ -21,6 +21,7 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 | [009](009-zip-backup-with-files.md) | ZIP Backup with Files | Accepted | 2024-12-30 |
 | [010](010-ai-chatbot-manual-extraction.md) | AI Chatbot & Manual Extraction | Accepted | 2024-12-30 |
 | [011](011-comprehensive-testing-strategy.md) | Comprehensive Testing Strategy | Accepted | 2024-12-30 |
+| [012](012-docker-self-hosted-deployment.md) | Docker Self-Hosted Deployment Strategy | Accepted | 2024-12-31 |
 
 ## ADR Template
 
