@@ -20,9 +20,8 @@ class DownloadItemManualAction
         }
 
         // Save the PDF to storage
-        $storageService = new StorageService($householdId);
-        $disk = $storageService->getDiskForHousehold();
-        $diskName = $storageService->getDiskName();
+        $disk = StorageService::getDiskForHousehold($householdId);
+        $diskName = StorageService::getDiskName($householdId);
 
         $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $result['filename']);
         $path = "households/{$householdId}/items/{$item->id}/manuals/" . time() . "_{$filename}";

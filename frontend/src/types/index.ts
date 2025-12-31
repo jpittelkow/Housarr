@@ -26,6 +26,7 @@ export interface Household {
 export interface Category {
   id: number
   household_id: number | null
+  type: 'item' | 'vendor'
   name: string
   icon: string | null
   color: string | null

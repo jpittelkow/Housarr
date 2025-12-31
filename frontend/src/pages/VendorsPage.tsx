@@ -52,8 +52,8 @@ export default function VendorsPage() {
   })
 
   const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => categories.list(),
+    queryKey: ['categories', 'vendor'],
+    queryFn: () => categories.list('vendor'),
   })
 
   const createMutation = useMutation({

@@ -146,8 +146,9 @@ export const users = {
 
 // Categories
 export const categories = {
-  list: async (): Promise<{ categories: Category[] }> => {
-    const response = await api.get('/categories')
+  list: async (type?: 'item' | 'vendor'): Promise<{ categories: Category[] }> => {
+    const params = type ? { type } : {}
+    const response = await api.get('/categories', { params })
     return response.data
   },
 

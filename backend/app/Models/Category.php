@@ -13,9 +13,14 @@ class Category extends Model
 
     protected $fillable = [
         'household_id',
+        'type',
         'name',
         'icon',
         'color',
+    ];
+
+    protected $casts = [
+        'type' => 'string',
     ];
 
     public function household(): BelongsTo
@@ -39,5 +44,13 @@ class Category extends Model
             $q->whereNull('household_id')
               ->orWhere('household_id', $householdId);
         });
+    }
+
+    /**
+     * Scope to filter categories by type.
+     */
+    public function scopeOfType($query, string $type)
+    {
+        return $query->where('type', $type);
     }
 }

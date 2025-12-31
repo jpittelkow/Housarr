@@ -24,6 +24,7 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 | [012](012-docker-self-hosted-deployment.md) | Docker Self-Hosted Deployment Strategy | Accepted | 2024-12-31 |
 | [013](013-vendor-search-address-features.md) | Vendor Search & Address Features | Accepted | 2024-12-31 |
 | [014](014-smart-add-product-image-search.md) | Smart Add Product Image Search | Accepted | 2024-12-30 |
+| [015](015-separate-item-vendor-categories.md) | Separate Item and Vendor Categories | Accepted | 2025-01-02 |
 
 ## ADR Template
 

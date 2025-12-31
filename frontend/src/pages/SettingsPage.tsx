@@ -188,7 +188,8 @@ export default function SettingsPage() {
   const [householdAddress, setHouseholdAddress] = useState('')
   const [householdCoords, setHouseholdCoords] = useState<{ lat: number; lon: number } | null>(null)
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isItemCategoryModalOpen, setIsItemCategoryModalOpen] = useState(false)
+  const [isVendorCategoryModalOpen, setIsVendorCategoryModalOpen] = useState(false)
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [editingLocation, setEditingLocation] = useState<{ id: number; name: string; icon: string; images?: unknown[]; featured_image?: unknown } | null>(null)
   const [showAIPrompts, setShowAIPrompts] = useState(false)
@@ -199,7 +200,8 @@ export default function SettingsPage() {
     password_confirmation: '',
     role: 'member' as 'admin' | 'member',
   })
-  const [categoryData, setCategoryData] = useState({ name: '', icon: '', color: '#7F56D9' })
+  const [itemCategoryData, setItemCategoryData] = useState({ name: '', icon: '', color: '#7F56D9' })
+  const [vendorCategoryData, setVendorCategoryData] = useState({ name: '', icon: '', color: '#7F56D9' })
   const [locationData, setLocationData] = useState({ name: '', icon: '' })
   const [editingUser, setEditingUser] = useState<{ id: number; name: string; email: string; role: 'admin' | 'member' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -227,9 +229,14 @@ export default function SettingsPage() {
     queryFn: () => users.list(),
   })
 
-  const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => categories.list(),
+  const { data: itemCategoriesData } = useQuery({
+    queryKey: ['categories', 'item'],
+    queryFn: () => categories.list('item'),
+  })
+
+  const { data: vendorCategoriesData } = useQuery({
+    queryKey: ['categories', 'vendor'],
+    queryFn: () => categories.list('vendor'),
   })
 
   const { data: locationsData } = useQuery({
@@ -394,36 +401,71 @@ export default function SettingsPage() {
     },
   })
 
-  const createCategoryMutation = useMutation({
-    mutationFn: (data: typeof categoryData) => categories.create(data),
+  const createItemCategoryMutation = useMutation({
+    mutationFn: (data: typeof itemCategoryData) => categories.create({ ...data, type: 'item' }),
     onSuccess: (response) => {
       // Immediately update cache with new category
-      queryClient.setQueryData(['categories'], (old: { categories: Category[] } | undefined) => ({
+      queryClient.setQueryData(['categories', 'item'], (old: { categories: Category[] } | undefined) => ({
         categories: [...(old?.categories || []), response.category],
       }))
-      setIsCategoryModalOpen(false)
-      setCategoryData({ name: '', icon: '', color: '#7F56D9' })
-      toast.success('Category created')
+      setIsItemCategoryModalOpen(false)
+      setItemCategoryData({ name: '', icon: '', color: '#7F56D9' })
+      toast.success('Item category created')
     },
   })
 
-  const deleteCategoryMutation = useMutation({
+  const createVendorCategoryMutation = useMutation({
+    mutationFn: (data: typeof vendorCategoryData) => categories.create({ ...data, type: 'vendor' }),
+    onSuccess: (response) => {
+      // Immediately update cache with new category
+      queryClient.setQueryData(['categories', 'vendor'], (old: { categories: Category[] } | undefined) => ({
+        categories: [...(old?.categories || []), response.category],
+      }))
+      setIsVendorCategoryModalOpen(false)
+      setVendorCategoryData({ name: '', icon: '', color: '#7F56D9' })
+      toast.success('Vendor category created')
+    },
+  })
+
+  const deleteItemCategoryMutation = useMutation({
     mutationFn: (id: number) => categories.delete(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['categories'] })
-      const previousCategories = queryClient.getQueryData(['categories'])
+      await queryClient.cancelQueries({ queryKey: ['categories', 'item'] })
+      const previousCategories = queryClient.getQueryData(['categories', 'item'])
       // Optimistically remove from cache
-      queryClient.setQueryData(['categories'], (old: { categories: Category[] } | undefined) => ({
+      queryClient.setQueryData(['categories', 'item'], (old: { categories: Category[] } | undefined) => ({
         categories: (old?.categories || []).filter((cat) => cat.id !== id),
       }))
       return { previousCategories }
     },
     onSuccess: () => {
-      toast.success('Category deleted')
+      toast.success('Item category deleted')
     },
     onError: (_err, _id, context) => {
       if (context?.previousCategories) {
-        queryClient.setQueryData(['categories'], context.previousCategories)
+        queryClient.setQueryData(['categories', 'item'], context.previousCategories)
+      }
+      toast.error('Cannot delete system categories')
+    },
+  })
+
+  const deleteVendorCategoryMutation = useMutation({
+    mutationFn: (id: number) => categories.delete(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['categories', 'vendor'] })
+      const previousCategories = queryClient.getQueryData(['categories', 'vendor'])
+      // Optimistically remove from cache
+      queryClient.setQueryData(['categories', 'vendor'], (old: { categories: Category[] } | undefined) => ({
+        categories: (old?.categories || []).filter((cat) => cat.id !== id),
+      }))
+      return { previousCategories }
+    },
+    onSuccess: () => {
+      toast.success('Vendor category deleted')
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData(['categories', 'vendor'], context.previousCategories)
       }
       toast.error('Cannot delete system categories')
     },
@@ -614,9 +656,6 @@ export default function SettingsPage() {
   }
 
   const allUsers = usersData?.users || []
-  const allCategories = categoriesData?.categories || []
-  const customCategories = allCategories.filter((c) => c.household_id !== null)
-  const systemCategories = allCategories.filter((c) => c.household_id === null)
   const allLocations = locationsData?.locations || []
 
   return (
@@ -800,7 +839,7 @@ export default function SettingsPage() {
         {/* ============ ORGANIZATION TAB ============ */}
         {activeTab === 'organization' && (
           <>
-            {/* Categories */}
+            {/* Item Categories */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
@@ -808,28 +847,28 @@ export default function SettingsPage() {
                     <Icon icon={Tag} size="sm" className="text-gray-700 dark:text-gray-300" />
                   </div>
                   <div>
-                    <CardTitle>Categories</CardTitle>
-                    <CardDescription>Organize your items and vendors</CardDescription>
+                    <CardTitle>Item Categories</CardTitle>
+                    <CardDescription>Organize your household items</CardDescription>
                   </div>
                 </div>
-                <Button onClick={() => setIsCategoryModalOpen(true)} size="sm">
+                <Button onClick={() => setIsItemCategoryModalOpen(true)} size="sm">
                   <Icon icon={Plus} size="xs" /> Add
                 </Button>
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-6">
-                  {customCategories.length > 0 && (
+                  {customItemCategories.length > 0 && (
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Custom Categories</h4>
                       <div className="flex flex-wrap gap-2">
-                        {customCategories.map((c) => (
+                        {customItemCategories.map((c) => (
                           <Badge
                             key={c.id}
                             style={{ backgroundColor: `${c.color}15`, color: c.color ?? undefined, borderColor: `${c.color}30` }}
                             className="group cursor-pointer border"
                             onClick={() => {
                               if (confirm('Delete this category?')) {
-                                deleteCategoryMutation.mutate(c.id)
+                                deleteItemCategoryMutation.mutate(c.id)
                               }
                             }}
                           >
@@ -844,7 +883,66 @@ export default function SettingsPage() {
                   <div>
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">System Categories</h4>
                     <div className="flex flex-wrap gap-2">
-                      {systemCategories.map((c) => (
+                      {systemItemCategories.map((c) => (
+                        <Badge
+                          key={c.id}
+                          style={{ backgroundColor: `${c.color}15`, color: c.color ?? undefined, borderColor: `${c.color}30` }}
+                          className="border"
+                        >
+                          {c.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Vendor Categories */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center">
+                    <Icon icon={Tag} size="sm" className="text-gray-700 dark:text-gray-300" />
+                  </div>
+                  <div>
+                    <CardTitle>Vendor Categories</CardTitle>
+                    <CardDescription>Organize your vendors and service providers</CardDescription>
+                  </div>
+                </div>
+                <Button onClick={() => setIsVendorCategoryModalOpen(true)} size="sm">
+                  <Icon icon={Plus} size="xs" /> Add
+                </Button>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-6">
+                  {customVendorCategories.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Custom Categories</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {customVendorCategories.map((c) => (
+                          <Badge
+                            key={c.id}
+                            style={{ backgroundColor: `${c.color}15`, color: c.color ?? undefined, borderColor: `${c.color}30` }}
+                            className="group cursor-pointer border"
+                            onClick={() => {
+                              if (confirm('Delete this category?')) {
+                                deleteVendorCategoryMutation.mutate(c.id)
+                              }
+                            }}
+                          >
+                            {c.name}
+                            <span className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity">×</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">System Categories</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {systemVendorCategories.map((c) => (
                         <Badge
                           key={c.id}
                           style={{ backgroundColor: `${c.color}15`, color: c.color ?? undefined, borderColor: `${c.color}30` }}
@@ -1489,49 +1587,98 @@ export default function SettingsPage() {
         </form>
       </Modal>
 
-      {/* Category Modal */}
-      <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title="Add Category">
+      {/* Item Category Modal */}
+      <Modal isOpen={isItemCategoryModalOpen} onClose={() => setIsItemCategoryModalOpen(false)} title="Add Item Category">
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            createCategoryMutation.mutate(categoryData)
+            createItemCategoryMutation.mutate(itemCategoryData)
           }}
           className="p-6 space-y-4"
         >
           <Input
             label="Name"
-            value={categoryData.name}
-            onChange={(e) => setCategoryData({ ...categoryData, name: e.target.value })}
-            placeholder="e.g., Outdoor"
+            value={itemCategoryData.name}
+            onChange={(e) => setItemCategoryData({ ...itemCategoryData, name: e.target.value })}
+            placeholder="e.g., Appliances"
             required
           />
           <Input
             label="Icon"
-            value={categoryData.icon}
-            onChange={(e) => setCategoryData({ ...categoryData, icon: e.target.value })}
-            placeholder="e.g., sun"
+            value={itemCategoryData.icon}
+            onChange={(e) => setItemCategoryData({ ...itemCategoryData, icon: e.target.value })}
+            placeholder="e.g., home"
           />
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Color</label>
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={categoryData.color}
-                onChange={(e) => setCategoryData({ ...categoryData, color: e.target.value })}
+                value={itemCategoryData.color}
+                onChange={(e) => setItemCategoryData({ ...itemCategoryData, color: e.target.value })}
                 className="h-10 w-14 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <Input
-                value={categoryData.color}
-                onChange={(e) => setCategoryData({ ...categoryData, color: e.target.value })}
+                value={itemCategoryData.color}
+                onChange={(e) => setItemCategoryData({ ...itemCategoryData, color: e.target.value })}
                 className="flex-1"
               />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button type="button" variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => setIsItemCategoryModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={createCategoryMutation.isPending}>
+            <Button type="submit" isLoading={createItemCategoryMutation.isPending}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Vendor Category Modal */}
+      <Modal isOpen={isVendorCategoryModalOpen} onClose={() => setIsVendorCategoryModalOpen(false)} title="Add Vendor Category">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            createVendorCategoryMutation.mutate(vendorCategoryData)
+          }}
+          className="p-6 space-y-4"
+        >
+          <Input
+            label="Name"
+            value={vendorCategoryData.name}
+            onChange={(e) => setVendorCategoryData({ ...vendorCategoryData, name: e.target.value })}
+            placeholder="e.g., Plumber"
+            required
+          />
+          <Input
+            label="Icon"
+            value={vendorCategoryData.icon}
+            onChange={(e) => setVendorCategoryData({ ...vendorCategoryData, icon: e.target.value })}
+            placeholder="e.g., wrench"
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Color</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={vendorCategoryData.color}
+                onChange={(e) => setVendorCategoryData({ ...vendorCategoryData, color: e.target.value })}
+                className="h-10 w-14 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
+              />
+              <Input
+                value={vendorCategoryData.color}
+                onChange={(e) => setVendorCategoryData({ ...vendorCategoryData, color: e.target.value })}
+                className="flex-1"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button type="button" variant="secondary" onClick={() => setIsVendorCategoryModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={createVendorCategoryMutation.isPending}>
               Create
             </Button>
           </div>

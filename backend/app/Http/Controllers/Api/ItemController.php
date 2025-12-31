@@ -18,7 +18,9 @@ use App\Services\ProductImageSearchService;
 use App\Services\StorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -267,9 +269,21 @@ class ItemController extends Controller
                 ...$result
             ]);
         } catch (\Exception $e) {
+            Log::error('Manual download action failed', [
+                'item_id' => $item->id,
+                'make' => $validated['make'],
+                'model' => $validated['model'],
+                'error' => $e->getMessage(),
+                'trace' => substr($e->getTraceAsString(), 0, 1000),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'error_details' => [
+                    'make' => $validated['make'],
+                    'model' => $validated['model'],
+                ],
             ], 422);
         }
     }
@@ -361,6 +375,14 @@ class ItemController extends Controller
             // Check if this is a search URL (Google, etc.)
             $isSearchUrl = preg_match('/google\.com\/search|bing\.com\/search|duckduckgo\.com/i', $url);
             
+            Log::warning('Manual download from URL failed', [
+                'item_id' => $item->id,
+                'url' => $url,
+                'make' => $validated['make'],
+                'model' => $validated['model'],
+                'is_search_url' => $isSearchUrl,
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => $isSearchUrl 
@@ -368,13 +390,17 @@ class ItemController extends Controller
                     : 'Could not download from this source. The site may require login or have bot protection.',
                 'is_search_url' => $isSearchUrl,
                 'open_url' => $url, // Frontend can offer to open this
+                'error_details' => [
+                    'url' => $url,
+                    'make' => $validated['make'],
+                    'model' => $validated['model'],
+                ],
             ], 422);
         }
 
         // Save the PDF to storage
-        $storageService = new StorageService($householdId);
-        $disk = $storageService->getDiskForHousehold();
-        $diskName = $storageService->getDiskName();
+        $disk = StorageService::getDiskForHousehold($householdId);
+        $diskName = StorageService::getDiskName($householdId);
 
         $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $result['filename']);
         $path = "households/{$householdId}/items/{$item->id}/manuals/" . time() . "_{$filename}";

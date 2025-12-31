@@ -552,9 +552,13 @@ PROMPT;
         try {
             Log::debug('Searching for PDF links on page', ['url' => $pageUrl]);
 
+            // Follow redirects when checking pages
             $response = Http::withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            ])->withOptions([
+                'allow_redirects' => true,
+                'max_redirects' => 5,
             ])->timeout(30)->get($pageUrl);
 
             if (!$response->successful()) {
@@ -564,6 +568,22 @@ PROMPT;
 
             $html = $response->body();
             $baseUrl = parse_url($pageUrl, PHP_URL_SCHEME) . '://' . parse_url($pageUrl, PHP_URL_HOST);
+
+            // Special handling for cloud storage links
+            if (preg_match('/(?:drive\.google\.com|dropbox\.com|onedrive\.live\.com|sharepoint\.com)/i', $pageUrl)) {
+                $pdfUrl = $this->handleCloudStorageLink($pageUrl, $html);
+                if ($pdfUrl) {
+                    return $pdfUrl;
+                }
+            }
+
+            // Special handling for archive.org
+            if (stripos($pageUrl, 'archive.org') !== false) {
+                $pdfUrl = $this->handleArchiveOrgLink($pageUrl, $html);
+                if ($pdfUrl) {
+                    return $pdfUrl;
+                }
+            }
 
             // Special handling for ManualsLib - need to find manual detail pages first
             if (stripos($pageUrl, 'manualslib.com') !== false) {
@@ -619,8 +639,24 @@ PROMPT;
             $pdfUrls = array_merge($pdfUrls, array_filter($downloadMatches[1]));
 
             // Look for data-src or data-url attributes that might contain PDFs
-            preg_match_all('/data-(?:src|url|pdf|file)=["\']([^"\']+\.pdf[^"\']*)["\']|data-(?:src|url|pdf|file)=["\']([^"\']+)["\'].*?\.pdf/i', $html, $dataMatches);
+            preg_match_all('/data-(?:src|url|pdf|file|manual)=["\']([^"\']+\.pdf[^"\']*)["\']|data-(?:src|url|pdf|file|manual)=["\']([^"\']+)["\'].*?\.pdf/i', $html, $dataMatches);
             $pdfUrls = array_merge($pdfUrls, array_filter(array_merge($dataMatches[1], $dataMatches[2])));
+
+            // Look for JavaScript variables containing PDF URLs
+            preg_match_all('/(?:pdfUrl|manualUrl|downloadUrl|fileUrl|documentUrl)\s*[=:]\s*["\']([^"\']+\.pdf[^"\']*)["\']/i', $html, $jsMatches);
+            $pdfUrls = array_merge($pdfUrls, array_filter($jsMatches[1] ?? []));
+
+            // Look for base64-encoded PDFs in data attributes (less common but possible)
+            preg_match_all('/data:application\/pdf;base64,([A-Za-z0-9+\/=]+)/i', $html, $base64Matches);
+            // Note: We skip base64 PDFs as they're embedded, not downloadable URLs
+
+            // Extract from iframes - some sites embed PDFs in iframes
+            preg_match_all('/<iframe[^>]+src=["\']([^"\']+\.pdf[^"\']*)["\']/i', $html, $iframeMatches);
+            $pdfUrls = array_merge($pdfUrls, array_filter($iframeMatches[1] ?? []));
+
+            // Look for object/embed tags with PDF sources
+            preg_match_all('/(?:<object|<embed)[^>]+(?:src|data)=["\']([^"\']+\.pdf[^"\']*)["\']/i', $html, $objectMatches);
+            $pdfUrls = array_merge($pdfUrls, array_filter($objectMatches[1] ?? []));
 
             Log::debug('Found potential PDF URLs on page', ['count' => count($pdfUrls)]);
 
@@ -629,21 +665,42 @@ PROMPT;
                 // Skip empty or invalid
                 if (empty($pdfUrl) || $pdfUrl === '#') continue;
 
-                // Make absolute URL
+                // Decode HTML entities
+                $pdfUrl = html_entity_decode($pdfUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+                // Remove query parameters that might interfere (but keep important ones)
+                // Some sites use query params for tracking, but we'll try the base URL too
+                $basePdfUrl = preg_replace('/\?.*$/', '', $pdfUrl);
+
+                // Make absolute URL - handle various formats
                 if (!preg_match('/^https?:\/\//', $pdfUrl)) {
-                    if (strpos($pdfUrl, '/') === 0) {
+                    if (strpos($pdfUrl, '//') === 0) {
+                        // Protocol-relative URL
+                        $pdfUrl = parse_url($pageUrl, PHP_URL_SCHEME) . ':' . $pdfUrl;
+                    } elseif (strpos($pdfUrl, '/') === 0) {
+                        // Absolute path
                         $pdfUrl = $baseUrl . $pdfUrl;
                     } else {
-                        $pdfUrl = $baseUrl . '/' . $pdfUrl;
+                        // Relative path
+                        $pagePath = parse_url($pageUrl, PHP_URL_PATH);
+                        $pageDir = dirname($pagePath === '/' ? '' : $pagePath);
+                        $pdfUrl = $baseUrl . $pageDir . '/' . ltrim($pdfUrl, '/');
                     }
                 }
 
+                // Normalize URL (remove duplicate slashes, etc.)
+                $pdfUrl = preg_replace('#([^:])//+#', '$1/', $pdfUrl);
+
                 // Skip navigation and language links
-                if (preg_match('/\/(about|contact|privacy|terms|language|locale)/i', $pdfUrl)) {
+                if (preg_match('/\/(about|contact|privacy|terms|language|locale|help|faq)/i', $pdfUrl)) {
                     continue;
                 }
 
+                // Try both with and without query parameters
                 $normalizedUrls[] = $pdfUrl;
+                if ($basePdfUrl !== $pdfUrl && !in_array($basePdfUrl, $normalizedUrls)) {
+                    $normalizedUrls[] = $basePdfUrl;
+                }
 
                 // Prefer URLs with the model number
                 if (stripos($pdfUrl, $model) !== false && stripos($pdfUrl, '.pdf') !== false) {
@@ -671,17 +728,117 @@ PROMPT;
     /**
      * Download a PDF from URL and return the content.
      * Tries to download even if URL doesn't end in .pdf, verifying by content.
+     * Includes retry logic for transient failures.
      */
     public function downloadPdf(string $url): ?array
     {
-        try {
-            // Always try to download - verify by content, not URL
-            // Some PDFs are served without .pdf extension
-            return $this->downloadDirectPdf($url);
-        } catch (\Exception $e) {
-            Log::error('PDF download error', ['url' => $url, 'error' => $e->getMessage()]);
-            return null;
+        $maxRetries = 3;
+        $baseDelay = 1; // seconds
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $result = $this->downloadDirectPdf($url);
+                
+                if ($result !== null) {
+                    if ($attempt > 1) {
+                        Log::info('PDF download succeeded after retry', [
+                            'url' => $url,
+                            'attempt' => $attempt,
+                        ]);
+                    }
+                    return $result;
+                }
+
+                // If downloadDirectPdf returns null, it's likely a validation failure
+                // Don't retry validation failures
+                if ($attempt === 1) {
+                    Log::debug('PDF download failed validation, not retrying', ['url' => $url]);
+                    return null;
+                }
+            } catch (\Exception $e) {
+                $errorMessage = $e->getMessage();
+                $isTransient = $this->isTransientError($e, $errorMessage);
+                
+                if (!$isTransient) {
+                    // Permanent failure, don't retry
+                    Log::warning('PDF download permanent failure, not retrying', [
+                        'url' => $url,
+                        'error' => $errorMessage,
+                    ]);
+                    return null;
+                }
+
+                // Transient failure - retry with exponential backoff
+                if ($attempt < $maxRetries) {
+                    $delay = $baseDelay * pow(2, $attempt - 1); // 1s, 2s, 4s
+                    Log::debug('PDF download transient failure, retrying', [
+                        'url' => $url,
+                        'attempt' => $attempt,
+                        'max_retries' => $maxRetries,
+                        'delay_seconds' => $delay,
+                        'error' => $errorMessage,
+                    ]);
+                    
+                    // Sleep with exponential backoff
+                    sleep($delay);
+                } else {
+                    Log::error('PDF download failed after all retries', [
+                        'url' => $url,
+                        'attempts' => $maxRetries,
+                        'error' => $errorMessage,
+                    ]);
+                }
+            }
         }
+
+        return null;
+    }
+
+    /**
+     * Determine if an error is transient (should retry) or permanent (should not retry).
+     */
+    protected function isTransientError(\Exception $e, string $errorMessage): bool
+    {
+        // Timeout errors are transient
+        if (
+            stripos($errorMessage, 'timeout') !== false ||
+            stripos($errorMessage, 'timed out') !== false ||
+            stripos($errorMessage, 'connection') !== false ||
+            $e->getCode() === CURLE_OPERATION_TIMEOUTED ||
+            $e->getCode() === CURLE_COULDNT_CONNECT
+        ) {
+            return true;
+        }
+
+        // 5xx server errors are transient
+        if (preg_match('/\b(50[0-9]|502|503|504)\b/', $errorMessage)) {
+            return true;
+        }
+
+        // Network errors are transient
+        if (
+            stripos($errorMessage, 'network') !== false ||
+            stripos($errorMessage, 'dns') !== false ||
+            stripos($errorMessage, 'resolve') !== false
+        ) {
+            return true;
+        }
+
+        // 404, 403, 401 are permanent
+        if (preg_match('/\b(404|403|401)\b/', $errorMessage)) {
+            return false;
+        }
+
+        // Validation failures are permanent
+        if (
+            stripos($errorMessage, 'not a PDF') !== false ||
+            stripos($errorMessage, 'validation') !== false
+        ) {
+            return false;
+        }
+
+        // Default: assume transient for unknown errors
+        return true;
     }
 
     /**
@@ -690,42 +847,77 @@ PROMPT;
     protected function downloadDirectPdf(string $url): ?array
     {
         try {
-            Log::debug('Attempting PDF download');
+            Log::debug('Attempting PDF download', ['url' => $url]);
 
+            // Follow redirects explicitly with max 5 redirects
             $response = Http::withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept' => 'application/pdf,*/*',
                 'Accept-Language' => 'en-US,en;q=0.9',
+            ])->withOptions([
+                'allow_redirects' => true,
+                'max_redirects' => 5,
             ])->timeout(90)->get($url);
 
             if (!$response->successful()) {
-                Log::warning('PDF download failed', ['url' => $url, 'status' => $response->status()]);
+                Log::warning('PDF download failed', [
+                    'url' => $url,
+                    'status' => $response->status(),
+                    'headers' => $response->headers(),
+                ]);
                 return null;
             }
 
             $body = $response->body();
             $contentType = $response->header('Content-Type') ?? '';
+            $contentLength = strlen($body);
 
-            // Verify it's actually a PDF by checking magic bytes or content-type
-            $isPdf = (substr($body, 0, 4) === '%PDF') ||
-                     (stripos($contentType, 'pdf') !== false) ||
-                     (stripos($contentType, 'octet-stream') !== false && strlen($body) > 1000);
+            // Enhanced PDF validation with multiple checks
+            $hasPdfMagicBytes = substr($body, 0, 4) === '%PDF';
+            $hasPdfContentType = stripos($contentType, 'pdf') !== false;
+            $isOctetStream = stripos($contentType, 'octet-stream') !== false;
+            
+            // Check for PDF structure markers in first 1KB
+            $hasPdfStructure = false;
+            if ($contentLength > 100) {
+                $first1KB = substr($body, 0, min(1024, $contentLength));
+                $hasPdfStructure = (
+                    strpos($first1KB, '/Type') !== false ||
+                    strpos($first1KB, '/Catalog') !== false ||
+                    strpos($first1KB, '/Pages') !== false ||
+                    strpos($first1KB, '/PDF') !== false
+                );
+            }
+
+            // Accept PDF if any of these conditions are met:
+            // 1. Has PDF magic bytes (most reliable)
+            // 2. Has PDF content-type header
+            // 3. Is octet-stream with reasonable size and PDF structure
+            // 4. Has PDF structure markers even without magic bytes (some PDFs have headers)
+            $isPdf = $hasPdfMagicBytes ||
+                     $hasPdfContentType ||
+                     ($isOctetStream && $contentLength > 1000 && $hasPdfStructure) ||
+                     ($contentLength > 1000 && $hasPdfStructure && !$this->isHtmlContent($body));
 
             if (!$isPdf) {
                 Log::warning('Downloaded file is not a PDF', [
                     'url' => $url,
                     'content_type' => $contentType,
-                    'first_bytes' => substr($body, 0, 20),
-                    'size' => strlen($body)
+                    'content_length' => $contentLength,
+                    'has_magic_bytes' => $hasPdfMagicBytes,
+                    'has_pdf_structure' => $hasPdfStructure,
+                    'first_bytes' => substr($body, 0, min(100, $contentLength)),
+                    'validation_reason' => 'Failed all PDF validation checks',
                 ]);
                 return null;
             }
 
             // Ensure minimum size (PDFs should be at least a few KB)
-            if (strlen($body) < 1000) {
+            if ($contentLength < 1000) {
                 Log::warning('Downloaded file too small to be a valid PDF', [
                     'url' => $url,
-                    'size' => strlen($body)
+                    'size' => $contentLength,
+                    'content_type' => $contentType,
                 ]);
                 return null;
             }
@@ -735,18 +927,53 @@ PROMPT;
             Log::debug('PDF downloaded successfully', [
                 'url' => $url,
                 'filename' => $filename,
-                'size' => strlen($body)
+                'size' => $contentLength,
+                'content_type' => $contentType,
             ]);
 
             return [
                 'content' => $body,
                 'filename' => $filename,
-                'size' => strlen($body),
+                'size' => $contentLength,
             ];
         } catch (\Exception $e) {
-            Log::error('Direct PDF download error', ['url' => $url, 'error' => $e->getMessage()]);
+            // Re-throw transient errors so retry logic can handle them
+            // Validation errors return null (handled above)
+            $errorMessage = $e->getMessage();
+            if ($this->isTransientError($e, $errorMessage)) {
+                Log::debug('Direct PDF download transient error, will retry', [
+                    'url' => $url,
+                    'error' => $errorMessage,
+                ]);
+                throw $e; // Re-throw for retry logic
+            }
+            
+            // Permanent errors - log and return null
+            Log::error('Direct PDF download permanent error', [
+                'url' => $url,
+                'error' => $errorMessage,
+                'trace' => substr($e->getTraceAsString(), 0, 500),
+            ]);
             return null;
         }
+    }
+
+    /**
+     * Check if content appears to be HTML (not PDF).
+     */
+    protected function isHtmlContent(string $content): bool
+    {
+        if (strlen($content) < 10) {
+            return false;
+        }
+        
+        $trimmed = trim($content);
+        return (
+            stripos($trimmed, '<html') === 0 ||
+            stripos($trimmed, '<!doctype') === 0 ||
+            stripos($trimmed, '<!DOCTYPE') === 0 ||
+            (stripos($trimmed, '<') === 0 && stripos($trimmed, '</') !== false)
+        );
     }
 
     /**
@@ -773,38 +1000,193 @@ PROMPT;
 
     /**
      * Search for manual and download the best match.
+     * Tries multiple strategies per URL and accumulates error information.
      */
     public function findAndDownloadManual(string $make, string $model): ?array
     {
         $urls = $this->searchForManual($make, $model);
 
-        Log::debug('Manual search found URLs', ['count' => count($urls)]);
+        Log::debug('Manual search found URLs', ['count' => count($urls), 'make' => $make, 'model' => $model]);
 
         if (empty($urls)) {
             return null;
         }
 
-        // Try each URL until we get a valid PDF
+        $errors = [];
+        $attemptedUrls = [];
+
+        // Try each URL with multiple strategies
         foreach ($urls as $url) {
-            // If it's a direct PDF link
+            $attemptedUrls[] = $url;
+            
+            // Strategy 1: Direct download if URL contains .pdf
             if (stripos($url, '.pdf') !== false) {
-                $result = $this->downloadDirectPdf($url);
+                $result = $this->downloadPdf($url);
                 if ($result !== null) {
                     $result['source_url'] = $url;
+                    Log::info('Manual downloaded successfully via direct PDF link', [
+                        'url' => $url,
+                        'make' => $make,
+                        'model' => $model,
+                    ]);
                     return $result;
+                }
+                $errors[] = "Direct download failed for: {$url}";
+                
+                // Try common PDF path variations
+                $variations = $this->getPdfPathVariations($url);
+                foreach ($variations as $variation) {
+                    $result = $this->downloadPdf($variation);
+                    if ($result !== null) {
+                        $result['source_url'] = $variation;
+                        Log::info('Manual downloaded successfully via path variation', [
+                            'original_url' => $url,
+                            'variation' => $variation,
+                            'make' => $make,
+                            'model' => $model,
+                        ]);
+                        return $result;
+                    }
                 }
                 continue;
             }
 
-            // Otherwise, try to find a PDF on the page
+            // Strategy 2: Find PDF on the page
             $pdfUrl = $this->findPdfOnPage($url, $make, $model);
             if ($pdfUrl) {
-                $result = $this->downloadDirectPdf($pdfUrl);
+                $result = $this->downloadPdf($pdfUrl);
                 if ($result !== null) {
                     $result['source_url'] = $pdfUrl;
+                    Log::info('Manual downloaded successfully via page extraction', [
+                        'page_url' => $url,
+                        'pdf_url' => $pdfUrl,
+                        'make' => $make,
+                        'model' => $model,
+                    ]);
+                    return $result;
+                }
+                $errors[] = "PDF found on page but download failed: {$pdfUrl} (from {$url})";
+            } else {
+                $errors[] = "No PDF found on page: {$url}";
+            }
+
+            // Strategy 3: Try common PDF path variations for HTML pages
+            $variations = $this->getPdfPathVariations($url);
+            foreach ($variations as $variation) {
+                $result = $this->downloadPdf($variation);
+                if ($result !== null) {
+                    $result['source_url'] = $variation;
+                    Log::info('Manual downloaded successfully via path variation', [
+                        'original_url' => $url,
+                        'variation' => $variation,
+                        'make' => $make,
+                        'model' => $model,
+                    ]);
                     return $result;
                 }
             }
+        }
+
+        // All URLs failed - log detailed error information
+        Log::warning('Manual download failed for all URLs', [
+            'make' => $make,
+            'model' => $model,
+            'urls_attempted' => count($attemptedUrls),
+            'errors' => array_slice($errors, 0, 10), // Limit to first 10 errors
+        ]);
+
+        return null;
+    }
+
+    /**
+     * Generate common PDF path variations for a given URL.
+     */
+    protected function getPdfPathVariations(string $url): array
+    {
+        $variations = [];
+        $parsed = parse_url($url);
+        
+        if (!isset($parsed['path'])) {
+            return $variations;
+        }
+
+        $basePath = dirname($parsed['path']);
+        $baseUrl = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
+        
+        // Common PDF path patterns
+        $pdfPaths = [
+            '/manual.pdf',
+            '/download.pdf',
+            '/user-manual.pdf',
+            '/owners-manual.pdf',
+            '/installation-manual.pdf',
+            '/service-manual.pdf',
+            '/product-manual.pdf',
+        ];
+
+        foreach ($pdfPaths as $pdfPath) {
+            $variations[] = $baseUrl . $basePath . $pdfPath;
+            $variations[] = $baseUrl . $pdfPath;
+        }
+
+        return array_unique($variations);
+    }
+
+    /**
+     * Handle cloud storage links (Google Drive, Dropbox, OneDrive, SharePoint).
+     */
+    protected function handleCloudStorageLink(string $url, string $html): ?string
+    {
+        // Google Drive - try to extract direct download link
+        if (preg_match('/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/', $url, $matches)) {
+            $fileId = $matches[1];
+            // Google Drive direct download URL format
+            return "https://drive.google.com/uc?export=download&id={$fileId}";
+        }
+
+        // Dropbox - try to convert share link to direct download
+        if (preg_match('/dropbox\.com\/(?:s|sh)\/([a-zA-Z0-9_-]+)/', $url, $matches)) {
+            $shareId = $matches[1];
+            // Try to extract from HTML or construct direct link
+            if (preg_match('/href="([^"]*dropbox[^"]*\.pdf[^"]*)"/i', $html, $pdfMatch)) {
+                return $pdfMatch[1];
+            }
+        }
+
+        // OneDrive/SharePoint - look for direct download links in HTML
+        if (preg_match('/onedrive\.live\.com|sharepoint\.com/i', $url)) {
+            // Look for download buttons or direct links
+            if (preg_match('/href="([^"]*download[^"]*\.pdf[^"]*)"/i', $html, $downloadMatch)) {
+                return $downloadMatch[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle archive.org links.
+     */
+    protected function handleArchiveOrgLink(string $url, string $html): ?string
+    {
+        // Archive.org often has direct PDF links in the page
+        // Look for download links or direct PDF references
+        if (preg_match('/href="([^"]*archive\.org[^"]*\.pdf[^"]*)"/i', $html, $matches)) {
+            $pdfUrl = $matches[1];
+            // Make absolute if relative
+            if (!preg_match('/^https?:\/\//', $pdfUrl)) {
+                $baseUrl = parse_url($url, PHP_URL_SCHEME) . '://' . parse_url($url, PHP_URL_HOST);
+                $pdfUrl = $baseUrl . $pdfUrl;
+            }
+            return $pdfUrl;
+        }
+
+        // Try to construct direct download URL from archive.org item URL
+        if (preg_match('/archive\.org\/(?:details|download)\/([^\/\?]+)/', $url, $matches)) {
+            $itemId = $matches[1];
+            // Archive.org direct download format (may not always work)
+            $directUrl = "https://archive.org/download/{$itemId}/{$itemId}.pdf";
+            return $directUrl;
         }
 
         return null;

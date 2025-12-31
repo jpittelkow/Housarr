@@ -175,8 +175,8 @@ export default function ItemsPage() {
   })
 
   const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => categories.list(),
+    queryKey: ['categories', 'item'],
+    queryFn: () => categories.list('item'),
   })
 
   const { data: locationsData } = useQuery({

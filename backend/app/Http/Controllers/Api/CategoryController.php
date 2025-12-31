@@ -12,9 +12,14 @@ class CategoryController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $categories = Category::forHousehold($request->user()->household_id)
-            ->orderBy('name')
-            ->get();
+        $query = Category::forHousehold($request->user()->household_id);
+
+        // Filter by type if provided
+        if ($request->has('type') && in_array($request->input('type'), ['item', 'vendor'])) {
+            $query->ofType($request->input('type'));
+        }
+
+        $categories = $query->orderBy('name')->get();
 
         return response()->json([
             'categories' => CategoryResource::collection($categories),
@@ -24,6 +29,7 @@ class CategoryController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'type' => ['required', 'string', 'in:item,vendor'],
             'name' => ['required', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:50'],
             'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
