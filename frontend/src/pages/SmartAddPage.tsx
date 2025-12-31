@@ -25,6 +25,7 @@ import {
   XCircle,
   HelpTooltip,
   Camera,
+  ExternalLink,
 } from '@/components/ui'
 import { toast } from 'sonner'
 import { cn, isMobileDevice } from '@/lib/utils'
@@ -403,6 +404,12 @@ export default function SmartAddPage() {
     if (file) {
       handleFileSelect(file)
     }
+  }
+
+  // Build Google search URL for a product
+  const buildGoogleSearchUrl = (make: string, model: string, type: string): string => {
+    const searchTerms = [make, model, type].filter(Boolean).join(' ')
+    return `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}&tbm=shop`
   }
 
   // Handle result selection
@@ -885,7 +892,7 @@ export default function SmartAddPage() {
                       >
                         <div className="flex items-start gap-3">
                           {/* Product Image with lazy loading */}
-                          <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                          <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
                             {imageLoadingStates[index] ? (
                               <div className="w-full h-full animate-pulse bg-gray-200 dark:bg-gray-700" />
                             ) : (productImages[index] || result.image_url) ? (
@@ -899,10 +906,20 @@ export default function SmartAddPage() {
                                 }}
                               />
                             ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                                <span className="text-white font-bold text-xl">
+                              <div className="w-full h-full bg-gradient-to-br from-primary-500 to-primary-700 flex flex-col items-center justify-center group relative">
+                                <span className="text-white font-bold text-xl mb-0.5">
                                   {(result.make || result.model || '?').substring(0, 2).toUpperCase()}
                                 </span>
+                                <a
+                                  href={buildGoogleSearchUrl(result.make, result.model, result.type)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg"
+                                  title="Search on Google to verify product"
+                                >
+                                  <Icon icon={ExternalLink} size="sm" className="text-white" />
+                                </a>
                               </div>
                             )}
                           </div>
@@ -942,6 +959,20 @@ export default function SmartAddPage() {
                                 <span className="text-xs text-gray-400">
                                   via {AGENT_DISPLAY_NAMES[result.source_agent] || result.source_agent}
                                 </span>
+                              )}
+                              {/* Google search link when no image available */}
+                              {!productImages[index] && !result.image_url && !imageLoadingStates[index] && (
+                                <a
+                                  href={buildGoogleSearchUrl(result.make, result.model, result.type)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1 transition-colors"
+                                  title="Search on Google to verify product"
+                                >
+                                  <Icon icon={ExternalLink} size="xs" />
+                                  Verify on Google
+                                </a>
                               )}
                             </div>
                           </div>
