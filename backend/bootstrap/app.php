@@ -19,5 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', \App\Http\Middleware\AddCacheHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Handle authentication exceptions for API requests
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                ], 401);
+            }
+        });
     })->create();

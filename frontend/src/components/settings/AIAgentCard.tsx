@@ -74,14 +74,14 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
 
   const config = AGENT_CONFIG[agent.name]
 
-  // Fetch available models when card is expanded and has API key
-  // Try to fetch even if not fully configured - API will return defaults if needed
+  // Fetch available models when card is expanded
+  // Backend returns default models even without API key, so we can fetch regardless
   const { data: modelsData, isLoading: isLoadingModels, error: modelsError } = useQuery({
     queryKey: ['ai-models', agent.name],
     queryFn: async (): Promise<{ models: string[] }> => {
       return await settings.getAvailableModels(agent.name)
     },
-    enabled: isExpanded && hasApiKey,
+    enabled: isExpanded, // Fetch when expanded, regardless of API key (backend returns defaults)
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1, // Only retry once on failure
   })
@@ -101,45 +101,11 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
     ? Array.from(new Set([defaultModel, ...fetchedModels]))
     : [defaultModel]
 
-  // Debug logging
-  useEffect(() => {
-    if (isExpanded) {
-      console.log('AIAgentCard expanded:', {
-        agentName: agent.name,
-        hasApiKey,
-        configured: agent.configured,
-        isLoadingModels,
-        modelsData,
-        modelsError,
-        fetchedModels,
-        allModels,
-        defaultModel,
-      })
-    }
-  }, [isExpanded, hasApiKey, agent.configured, isLoadingModels, modelsData, modelsError, agent.name, fetchedModels, allModels, defaultModel])
-
   // Sync model state when agent prop changes
   useEffect(() => {
     setModel(agent.model || '')
     setUseCustomModel(false)
   }, [agent.model])
-
-  // Debug logging
-  useEffect(() => {
-    if (isExpanded) {
-      console.log('AIAgentCard expanded:', {
-        agentName: agent.name,
-        hasApiKey,
-        configured: agent.configured,
-        isLoadingModels,
-        modelsData,
-        modelsError,
-        fetchedModels,
-        allModels,
-        defaultModel,
-      })
-    }
-  }, [isExpanded, hasApiKey, agent.configured, isLoadingModels, modelsData, modelsError, agent.name, fetchedModels, allModels, defaultModel])
 
   // Update agent mutation with optimistic updates
   const updateMutation = useMutation({
