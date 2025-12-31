@@ -1,0 +1,1 @@
+export { VendorSearchModal } from './VendorSearchModal'

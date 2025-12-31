@@ -116,7 +116,7 @@ export const household = {
     return response.data
   },
 
-  update: async (data: { name: string }): Promise<{ household: Household }> => {
+  update: async (data: { name?: string; address?: string | null }): Promise<{ household: Household }> => {
     const response = await api.patch('/household', data)
     return response.data
   },
@@ -188,6 +188,17 @@ export const locations = {
   },
 }
 
+// Vendor Search Result (from AI)
+export interface VendorSearchResult {
+  name: string
+  company: string | null
+  phone: string | null
+  email: string | null
+  website: string | null
+  address: string | null
+  notes: string | null
+}
+
 // Vendors
 export const vendors = {
   list: async (): Promise<{ vendors: Vendor[] }> => {
@@ -212,6 +223,22 @@ export const vendors = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/vendors/${id}`)
+  },
+
+  searchNearby: async (query: string, categoryId?: number): Promise<{
+    success: boolean
+    vendors: VendorSearchResult[]
+    query: string
+    address: string
+    agents_used?: string[]
+    total_duration_ms?: number
+    error?: string
+  }> => {
+    const response = await api.post('/vendors/search-nearby', {
+      query,
+      category_id: categoryId,
+    }, { timeout: 120000 })
+    return response.data
   },
 }
 
@@ -894,6 +921,47 @@ export const chat = {
 
   getSuggestedQuestions: async (itemId: number): Promise<{ suggestions: string[] }> => {
     const response = await api.get(`/items/${itemId}/chat/suggestions`)
+    return response.data
+  },
+}
+
+// Address Autocomplete (OpenStreetMap/Nominatim)
+export interface AddressSuggestion {
+  place_id: number | null
+  display_name: string
+  lat: string | null
+  lon: string | null
+  type: string | null
+  importance: number
+  address: {
+    house_number: string | null
+    road: string | null
+    neighbourhood: string | null
+    city: string | null
+    county: string | null
+    state: string | null
+    postcode: string | null
+    country: string | null
+    country_code: string | null
+  }
+}
+
+export const address = {
+  autocomplete: async (query: string, limit?: number, countrycodes?: string): Promise<{
+    suggestions: AddressSuggestion[]
+    count: number
+  }> => {
+    const params: Record<string, string | number> = { query }
+    if (limit) params.limit = limit
+    if (countrycodes) params.countrycodes = countrycodes
+    const response = await api.get('/address/autocomplete', { params })
+    return response.data
+  },
+
+  reverse: async (lat: number, lon: number): Promise<{
+    address: AddressSuggestion | null
+  }> => {
+    const response = await api.get('/address/reverse', { params: { lat, lon } })
     return response.data
   },
 }

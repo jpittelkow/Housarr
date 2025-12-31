@@ -14,6 +14,7 @@ class Household extends Model
 
     protected $fillable = [
         'name',
+        'address',
     ];
 
     public function users(): HasMany

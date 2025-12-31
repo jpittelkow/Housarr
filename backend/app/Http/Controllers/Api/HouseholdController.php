@@ -23,7 +23,8 @@ class HouseholdController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
         $household = $request->user()->household;

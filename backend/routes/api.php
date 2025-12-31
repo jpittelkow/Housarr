@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\CategoryController;
@@ -59,6 +60,11 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // Vendors
     Route::apiResource('vendors', VendorController::class);
+    Route::post('/vendors/search-nearby', [VendorController::class, 'searchNearby']);
+
+    // Address Autocomplete (OpenStreetMap/Nominatim)
+    Route::get('/address/autocomplete', [AddressController::class, 'autocomplete']);
+    Route::get('/address/reverse', [AddressController::class, 'reverse']);
 
     // Items
     Route::post('/items/analyze-image', [ItemController::class, 'analyzeImage']);

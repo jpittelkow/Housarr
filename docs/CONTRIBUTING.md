@@ -508,7 +508,7 @@ Before submitting changes, verify ALL items:
 ### Code Quality
 - [ ] Code follows existing patterns in the codebase
 - [ ] No debug/console.log statements left in code
-- [ ] Error handling is consistent with existing code
+- [ ] Error handling uses `getApiErrorMessage()` for specific, actionable messages
 - [ ] Loading/error states handled in UI
 
 ---
@@ -647,6 +647,45 @@ test('user can add a new item', async ({ page }) => {
 5. TypeScript: Update interface
 6. Frontend: Update forms/displays
 7. **Update existing tests** to cover new field
+
+### Error Handling in Frontend
+
+**All API error messages must be specific and actionable.** Use the `getApiErrorMessage()` helper to extract detailed error messages from API responses:
+
+```typescript
+import { getApiErrorMessage } from '@/lib/utils'
+
+// In React Query mutations
+const mutation = useMutation({
+  mutationFn: (data) => api.updateItem(data),
+  onError: (error) => {
+    // ✅ CORRECT - Shows specific error from API
+    toast.error(getApiErrorMessage(error, 'Failed to update item'))
+  },
+})
+
+// ❌ WRONG - Generic messages hide useful information
+onError: () => {
+  toast.error('Failed to update item')  // User can't debug the issue!
+}
+```
+
+The helper extracts messages from various API response formats:
+- Laravel validation errors (`response.data.errors` object)
+- Standard error messages (`response.data.message`)
+- Error property (`response.data.error`)
+- Axios error message (fallback)
+
+**When to use:**
+- All `onError` handlers in React Query mutations
+- All `catch` blocks when calling API methods
+- Any place where an API error could occur
+
+**Example output:**
+- Generic: "Failed to update item" ❌
+- Specific: "The email has already been taken." ✅
+- Specific: "invalid x-api-key" ✅
+- Specific: "You exceeded your current quota" ✅
 
 ### Creating Tests for Existing Code
 

@@ -126,6 +126,48 @@ The checkbox label changes based on context:
 | Text search with image | "Attach product photo" |
 | Text search without image | "Attach photo" (disabled) |
 
+## Update: Mobile Camera Capture (2024-12-31)
+
+### Context
+
+Users on mobile devices needed a more direct way to capture photos of products using their phone's camera, rather than first taking a photo and then selecting it from the gallery.
+
+### Decision
+
+Added native camera capture support using the HTML5 `capture` attribute on file inputs:
+
+- **Smart Add Page**: Added a dedicated "Take Photo" button that opens the rear camera directly
+- **ImageUpload Component**: Added camera button for all image upload areas
+- **Avatar Upload**: Uses front camera (`capture="user"`) for selfies
+- **Object Photos**: Uses rear camera (`capture="environment"`) for items/products
+
+### Implementation
+
+```html
+<!-- Rear camera for object photos -->
+<input type="file" accept="image/*" capture="environment" />
+
+<!-- Front camera for selfies/avatars -->
+<input type="file" accept="image/*" capture="user" />
+```
+
+Mobile detection determines when to show camera buttons:
+
+```typescript
+function isMobileDevice(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) 
+    || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024)
+}
+```
+
+### UX Flow
+
+On mobile devices, users see two options:
+1. **Gallery button** - Select existing photos from device
+2. **Camera button** - Open camera to take new photo immediately
+
+On desktop, only the standard file picker is shown.
+
 ## Related Decisions
 
 - ADR 001: Multi-Agent AI Orchestration

@@ -92,6 +92,7 @@ export {
   Link,
   Tag,
   Database,
+  Camera,
 
   // Status
   AlertCircle,

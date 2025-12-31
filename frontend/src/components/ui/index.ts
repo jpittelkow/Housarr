@@ -48,6 +48,7 @@ export {
   Link,
   Tag,
   Database,
+  Camera,
   AlertCircle,
   AlertTriangle,
   Info,
@@ -102,6 +103,7 @@ export { Toggle } from './Toggle'
 export { IconPicker, getIconByName } from './IconPicker'
 export { Tooltip, HelpTooltip } from './Tooltip'
 export { ThemeToggle } from './ThemeToggle'
+export { AddressInput, type AddressInputProps } from './AddressInput'
 
 // Re-export theme icons
 export { Sun, Moon, Monitor } from './Icon'

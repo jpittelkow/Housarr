@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { files } from '@/services/api'
-import { cn } from '@/lib/utils'
+import { cn, isMobileDevice } from '@/lib/utils'
 import { Button } from './Button'
+import { Icon, Camera } from './Icon'
 import type { FileRecord, FileableType } from '@/types'
 
 interface ImageUploadProps {
@@ -37,8 +38,10 @@ export function ImageUpload({
   className,
 }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = useState(false)
   const queryClient = useQueryClient()
+  const isMobile = isMobileDevice()
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, isFeatured }: { file: File; isFeatured: boolean }) => {
@@ -172,15 +175,38 @@ export function ImageUpload({
             className="hidden"
             onChange={handleFileSelect}
           />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadMutation.isPending}
-          >
-            {currentAvatar ? 'Change Avatar' : 'Upload Avatar'}
-          </Button>
+          {/* Camera input for selfies - uses front camera */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadMutation.isPending}
+            >
+              {currentAvatar ? 'Change' : 'Upload'}
+            </Button>
+            {isMobile && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={uploadMutation.isPending}
+                title="Take a selfie"
+              >
+                <Icon icon={Camera} size="xs" />
+              </Button>
+            )}
+          </div>
           {currentAvatar && (
             <Button
               type="button"
@@ -208,41 +234,69 @@ export function ImageUpload({
         className="hidden"
         onChange={handleFileSelect}
       />
+      {/* Camera input - uses rear camera for object photos */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
 
-      <div
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={cn(
-          'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
-          dragActive
-            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
-            : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-        )}
-      >
-        <div className="flex flex-col items-center gap-2">
-          <svg className="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          {uploadMutation.isPending ? (
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span>Uploading...</span>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{label}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Drag and drop or click to select • JPG, PNG, GIF, WebP
-              </p>
-            </>
+      <div className="flex gap-2">
+        <div
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            'flex-1 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
+            dragActive
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
+              : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
           )}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <svg className="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {uploadMutation.isPending ? (
+              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>Uploading...</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{label}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {isMobile ? 'Tap to select from gallery' : 'Drag and drop or click to select'} • JPG, PNG, GIF, WebP
+                </p>
+              </>
+            )}
+          </div>
         </div>
+        
+        {/* Camera button - shown on mobile devices */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploadMutation.isPending}
+            className={cn(
+              'flex flex-col items-center justify-center gap-2 px-6 border-2 border-dashed rounded-lg transition-colors',
+              'border-gray-300 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20',
+              uploadMutation.isPending && 'opacity-50 cursor-not-allowed'
+            )}
+          >
+            <Icon icon={Camera} size="lg" className="text-gray-400 dark:text-gray-500" />
+            <span className="text-xs text-gray-500 dark:text-gray-400">Camera</span>
+          </button>
+        )}
       </div>
 
       {showGallery && allImages.length > 0 && (

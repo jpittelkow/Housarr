@@ -14,6 +14,7 @@ export interface User {
 export interface Household {
   id: number
   name: string
+  address: string | null
   images?: FileRecord[]
   featured_image?: FileRecord
   created_at: string

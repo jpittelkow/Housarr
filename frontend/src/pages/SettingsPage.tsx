@@ -11,10 +11,11 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
-import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip, Star, ChevronDown, ChevronUp, FileText, IconPicker, getIconByName } from '@/components/ui'
+import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip, Star, ChevronDown, ChevronUp, FileText, IconPicker, getIconByName, AddressInput } from '@/components/ui'
 import { Textarea } from '@/components/ui/Textarea'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/utils'
 
 // Default AI prompts (must match backend defaults)
 const DEFAULT_SMART_ADD_PROMPT = `{context}
@@ -184,6 +185,7 @@ export default function SettingsPage() {
   ]
 
   const [householdName, setHouseholdName] = useState('')
+  const [householdAddress, setHouseholdAddress] = useState('')
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
@@ -308,24 +310,24 @@ export default function SettingsPage() {
   }, [settingsData])
 
   const updateHouseholdMutation = useMutation({
-    mutationFn: (name: string) => household.update({ name }),
-    onMutate: async (name) => {
+    mutationFn: (data: { name?: string; address?: string | null }) => household.update(data),
+    onMutate: async (data) => {
       await queryClient.cancelQueries({ queryKey: ['household'] })
       const previousHousehold = queryClient.getQueryData(['household'])
       // Optimistically update
       queryClient.setQueryData(['household'], (old: { household: Household } | undefined) => ({
-        household: old?.household ? { ...old.household, name } : { name },
+        household: old?.household ? { ...old.household, ...data } : data,
       }))
       return { previousHousehold }
     },
     onSuccess: () => {
       toast.success('Household updated')
     },
-    onError: (_err, _name, context) => {
+    onError: (error, _data, context) => {
       if (context?.previousHousehold) {
         queryClient.setQueryData(['household'], context.previousHousehold)
       }
-      toast.error('Failed to update household')
+      toast.error(getApiErrorMessage(error, 'Failed to update household'))
     },
   })
 
@@ -340,8 +342,8 @@ export default function SettingsPage() {
       setInviteData({ name: '', email: '', password: '', password_confirmation: '', role: 'member' })
       toast.success('User invited successfully')
     },
-    onError: () => {
-      toast.error('Failed to invite user')
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to invite user'))
     },
   })
 
@@ -359,11 +361,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       toast.success('User removed')
     },
-    onError: (_err, _id, context) => {
+    onError: (error, _id, context) => {
       if (context?.previousUsers) {
         queryClient.setQueryData(['users'], context.previousUsers)
       }
-      toast.error('Failed to remove user')
+      toast.error(getApiErrorMessage(error, 'Failed to remove user'))
     },
   })
 
@@ -383,11 +385,11 @@ export default function SettingsPage() {
       setEditingUser(null)
       toast.success('User updated')
     },
-    onError: (_err, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previousUsers) {
         queryClient.setQueryData(['users'], context.previousUsers)
       }
-      toast.error('Failed to update user')
+      toast.error(getApiErrorMessage(error, 'Failed to update user'))
     },
   })
 
@@ -464,12 +466,12 @@ export default function SettingsPage() {
       setEditingLocation(null)
       toast.success('Location updated')
     },
-    onError: (_err, _vars, context) => {
+    onError: (error, _vars, context) => {
       // Rollback on error
       if (context?.previousLocations) {
         queryClient.setQueryData(['locations'], context.previousLocations)
       }
-      toast.error('Failed to update location')
+      toast.error(getApiErrorMessage(error, 'Failed to update location'))
     },
   })
 
@@ -487,11 +489,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       toast.success('Location deleted')
     },
-    onError: (_err, _id, context) => {
+    onError: (error, _id, context) => {
       if (context?.previousLocations) {
         queryClient.setQueryData(['locations'], context.previousLocations)
       }
-      toast.error('Cannot delete location with items')
+      toast.error(getApiErrorMessage(error, 'Cannot delete location'))
     },
   })
 
@@ -507,8 +509,8 @@ export default function SettingsPage() {
         window.location.reload()
       }, 1000)
     },
-    onError: () => {
-      toast.error('Failed to import backup')
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to import backup'))
     },
   })
 
@@ -526,11 +528,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       toast.success('Storage settings updated')
     },
-    onError: (_err, _data, context) => {
+    onError: (error, _data, context) => {
       if (context?.previousSettings) {
         queryClient.setQueryData(['settings'], context.previousSettings)
       }
-      toast.error('Failed to update storage settings')
+      toast.error(getApiErrorMessage(error, 'Failed to update storage settings'))
     },
   })
 
@@ -548,11 +550,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       toast.success('Email settings updated')
     },
-    onError: (_err, _data, context) => {
+    onError: (error, _data, context) => {
       if (context?.previousSettings) {
         queryClient.setQueryData(['settings'], context.previousSettings)
       }
-      toast.error('Failed to update email settings')
+      toast.error(getApiErrorMessage(error, 'Failed to update email settings'))
     },
   })
 
@@ -572,11 +574,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       toast.success('AI prompts updated')
     },
-    onError: (_err, _data, context) => {
+    onError: (error, _data, context) => {
       if (context?.previousSettings) {
         queryClient.setQueryData(['settings'], context.previousSettings)
       }
-      toast.error('Failed to update AI prompts')
+      toast.error(getApiErrorMessage(error, 'Failed to update AI prompts'))
     },
   })
 
@@ -593,8 +595,8 @@ export default function SettingsPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       toast.success('Backup downloaded (includes all files)')
-    } catch {
-      toast.error('Failed to export backup')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to export backup'))
     } finally {
       setIsExporting(false)
     }
@@ -654,19 +656,31 @@ export default function SettingsPage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault()
-                    updateHouseholdMutation.mutate(householdName || householdData?.household?.name || '')
+                    updateHouseholdMutation.mutate({
+                      name: householdName || householdData?.household?.name || '',
+                      address: householdAddress || householdData?.household?.address || null,
+                    })
                   }}
-                  className="flex gap-4"
+                  className="space-y-4"
                 >
                   <Input
+                    label="Household Name"
                     value={householdName || householdData?.household?.name || ''}
                     onChange={(e) => setHouseholdName(e.target.value)}
-                    placeholder="Household name"
-                    className="flex-1"
+                    placeholder="e.g., Smith Residence"
                   />
-                  <Button type="submit" isLoading={updateHouseholdMutation.isPending}>
-                    Save
-                  </Button>
+                  <AddressInput
+                    label="Address"
+                    value={householdAddress || householdData?.household?.address || ''}
+                    onChange={(value) => setHouseholdAddress(value)}
+                    placeholder="Start typing your address..."
+                    hint="Used for finding nearby vendors and service providers"
+                  />
+                  <div className="flex justify-end">
+                    <Button type="submit" isLoading={updateHouseholdMutation.isPending}>
+                      Save
+                    </Button>
+                  </div>
                 </form>
 
                 {householdData?.household && (

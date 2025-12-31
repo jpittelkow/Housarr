@@ -9,7 +9,8 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip } from '@/components/ui'
+import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip, AddressInput, Search } from '@/components/ui'
+import { VendorSearchModal } from '@/components/vendors'
 import { toast } from 'sonner'
 import type { Vendor } from '@/types'
 
@@ -38,6 +39,7 @@ function VendorSkeleton() {
 
 export default function VendorsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
   const [formData, setFormData] = useState<Partial<Vendor>>({})
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
   const queryClient = useQueryClient()
@@ -109,9 +111,14 @@ export default function VendorsPage() {
           </h1>
           <p className="text-text-md text-gray-500 dark:text-gray-400 mt-1">Your address book for service providers</p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Icon icon={Plus} size="xs" /> Add Vendor
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setIsSearchModalOpen(true)}>
+            <Icon icon={Search} size="xs" /> Find Nearby
+          </Button>
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Icon icon={Plus} size="xs" /> Add Vendor
+          </Button>
+        </div>
       </div>
 
       {/* Vendors Grid */}
@@ -274,11 +281,11 @@ export default function VendorsPage() {
             placeholder="https://example.com"
           />
 
-          <Input
+          <AddressInput
             label="Address"
             value={formData.address || ''}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            placeholder="123 Main St, City, State"
+            onChange={(value) => setFormData({ ...formData, address: value })}
+            placeholder="Start typing an address..."
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
@@ -364,10 +371,11 @@ export default function VendorsPage() {
             onChange={(e) => setEditingVendor(prev => prev ? { ...prev, website: e.target.value } : null)}
           />
 
-          <Input
+          <AddressInput
             label="Address"
             value={editingVendor?.address || ''}
-            onChange={(e) => setEditingVendor(prev => prev ? { ...prev, address: e.target.value } : null)}
+            onChange={(value) => setEditingVendor(prev => prev ? { ...prev, address: value } : null)}
+            placeholder="Start typing an address..."
           />
 
           {editingVendor && (
@@ -394,6 +402,12 @@ export default function VendorsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Vendor Search Modal */}
+      <VendorSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+      />
     </div>
   )
 }

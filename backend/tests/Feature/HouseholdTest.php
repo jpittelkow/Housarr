@@ -40,7 +40,7 @@ describe('household show', function () {
 
 describe('household update', function () {
     it('updates household name', function () {
-        $response = $this->putJson('/api/household', [
+        $response = $this->patchJson('/api/household', [
             'name' => 'New Household Name',
         ]);
 
@@ -48,23 +48,47 @@ describe('household update', function () {
             ->assertJsonPath('household.name', 'New Household Name');
     });
 
+    it('updates household address', function () {
+        $response = $this->patchJson('/api/household', [
+            'name' => 'Test Household',
+            'address' => '123 Main St, Springfield, IL 62701',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('household.address', '123 Main St, Springfield, IL 62701');
+    });
+
+    it('allows null address', function () {
+        // First set an address
+        $this->household->update(['address' => '123 Main St']);
+        
+        $response = $this->patchJson('/api/household', [
+            'name' => 'Test Household',
+            'address' => null,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('household.address', null);
+    });
+
     it('requires admin role', function () {
         $this->actingAs($this->member);
 
-        $response = $this->putJson('/api/household', [
+        $response = $this->patchJson('/api/household', [
             'name' => 'Hacked Name',
         ]);
 
         $response->assertForbidden();
     });
 
-    it('validates name is required', function () {
-        $response = $this->putJson('/api/household', [
-            'name' => '',
+    it('validates address max length', function () {
+        $response = $this->patchJson('/api/household', [
+            'name' => 'Test Household',
+            'address' => str_repeat('a', 1001), // Over 1000 chars
         ]);
 
         $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['name']);
+            ->assertJsonValidationErrors(['address']);
     });
 });
 

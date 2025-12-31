@@ -172,3 +172,38 @@ describe('vendors destroy', function () {
         $response->assertForbidden();
     });
 });
+
+describe('vendors search nearby', function () {
+    it('requires household address', function () {
+        // Ensure household has no address
+        $this->household->update(['address' => null]);
+
+        $response = $this->postJson('/api/vendors/search-nearby', [
+            'query' => 'plumber',
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error', 'Please set your household address in Settings before searching for nearby vendors.');
+    });
+
+    it('validates query is required', function () {
+        $this->household->update(['address' => '123 Main St, City, State 12345']);
+
+        $response = $this->postJson('/api/vendors/search-nearby', []);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['query']);
+    });
+
+    it('validates query minimum length', function () {
+        $this->household->update(['address' => '123 Main St, City, State 12345']);
+
+        $response = $this->postJson('/api/vendors/search-nearby', [
+            'query' => 'a',
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['query']);
+    });
+});

@@ -8,6 +8,7 @@ import { Toggle } from '@/components/ui/Toggle'
 import { Icon, ChevronDown, ChevronUp, Star, Trash2, Check, AlertCircle, Zap } from '@/components/ui'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
+import { getApiErrorMessage } from '@/lib/utils'
 
 interface AIAgentCardProps {
   agent: AIAgent
@@ -93,12 +94,11 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
     onSuccess: () => {
       onRefresh()
     },
-    onError: (error: Error & { response?: { data?: { message?: string } } }, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previousAgents) {
         queryClient.setQueryData(['ai-agents'], context.previousAgents)
       }
-      const message = error.response?.data?.message || error.message || 'Failed to update agent'
-      toast.error(message)
+      toast.error(getApiErrorMessage(error, 'Failed to update agent'))
     },
   })
 
@@ -134,8 +134,8 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
       }
       onRefresh()
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Test failed')
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Connection test failed'))
     },
   })
 
@@ -163,11 +163,11 @@ export function AIAgentCard({ agent, hasApiKey, onRefresh }: AIAgentCardProps) {
       toast.success(`${agent.display_name} is now the primary agent`)
       onRefresh()
     },
-    onError: (_err, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previousAgents) {
         queryClient.setQueryData(['ai-agents'], context.previousAgents)
       }
-      toast.error('Failed to set primary agent')
+      toast.error(getApiErrorMessage(error, 'Failed to set primary agent'))
     },
   })
 
