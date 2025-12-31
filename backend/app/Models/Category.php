@@ -54,7 +54,8 @@ class Category extends Model
     public function scopeOfType($query, string $type)
     {
         // Check if type column exists before filtering
-        if (Schema::hasColumn($this->getTable(), 'type')) {
+        $tableName = (new static)->getTable();
+        if (Schema::hasColumn($tableName, 'type')) {
             return $query->where('type', $type);
         }
         // If column doesn't exist, return all categories (backward compatibility)

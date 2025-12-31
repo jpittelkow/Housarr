@@ -9,9 +9,22 @@ class CategoryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Safely get type - handle cases where column doesn't exist yet
+        $type = 'item'; // Default
+        try {
+            // Try to get the type attribute - this will work if column exists
+            $typeValue = $this->resource->getAttribute('type');
+            if ($typeValue !== null) {
+                $type = $typeValue;
+            }
+        } catch (\Exception $e) {
+            // If accessing type fails (column doesn't exist), use default
+            $type = 'item';
+        }
+
         return [
             'id' => $this->id,
-            'type' => $this->type ?? 'item', // Default to 'item' if type is missing (backward compatibility)
+            'type' => $type,
             'name' => $this->name,
             'icon' => $this->icon,
             'color' => $this->color,
