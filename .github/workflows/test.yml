@@ -68,10 +68,10 @@ jobs:
         run: php artisan migrate --force
         env:
           DB_CONNECTION: sqlite
-          DB_DATABASE: database/database.sqlite
+          DB_DATABASE: ${{ github.workspace }}/backend/database/database.sqlite
       
       - name: Run tests
         run: ./vendor/bin/pest || php artisan test
         env:
           DB_CONNECTION: sqlite
-          DB_DATABASE: database/database.sqlite
+          DB_DATABASE: ${{ github.workspace }}/backend/database/database.sqlite

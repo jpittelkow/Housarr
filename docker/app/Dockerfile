@@ -60,7 +60,7 @@ WORKDIR /var/www/html
 
 # Copy backend
 COPY backend/composer.json backend/composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 
 COPY backend/ ./
 RUN composer dump-autoload --optimize

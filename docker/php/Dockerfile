@@ -63,8 +63,8 @@ RUN apk add --no-cache \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy development PHP config
-COPY php.ini /usr/local/etc/php/conf.d/99-custom.ini
-COPY php-fpm.conf /usr/local/etc/php-fpm.d/zz-custom.conf
+COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
+COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/zz-custom.conf
 
 # Install php-fpm-healthcheck
 RUN curl -o /usr/local/bin/php-fpm-healthcheck \
@@ -72,7 +72,7 @@ RUN curl -o /usr/local/bin/php-fpm-healthcheck \
     && chmod +x /usr/local/bin/php-fpm-healthcheck
 
 # Copy scheduler script
-COPY scheduler.sh /usr/local/bin/scheduler.sh
+COPY docker/php/scheduler.sh /usr/local/bin/scheduler.sh
 RUN chmod +x /usr/local/bin/scheduler.sh
 
 # Set ownership
