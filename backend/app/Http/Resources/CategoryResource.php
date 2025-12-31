@@ -11,7 +11,7 @@ class CategoryResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'type' => $this->type,
+            'type' => $this->type ?? 'item', // Default to 'item' if type is missing (backward compatibility)
             'name' => $this->name,
             'icon' => $this->icon,
             'color' => $this->color,

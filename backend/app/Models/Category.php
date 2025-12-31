@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Category extends Model
 {
@@ -48,9 +49,15 @@ class Category extends Model
 
     /**
      * Scope to filter categories by type.
+     * Gracefully handles cases where the type column doesn't exist yet (before migration).
      */
     public function scopeOfType($query, string $type)
     {
-        return $query->where('type', $type);
+        // Check if type column exists before filtering
+        if (Schema::hasColumn($this->getTable(), 'type')) {
+            return $query->where('type', $type);
+        }
+        // If column doesn't exist, return all categories (backward compatibility)
+        return $query;
     }
 }
