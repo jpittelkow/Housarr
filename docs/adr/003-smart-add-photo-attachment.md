@@ -179,3 +179,93 @@ On desktop, only the standard file picker is shown.
 **Image Gallery Import**: Product images from search results are now automatically imported to the item's image gallery when creating an item, providing visual reference even if not set as featured.
 
 **Try Again Button**: Users can now request new AI suggestions when none of the initial results match, with the AI receiving feedback that previous results were incorrect.
+
+## User Context Input (2025-01-02)
+
+### Context
+
+Users often have additional information about products that could help AI identify them more accurately, such as:
+- Location of the product (e.g., "kitchen refrigerator")
+- Visible features or details not captured in the photo
+- Hints about where model numbers might be located
+- Brand or model information partially visible
+
+Previously, users could only provide text context through the search query field, which was primarily designed for text-only searches. Photo uploads immediately triggered analysis without an opportunity to add context.
+
+### Decision
+
+We implemented a **two-stage context input system**:
+
+1. **Photo Confirmation Step**: When a user uploads or takes a photo, they see a confirmation screen with:
+   - Photo preview
+   - Optional context input field
+   - "Search" and "Cancel" buttons
+   - Analysis only starts after user confirms
+
+2. **Results Page Context Editing**: On the results page, above the "Try Again" button:
+   - Context input field showing the original prompt (if any)
+   - Editable field allowing users to refine their search context
+   - "Try Again" button uses the updated context
+
+### Implementation
+
+**State Management:**
+```typescript
+const [userPrompt, setUserPrompt] = useState('') // User-provided context
+const [showPhotoConfirmation, setShowPhotoConfirmation] = useState(false)
+```
+
+**Photo Upload Flow:**
+```
+User uploads photo → Photo preview + context input shown → 
+User enters context (optional) → Clicks "Search" → Analysis starts
+```
+
+**Results Page:**
+- Context input appears above "Try Again" button
+- Shows original `userPrompt` (for photo searches) or `searchQuery` (for text searches)
+- User can edit before clicking "Try Again"
+- Updated context is sent to AI with feedback message
+
+**Key Design Decisions:**
+- Context input is **optional** - analysis works without it
+- Separate `userPrompt` state from `searchQuery` to distinguish photo vs text searches
+- Photo confirmation step prevents accidental immediate analysis
+- Results page editing allows refinement without starting over
+
+### UX Flow
+
+**Photo Search Path:**
+1. User uploads/takes photo
+2. Confirmation screen appears with photo preview and context input
+3. User optionally adds context (e.g., "This is in my kitchen, model number on back")
+4. User clicks "Search"
+5. Analysis starts with photo + context
+6. Results page shows context input above "Try Again" button
+7. User can edit context and click "Try Again" for refined search
+
+**Text Search Path:**
+1. User enters text in search field
+2. User clicks "Search"
+3. Analysis starts immediately (no confirmation step)
+4. Results page shows context input with original search query
+5. User can edit and retry
+
+### Consequences
+
+**Positive:**
+- **Better AI Accuracy**: Additional context helps AI identify products more accurately
+- **User Control**: Users can refine searches without starting over
+- **Flexible Input**: Context is optional, doesn't block users who want quick searches
+- **Clear Intent**: Confirmation step prevents accidental photo analysis
+
+**Negative:**
+- **Additional Step**: Photo uploads require one extra click (confirmation)
+- **State Complexity**: Need to manage separate `userPrompt` and `searchQuery` states
+- **UI Space**: Results page has additional input field
+
+**Edge Cases Handled:**
+- Empty context input still triggers analysis
+- Context input preserves value when retrying
+- Reset clears both `userPrompt` and `searchQuery`
+- Text searches don't show photo confirmation step

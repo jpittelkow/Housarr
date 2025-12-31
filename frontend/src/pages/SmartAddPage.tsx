@@ -107,6 +107,8 @@ export default function SmartAddPage() {
   const [showAgentDetails, setShowAgentDetails] = useState(false)
   const [wasPhotoSearch, setWasPhotoSearch] = useState(false) // Track if original search used a photo
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null) // Selected result's image
+  const [userPrompt, setUserPrompt] = useState('') // User-provided context/context for AI analysis
+  const [showPhotoConfirmation, setShowPhotoConfirmation] = useState(false) // Show confirmation step after photo upload
   
   // Lazy-loaded product images for search results
   const [productImages, setProductImages] = useState<Record<number, string | null>>({})
@@ -337,14 +339,27 @@ export default function SmartAddPage() {
       setShowAgentDetails(false)
       setWasPhotoSearch(true) // This search was initiated with a photo
       setSelectedImageUrl(null)
+      setUserPrompt('') // Reset user prompt for new photo
 
-      // Start analysis immediately if image is dropped/selected
-      setAnalysisState('analyzing')
-      // Only include query if it's non-empty
-      analyzeMutation.mutate({ file, query: searchQuery || undefined })
+      // Show confirmation step instead of immediately starting analysis
+      setShowPhotoConfirmation(true)
     },
-    [analyzeMutation, searchQuery]
+    []
   )
+
+  // Handle photo confirmation and start analysis
+  const handleConfirmPhotoSearch = () => {
+    if (!uploadedImage) {
+      return
+    }
+
+    setShowPhotoConfirmation(false)
+    setAnalysisState('analyzing')
+    analyzeMutation.mutate({ 
+      file: uploadedImage, 
+      query: userPrompt.trim() || undefined 
+    })
+  }
 
   // Handle manual search trigger
   const handleSearch = (e?: React.FormEvent) => {
@@ -363,6 +378,11 @@ export default function SmartAddPage() {
     // Update searchQuery state if reading from DOM
     if (queryValue !== searchQuery) {
       setSearchQuery(queryValue)
+    }
+
+    // For text searches, also set userPrompt
+    if (queryValue && !uploadedImage) {
+      setUserPrompt(queryValue)
     }
 
     setResults([])
@@ -449,6 +469,8 @@ export default function SmartAddPage() {
     setUploadedImage(null)
     setImagePreview(null)
     setSearchQuery('')
+    setUserPrompt('')
+    setShowPhotoConfirmation(false)
     setResults([])
     setSelectedIndex(null)
     setFormData({})
@@ -471,8 +493,10 @@ export default function SmartAddPage() {
 
   // Try again with feedback that previous results were incorrect
   const handleTryAgainWithFeedback = () => {
-    const feedbackQuery = searchQuery 
-      ? `${searchQuery} - None of the previous results were correct. Please try again with different suggestions.`
+    // Use userPrompt for photo searches, searchQuery for text searches
+    const currentPrompt = wasPhotoSearch ? userPrompt : searchQuery
+    const feedbackQuery = currentPrompt
+      ? `${currentPrompt} - None of the previous results were correct. Please try again with different suggestions.`
       : 'None of the previous results were correct. Please try again with different suggestions.'
     
     setResults([])
@@ -638,8 +662,69 @@ export default function SmartAddPage() {
           </div>
         )}
 
+        {/* Photo Confirmation Step */}
+        {showPhotoConfirmation && uploadedImage && imagePreview && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div className="text-center">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-50 mb-2">
+                    Confirm Search
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Add any additional context to help AI identify the product
+                  </p>
+                </div>
+                
+                <div className="flex justify-center">
+                  <img
+                    src={imagePreview}
+                    alt="Uploaded"
+                    className="w-64 h-64 object-contain rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <Textarea
+                    label="Additional context (optional)"
+                    value={userPrompt}
+                    onChange={(e) => setUserPrompt(e.target.value)}
+                    placeholder="e.g., This is a refrigerator in my kitchen, model number might be on the back..."
+                    rows={3}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Provide any details that might help identify the product, such as location, visible features, or where to find the model number.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowPhotoConfirmation(false)
+                      setUploadedImage(null)
+                      setImagePreview(null)
+                      setUserPrompt('')
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConfirmPhotoSearch}
+                    className="flex-1"
+                  >
+                    <Icon icon={Search} size="xs" />
+                    Search
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Analyzing State */}
-        {analysisState === 'analyzing' && (
+        {analysisState === 'analyzing' && !showPhotoConfirmation && (
           <Card>
             <CardContent className="p-8">
               <div className="flex flex-col items-center gap-4">
@@ -993,18 +1078,40 @@ export default function SmartAddPage() {
                     </Button>
                   )}
 
-                  {/* Try Again button - shown when no result is selected */}
+                  {/* Context input and Try Again button - shown when no result is selected */}
                   {selectedIndex === null && results.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full mt-4"
-                      onClick={handleTryAgainWithFeedback}
-                      disabled={analyzeMutation.isPending}
-                    >
-                      <Icon icon={RefreshCw} size="xs" />
-                      {analyzeMutation.isPending ? 'Searching...' : 'Try Again'}
-                    </Button>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <Textarea
+                          label="Search context"
+                          value={userPrompt || searchQuery || ''}
+                          onChange={(e) => {
+                            // Update the appropriate state based on search type
+                            if (wasPhotoSearch) {
+                              setUserPrompt(e.target.value)
+                            } else {
+                              setSearchQuery(e.target.value)
+                              setUserPrompt(e.target.value)
+                            }
+                          }}
+                          placeholder="Add or edit context to help AI find the product..."
+                          rows={2}
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Edit the search context to refine your search results
+                        </p>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        onClick={handleTryAgainWithFeedback}
+                        disabled={analyzeMutation.isPending}
+                      >
+                        <Icon icon={RefreshCw} size="xs" />
+                        {analyzeMutation.isPending ? 'Searching...' : 'Try Again'}
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>

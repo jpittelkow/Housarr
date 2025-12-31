@@ -207,6 +207,7 @@ class BackupController extends Controller
             $vendorIdMap = [];
             $itemIdMap = [];
             $partIdMap = [];
+            $maintenanceLogIdMap = [];
 
             // Import categories
             foreach ($data['categories'] ?? [] as $category) {
@@ -268,6 +269,7 @@ class BackupController extends Controller
 
             // Import maintenance logs
             foreach ($data['maintenance_logs'] ?? [] as $log) {
+                $oldId = $log['id'] ?? null;
                 unset($log['id'], $log['created_at'], $log['updated_at'], $log['household_id']);
                 if (isset($log['item_id']) && isset($itemIdMap[$log['item_id']])) {
                     $log['item_id'] = $itemIdMap[$log['item_id']];
@@ -276,7 +278,10 @@ class BackupController extends Controller
                     } else {
                         $log['vendor_id'] = null;
                     }
-                    MaintenanceLog::create($log);
+                    $new = MaintenanceLog::create($log);
+                    if ($oldId) {
+                        $maintenanceLogIdMap[$oldId] = $new->id;
+                    }
                 }
             }
 
@@ -303,6 +308,7 @@ class BackupController extends Controller
 
             // Import files with actual content from ZIP
             $filesRestored = 0;
+            
             foreach ($data['files'] ?? [] as $fileData) {
                 $backupPath = $fileData['backup_path'] ?? null;
                 unset($fileData['id'], $fileData['created_at'], $fileData['updated_at'], 
@@ -310,16 +316,49 @@ class BackupController extends Controller
                 
                 $fileData['household_id'] = $householdId;
                 
-                // Map fileable_id to new IDs
-                if ($fileData['fileable_type'] === 'App\\Models\\Item' && isset($itemIdMap[$fileData['fileable_id']])) {
-                    $fileData['fileable_id'] = $itemIdMap[$fileData['fileable_id']];
-                } elseif ($fileData['fileable_type'] === 'App\\Models\\Location' && isset($locationIdMap[$fileData['fileable_id']])) {
-                    $fileData['fileable_id'] = $locationIdMap[$fileData['fileable_id']];
-                } elseif ($fileData['fileable_type'] === 'App\\Models\\Part' && isset($partIdMap[$fileData['fileable_id']])) {
-                    $fileData['fileable_id'] = $partIdMap[$fileData['fileable_id']];
-                } elseif ($fileData['fileable_type'] === 'App\\Models\\User') {
-                    // Skip user files or map to current user
+                // Map fileable_id to new IDs based on fileable_type
+                // Handle both full class names (App\Models\Item) and class constants
+                $fileableType = $fileData['fileable_type'];
+                $oldFileableId = $fileData['fileable_id'] ?? null;
+                
+                // Normalize fileable_type to handle both formats
+                $normalizedType = $fileableType;
+                if (str_contains($fileableType, '\\')) {
+                    // Full class name - extract model name
+                    $normalizedType = class_basename($fileableType);
+                }
+                
+                // Map based on normalized type or direct class comparison
+                $mapped = false;
+                if (($normalizedType === 'Item' || $fileableType === Item::class) && isset($itemIdMap[$oldFileableId])) {
+                    $fileData['fileable_id'] = $itemIdMap[$oldFileableId];
+                    $mapped = true;
+                } elseif (($normalizedType === 'Location' || $fileableType === Location::class) && isset($locationIdMap[$oldFileableId])) {
+                    $fileData['fileable_id'] = $locationIdMap[$oldFileableId];
+                    $mapped = true;
+                } elseif (($normalizedType === 'Part' || $fileableType === Part::class) && isset($partIdMap[$oldFileableId])) {
+                    $fileData['fileable_id'] = $partIdMap[$oldFileableId];
+                    $mapped = true;
+                } elseif (($normalizedType === 'MaintenanceLog' || $fileableType === MaintenanceLog::class) && isset($maintenanceLogIdMap[$oldFileableId])) {
+                    $fileData['fileable_id'] = $maintenanceLogIdMap[$oldFileableId];
+                    $mapped = true;
+                } elseif (($normalizedType === 'Vendor' || $fileableType === Vendor::class) && isset($vendorIdMap[$oldFileableId])) {
+                    $fileData['fileable_id'] = $vendorIdMap[$oldFileableId];
+                    $mapped = true;
+                } elseif ($normalizedType === 'Household' || $fileableType === Household::class) {
+                    // Household files map to current household
+                    $fileData['fileable_id'] = $householdId;
+                    $mapped = true;
+                } elseif ($normalizedType === 'User' || $fileableType === User::class) {
+                    // User files map to current user
                     $fileData['fileable_id'] = $user->id;
+                    $mapped = true;
+                }
+                
+                if (!$mapped) {
+                    // Unknown fileable type or ID not found, skip with logging
+                    Log::warning("Skipping file import: fileable_type={$fileableType}, old_id={$oldFileableId}");
+                    continue;
                 }
 
                 // Restore file content from ZIP if available
@@ -338,8 +377,15 @@ class BackupController extends Controller
                             $newPath = $originalPath;
                         }
                         
+                        // Ensure directory exists before storing file
+                        $disk = Storage::disk($fileData['disk']);
+                        $directory = dirname($newPath);
+                        if (!$disk->exists($directory)) {
+                            $disk->makeDirectory($directory, 0755, true);
+                        }
+                        
                         // Store file
-                        Storage::disk($fileData['disk'])->put($newPath, $fileContent);
+                        $disk->put($newPath, $fileContent);
                         $fileData['path'] = $newPath;
                         $filesRestored++;
                     }
