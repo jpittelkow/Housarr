@@ -17,7 +17,7 @@ Housarr is deployed as a single Docker container with everything included:
 | **RAM** | 256 MB | 512 MB |
 | **CPU** | 1 core | 2 cores |
 | **Disk** | 500 MB | 1 GB + storage for files |
-| **Architecture** | amd64, arm64 | - |
+| **Architecture** | amd64 (x86_64) | - |
 
 ## Quick Start
 
@@ -303,13 +303,4 @@ To build locally:
 
 ```bash
 docker build -f docker/app/Dockerfile -t housarr:local .
-```
-
-To build for multiple architectures:
-
-```bash
-docker buildx build -f docker/app/Dockerfile \
-  --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/jpittelkow/housarr:latest \
-  --push .
 ```
