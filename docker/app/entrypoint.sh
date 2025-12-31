@@ -3,19 +3,22 @@ set -e
 
 echo "=== Housarr Container Starting ==="
 
-# Restore migrations if they were overwritten by volume mount
-if [ ! -d "/var/www/html/database/migrations" ] || [ -z "$(ls -A /var/www/html/database/migrations 2>/dev/null)" ]; then
-    echo "Migrations directory missing or empty, restoring from backup..."
-    if [ -d "/var/www/migrations-backup" ] && [ -n "$(ls -A /var/www/migrations-backup 2>/dev/null)" ]; then
-        mkdir -p /var/www/html/database/migrations
-        cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
-        chown -R www-data:www-data /var/www/html/database/migrations
-        echo "Restored $(ls /var/www/html/database/migrations | wc -l) migration files"
-    else
-        echo "WARNING: No migration backup found at /var/www/migrations-backup"
-    fi
+# Always sync migrations from backup to handle volume mount overwrites
+# This ensures the container's migrations are always up-to-date regardless of host state
+if [ -d "/var/www/migrations-backup" ] && [ -n "$(ls -A /var/www/migrations-backup 2>/dev/null)" ]; then
+    mkdir -p /var/www/html/database/migrations
+    
+    BACKUP_COUNT=$(ls /var/www/migrations-backup | wc -l)
+    CURRENT_COUNT=$(ls /var/www/html/database/migrations 2>/dev/null | wc -l || echo "0")
+    
+    # Always copy to ensure we have the latest migrations
+    cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
+    chown -R www-data:www-data /var/www/html/database/migrations
+    
+    NEW_COUNT=$(ls /var/www/html/database/migrations | wc -l)
+    echo "Migrations synced: $CURRENT_COUNT -> $NEW_COUNT files (backup has $BACKUP_COUNT)"
 else
-    echo "Migrations present: $(ls /var/www/html/database/migrations | wc -l) files"
+    echo "WARNING: No migration backup found at /var/www/migrations-backup"
 fi
 
 # Fix permissions for storage and database directories
