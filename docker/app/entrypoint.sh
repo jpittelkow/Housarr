@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 
+# Restore migrations if they were overwritten by volume mount
+if [ ! -d "/var/www/html/database/migrations" ] || [ -z "$(ls -A /var/www/html/database/migrations 2>/dev/null)" ]; then
+    echo "Restoring migrations from backup..."
+    mkdir -p /var/www/html/database/migrations
+    cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
+    chown -R www-data:www-data /var/www/html/database/migrations
+fi
+
 # Fix permissions for storage and database directories
 if [ -d "/var/www/html/storage" ]; then
     chown -R www-data:www-data /var/www/html/storage
@@ -23,6 +31,10 @@ if [ "$DB_CONNECTION" = "sqlite" ] && [ ! -f "/var/www/html/database/database.sq
     chown www-data:www-data /var/www/html/database/database.sqlite
     chmod 664 /var/www/html/database/database.sqlite
 fi
+
+# Create session directory for file-based sessions
+mkdir -p /tmp/sessions
+chmod 777 /tmp/sessions
 
 # Run migrations if needed (only if artisan exists and DB is configured)
 if [ -f "/var/www/html/artisan" ]; then

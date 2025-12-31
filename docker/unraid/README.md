@@ -4,6 +4,25 @@ Single-container deployment with SQLite - simple and self-contained.
 
 **Docker Image:** `ghcr.io/jpittelkow/housarr:latest`
 
+## Quick Start
+
+### Step 1: Generate APP_KEY (Required)
+
+Run this in Unraid terminal to generate a secure key:
+
+```bash
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+```
+
+This outputs something like:
+```
+base64:K7n9x2mPq3wR5tY8uI0oL6jH4gF1dS9aZ2xC5vB8nM4=
+```
+
+**⚠️ Important:** Copy the **entire output** including `base64:`. The key must be exactly 44 characters after `base64:` (32 bytes encoded). Do not create your own key.
+
+---
+
 ## Option 1: Add Container (Unraid UI)
 
 The easiest method - no command line needed!
@@ -45,27 +64,46 @@ Click **Add another Path...** → **Path** (repeat 3 times):
 
 Click **Add another Path...** → **Variable** (repeat for each):
 
+**Required:**
+
 | Name | Key | Value |
 |------|-----|-------|
-| `App Key` | `APP_KEY` | `base64:YOUR_KEY_HERE` ⬅️ **Generate below** |
+| `App Key` | `APP_KEY` | `base64:YOUR_KEY_HERE` ⬅️ **From Step 1 above** |
 | `App URL` | `APP_URL` | `http://YOUR_UNRAID_IP:8000` |
-| `App Env` | `APP_ENV` | `production` |
-| `Debug` | `APP_DEBUG` | `false` |
-| `DB Connection` | `DB_CONNECTION` | `sqlite` |
-| `DB Database` | `DB_DATABASE` | `/var/www/html/database/database.sqlite` |
-| `Cache` | `CACHE_STORE` | `file` |
-| `Session` | `SESSION_DRIVER` | `file` |
-| `Queue` | `QUEUE_CONNECTION` | `sync` |
-| `Timezone` | `TZ` | `America/New_York` |
 
-**Generate APP_KEY** (run in Unraid terminal):
-```bash
-docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
-```
+**Optional (have sensible defaults):**
+
+| Name | Key | Value | Default |
+|------|-----|-------|---------|
+| `App Env` | `APP_ENV` | `production` | `production` |
+| `Debug` | `APP_DEBUG` | `false` | `false` |
+| `DB Connection` | `DB_CONNECTION` | `sqlite` | `sqlite` |
+| `DB Database` | `DB_DATABASE` | `/var/www/html/database/database.sqlite` | auto |
+| `Cache` | `CACHE_STORE` | `file` | `file` |
+| `Session` | `SESSION_DRIVER` | `file` | `database` |
+| `Queue` | `QUEUE_CONNECTION` | `sync` | `sync` |
+| `Timezone` | `TZ` | `America/New_York` | `UTC` |
 
 ### Step 5: Apply
 
-Click **Apply** - Housarr will start and be available at `http://YOUR_UNRAID_IP:8000`
+Click **Apply** - Housarr will:
+1. Create the database if it doesn't exist
+2. Run migrations automatically
+3. Start and be available at `http://YOUR_UNRAID_IP:8000`
+
+---
+
+## What Happens on Startup
+
+The container automatically:
+1. ✅ Restores migration files (needed because volume mounts can overwrite them)
+2. ✅ Creates the SQLite database file if it doesn't exist
+3. ✅ Sets correct file permissions
+4. ✅ Creates session directory
+5. ✅ Caches configuration
+6. ✅ Runs database migrations
+
+If you see errors on first startup, wait 10-15 seconds and refresh - the container may still be initializing.
 
 ---
 
@@ -151,9 +189,37 @@ docker restart housarr
 docker logs housarr -f
 ```
 
+### View Application Logs
+```bash
+cat /mnt/user/appdata/housarr/logs/laravel.log
+```
+
 ### Restart Container
 ```bash
 docker restart housarr
+```
+
+### "Unsupported cipher or incorrect key length" Error
+
+Your `APP_KEY` is invalid. It must be exactly 32 bytes encoded as base64.
+
+**Fix:** Generate a new key:
+```bash
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+```
+
+Update the `APP_KEY` variable in your container settings with the **full output** including `base64:`, then restart.
+
+### "No such table: users" Error
+
+Migrations haven't run. First check if `APP_KEY` is valid (see above), then:
+
+```bash
+# Check migration status
+docker exec housarr php /var/www/html/artisan migrate:status
+
+# Manually run migrations
+docker exec housarr php /var/www/html/artisan migrate --force
 ```
 
 ### Reset Database (⚠️ Deletes all data)
@@ -166,4 +232,11 @@ docker start housarr
 ### Permission Issues
 ```bash
 docker exec housarr chown -R www-data:www-data /var/www/html/storage /var/www/html/database
+```
+
+### Clear Application Cache
+```bash
+docker exec housarr php /var/www/html/artisan config:clear
+docker exec housarr php /var/www/html/artisan cache:clear
+docker restart housarr
 ```

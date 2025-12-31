@@ -65,6 +65,9 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 COPY backend/ ./
 RUN composer dump-autoload --optimize
 
+# Backup migrations to a location that won't be overwritten by volume mounts
+RUN cp -r database/migrations /var/www/migrations-backup
+
 # Setup directories
 RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database \
     && chown -R www-data:www-data /var/www/html \
