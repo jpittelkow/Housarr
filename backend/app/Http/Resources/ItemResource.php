@@ -23,7 +23,7 @@ class ItemResource extends JsonResource
             'warranty_years' => $this->warranty_years,
             'maintenance_interval_months' => $this->maintenance_interval_months,
             'typical_lifespan_years' => $this->typical_lifespan_years,
-            'category' => new CategoryResource($this->whenLoaded('category')),
+            'category' => $this->whenLoaded('category') ? new CategoryResource($this->whenLoaded('category')) : null,
             'vendor' => new VendorResource($this->whenLoaded('vendor')),
             'parts' => PartResource::collection($this->whenLoaded('parts')),
             'replacement_parts' => PartResource::collection($this->whenLoaded('replacementParts')),
