@@ -656,6 +656,14 @@ export default function SettingsPage() {
   }
 
   const allUsers = usersData?.users || []
+  const allItemCategories = itemCategoriesData?.categories || []
+  const customItemCategories = allItemCategories.filter((c) => c.household_id !== null)
+  const systemItemCategories = allItemCategories.filter((c) => c.household_id === null)
+
+  const allVendorCategories = vendorCategoriesData?.categories || []
+  const customVendorCategories = allVendorCategories.filter((c) => c.household_id !== null)
+  const systemVendorCategories = allVendorCategories.filter((c) => c.household_id === null)
+
   const allLocations = locationsData?.locations || []
 
   return (
