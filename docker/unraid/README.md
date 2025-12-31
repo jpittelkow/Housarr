@@ -96,7 +96,7 @@ Click **Apply** - Housarr will:
 ## What Happens on Startup
 
 The container automatically:
-1. ✅ Restores migration files (needed because volume mounts can overwrite them)
+1. ✅ Syncs migration files from image backup (ensures latest migrations even if host volume has older files)
 2. ✅ Creates the SQLite database file if it doesn't exist
 3. ✅ Sets correct file permissions
 4. ✅ Creates session directory

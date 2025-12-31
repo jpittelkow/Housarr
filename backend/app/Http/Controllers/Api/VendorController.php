@@ -68,6 +68,8 @@ class VendorController extends Controller
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'website' => ['nullable', 'url', 'max:500'],
             'address' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 

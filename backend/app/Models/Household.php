@@ -15,6 +15,13 @@ class Household extends Model
     protected $fillable = [
         'name',
         'address',
+        'latitude',
+        'longitude',
+    ];
+
+    protected $casts = [
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
     ];
 
     public function users(): HasMany

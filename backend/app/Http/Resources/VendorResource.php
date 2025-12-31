@@ -17,6 +17,8 @@ class VendorResource extends JsonResource
             'email' => $this->email,
             'website' => $this->website,
             'address' => $this->address,
+            'latitude' => $this->latitude ? (float) $this->latitude : null,
+            'longitude' => $this->longitude ? (float) $this->longitude : null,
             'notes' => $this->notes,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'images' => FileResource::collection($this->whenLoaded('images')),

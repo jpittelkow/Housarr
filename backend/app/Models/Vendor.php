@@ -22,7 +22,14 @@ class Vendor extends Model
         'email',
         'website',
         'address',
+        'latitude',
+        'longitude',
         'notes',
+    ];
+
+    protected $casts = [
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
     ];
 
     public function household(): BelongsTo

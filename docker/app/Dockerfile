@@ -12,7 +12,14 @@ RUN npm run build
 # Stage 2: PHP + Nginx (minimal)
 FROM php:8.3-fpm-alpine
 
-# Install only essential system deps
+# OCI Image Labels
+LABEL org.opencontainers.image.title="Housarr"
+LABEL org.opencontainers.image.description="Home inventory and maintenance management application"
+LABEL org.opencontainers.image.url="https://github.com/jpittelkow/Housarr"
+LABEL org.opencontainers.image.source="https://github.com/jpittelkow/Housarr"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Install only essential system deps (curl needed for healthchecks)
 RUN apk add --no-cache \
     nginx \
     supervisor \

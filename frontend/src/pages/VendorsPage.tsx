@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ImageUpload } from '@/components/ui/ImageUpload'
-import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip, AddressInput, Search } from '@/components/ui'
+import { Icon, Plus, Users, Phone, Mail, Globe, MapPin, Pencil, Trash2, HelpTooltip, AddressInput, Search, Map } from '@/components/ui'
 import { VendorSearchModal } from '@/components/vendors'
 import { toast } from 'sonner'
 import type { Vendor } from '@/types'
@@ -41,7 +41,9 @@ export default function VendorsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
   const [formData, setFormData] = useState<Partial<Vendor>>({})
+  const [formCoords, setFormCoords] = useState<{ lat: number; lon: number } | null>(null)
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
+  const [editCoords, setEditCoords] = useState<{ lat: number; lon: number } | null>(null)
   const queryClient = useQueryClient()
 
   const { data: vendorsData, isLoading } = useQuery({
@@ -92,7 +94,11 @@ export default function VendorsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    createMutation.mutate(formData)
+    createMutation.mutate({
+      ...formData,
+      latitude: formCoords?.lat ?? null,
+      longitude: formCoords?.lon ?? null,
+    })
   }
 
   const allVendors = vendorsData?.vendors || []
@@ -284,12 +290,34 @@ export default function VendorsPage() {
           <AddressInput
             label="Address"
             value={formData.address || ''}
-            onChange={(value) => setFormData({ ...formData, address: value })}
+            onChange={(value, addressData) => {
+              setFormData({ ...formData, address: value })
+              if (addressData?.lat && addressData?.lon) {
+                setFormCoords({ lat: parseFloat(addressData.lat), lon: parseFloat(addressData.lon) })
+              }
+            }}
             placeholder="Start typing an address..."
           />
 
+          {/* Show map preview if we have coordinates */}
+          {formCoords && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Icon icon={MapPin} size="xs" className="inline mr-1.5" />
+                Location Preview
+              </label>
+              <Map
+                lat={formCoords.lat}
+                lon={formCoords.lon}
+                markerLabel={formData.name || 'Vendor'}
+                height="180px"
+                zoom={14}
+              />
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => { setIsModalOpen(false); setFormCoords(null) }}>
               Cancel
             </Button>
             <Button type="submit" isLoading={createMutation.isPending}>
@@ -309,6 +337,9 @@ export default function VendorsPage() {
           onSubmit={(e) => {
             e.preventDefault()
             if (editingVendor) {
+              const coords = editCoords || (editingVendor.latitude && editingVendor.longitude 
+                ? { lat: editingVendor.latitude, lon: editingVendor.longitude }
+                : null)
               updateMutation.mutate({
                 id: editingVendor.id,
                 data: {
@@ -319,6 +350,8 @@ export default function VendorsPage() {
                   email: editingVendor.email,
                   website: editingVendor.website,
                   address: editingVendor.address,
+                  latitude: coords?.lat ?? null,
+                  longitude: coords?.lon ?? null,
                   notes: editingVendor.notes,
                 },
               })
@@ -374,13 +407,35 @@ export default function VendorsPage() {
           <AddressInput
             label="Address"
             value={editingVendor?.address || ''}
-            onChange={(value) => setEditingVendor(prev => prev ? { ...prev, address: value } : null)}
+            onChange={(value, addressData) => {
+              setEditingVendor(prev => prev ? { ...prev, address: value } : null)
+              if (addressData?.lat && addressData?.lon) {
+                setEditCoords({ lat: parseFloat(addressData.lat), lon: parseFloat(addressData.lon) })
+              }
+            }}
             placeholder="Start typing an address..."
           />
 
+          {/* Show map if we have coordinates */}
+          {(editCoords || (editingVendor?.latitude && editingVendor?.longitude)) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Icon icon={MapPin} size="xs" className="inline mr-1.5" />
+                Location
+              </label>
+              <Map
+                lat={editCoords?.lat ?? editingVendor?.latitude ?? 0}
+                lon={editCoords?.lon ?? editingVendor?.longitude ?? 0}
+                markerLabel={editingVendor?.name || 'Vendor'}
+                height="180px"
+                zoom={14}
+              />
+            </div>
+          )}
+
           {editingVendor && (
             <div className="pt-4 border-t border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Logo & Images</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Logo & Images</label>
               <ImageUpload
                 fileableType="vendor"
                 fileableId={editingVendor.id}
@@ -393,7 +448,7 @@ export default function VendorsPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <Button type="button" variant="secondary" onClick={() => setEditingVendor(null)}>
+            <Button type="button" variant="secondary" onClick={() => { setEditingVendor(null); setEditCoords(null) }}>
               Cancel
             </Button>
             <Button type="submit" isLoading={updateMutation.isPending}>

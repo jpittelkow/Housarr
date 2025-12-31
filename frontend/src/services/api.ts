@@ -116,7 +116,12 @@ export const household = {
     return response.data
   },
 
-  update: async (data: { name?: string; address?: string | null }): Promise<{ household: Household }> => {
+  update: async (data: { 
+    name?: string
+    address?: string | null
+    latitude?: number | null
+    longitude?: number | null 
+  }): Promise<{ household: Household }> => {
     const response = await api.patch('/household', data)
     return response.data
   },

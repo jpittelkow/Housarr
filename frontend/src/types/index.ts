@@ -15,6 +15,8 @@ export interface Household {
   id: number
   name: string
   address: string | null
+  latitude: number | null
+  longitude: number | null
   images?: FileRecord[]
   featured_image?: FileRecord
   created_at: string
@@ -41,6 +43,8 @@ export interface Vendor {
   email: string | null
   website: string | null
   address: string | null
+  latitude: number | null
+  longitude: number | null
   notes: string | null
   category?: Category
   images?: FileRecord[]

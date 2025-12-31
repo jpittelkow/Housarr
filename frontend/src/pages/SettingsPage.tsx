@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
-import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip, Star, ChevronDown, ChevronUp, FileText, IconPicker, getIconByName, AddressInput } from '@/components/ui'
+import { Icon, Plus, Users, Tag, Home, Trash2, MapPin, Pencil, Download, Upload, Database, HardDrive, Mail, Zap, Image, HelpTooltip, Star, ChevronDown, ChevronUp, FileText, IconPicker, getIconByName, AddressInput, Map } from '@/components/ui'
 import { Textarea } from '@/components/ui/Textarea'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { toast } from 'sonner'
@@ -186,6 +186,7 @@ export default function SettingsPage() {
 
   const [householdName, setHouseholdName] = useState('')
   const [householdAddress, setHouseholdAddress] = useState('')
+  const [householdCoords, setHouseholdCoords] = useState<{ lat: number; lon: number } | null>(null)
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
@@ -310,7 +311,7 @@ export default function SettingsPage() {
   }, [settingsData])
 
   const updateHouseholdMutation = useMutation({
-    mutationFn: (data: { name?: string; address?: string | null }) => household.update(data),
+    mutationFn: (data: { name?: string; address?: string | null; latitude?: number | null; longitude?: number | null }) => household.update(data),
     onMutate: async (data) => {
       await queryClient.cancelQueries({ queryKey: ['household'] })
       const previousHousehold = queryClient.getQueryData(['household'])
@@ -656,9 +657,14 @@ export default function SettingsPage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault()
+                    const coords = householdCoords || (householdData?.household?.latitude && householdData?.household?.longitude 
+                      ? { lat: householdData.household.latitude, lon: householdData.household.longitude }
+                      : null)
                     updateHouseholdMutation.mutate({
                       name: householdName || householdData?.household?.name || '',
                       address: householdAddress || householdData?.household?.address || null,
+                      latitude: coords?.lat ?? null,
+                      longitude: coords?.lon ?? null,
                     })
                   }}
                   className="space-y-4"
@@ -672,10 +678,33 @@ export default function SettingsPage() {
                   <AddressInput
                     label="Address"
                     value={householdAddress || householdData?.household?.address || ''}
-                    onChange={(value) => setHouseholdAddress(value)}
+                    onChange={(value, addressData) => {
+                      setHouseholdAddress(value)
+                      if (addressData?.lat && addressData?.lon) {
+                        setHouseholdCoords({ lat: parseFloat(addressData.lat), lon: parseFloat(addressData.lon) })
+                      }
+                    }}
                     placeholder="Start typing your address..."
                     hint="Used for finding nearby vendors and service providers"
                   />
+                  
+                  {/* Show map if we have coordinates */}
+                  {(householdCoords || (householdData?.household?.latitude && householdData?.household?.longitude)) && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <Icon icon={MapPin} size="xs" className="inline mr-1.5" />
+                        Location
+                      </label>
+                      <Map
+                        lat={householdCoords?.lat ?? householdData?.household?.latitude ?? 0}
+                        lon={householdCoords?.lon ?? householdData?.household?.longitude ?? 0}
+                        markerLabel={householdData?.household?.name || 'Home'}
+                        height="250px"
+                        zoom={14}
+                      />
+                    </div>
+                  )}
+                  
                   <div className="flex justify-end">
                     <Button type="submit" isLoading={updateHouseholdMutation.isPending}>
                       Save

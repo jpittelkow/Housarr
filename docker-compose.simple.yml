@@ -1,0 +1,73 @@
+# =============================================================================
+# Housarr - Simple Single-Container Deployment
+# =============================================================================
+# Perfect for self-hosting on any platform (Unraid, Synology, TrueNAS, etc.)
+# Uses SQLite database - no external database required!
+#
+# Quick Start:
+#   1. Generate APP_KEY:
+#      docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+#   2. Replace YOUR_KEY_HERE below with the generated key
+#   3. Run: docker compose -f docker-compose.simple.yml up -d
+#   4. Open: http://localhost:8000
+#
+# Image: ghcr.io/jpittelkow/housarr:latest
+
+services:
+  housarr:
+    image: ghcr.io/jpittelkow/housarr:latest
+    container_name: housarr
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:80"
+    volumes:
+      # Database persistence (SQLite)
+      - housarr_database:/var/www/html/database
+      # Uploaded files (manuals, images, etc.)
+      - housarr_storage:/var/www/html/storage/app
+      # Application logs
+      - housarr_logs:/var/www/html/storage/logs
+    environment:
+      # ===========================================
+      # REQUIRED: Set your APP_KEY
+      # ===========================================
+      # Generate with: docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+      APP_KEY: "${APP_KEY:-base64:CHANGE_ME_GENERATE_A_REAL_KEY}"
+      
+      # ===========================================
+      # REQUIRED: Set your APP_URL
+      # ===========================================
+      # Change to your server's IP or domain
+      APP_URL: "${APP_URL:-http://localhost:8000}"
+      
+      # ===========================================
+      # Application Settings (defaults work fine)
+      # ===========================================
+      APP_ENV: production
+      APP_DEBUG: "false"
+      
+      # SQLite Database (simple, no external DB needed)
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /var/www/html/database/database.sqlite
+      
+      # File-based cache/session (no Redis needed)
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+      
+      # Timezone (https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+      TZ: "${TZ:-UTC}"
+      
+      # Mail (optional - for reminder notifications)
+      MAIL_MAILER: "${MAIL_MAILER:-log}"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/up"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  housarr_database:
+  housarr_storage:
+  housarr_logs:

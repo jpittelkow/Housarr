@@ -2,25 +2,93 @@
 
 ## Overview
 
-Housarr uses Docker Compose with two configuration files:
-1. **docker-compose.yml**: Full development stack with all services
-2. **docker-compose.prod.yml**: Production overlay with security hardening
+Housarr offers two deployment modes:
+
+| Mode | Use Case | Database | Files |
+|------|----------|----------|-------|
+| **Single Container** | Self-hosted (Unraid, Synology, etc.) | SQLite | `docker-compose.simple.yml` or `docker/app/Dockerfile` |
+| **Multi Container** | Development / Advanced users | MySQL + Redis | `docker-compose.yml` |
+
+**Most self-hosted users should use the single-container deployment** - it's simpler and requires no external database.
+
+## System Requirements
+
+### Single Container (Recommended for Self-Hosting)
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| **RAM** | 256 MB | 512 MB |
+| **CPU** | 1 core | 2 cores |
+| **Disk** | 500 MB | 1 GB + storage for files |
+| **Architecture** | amd64, arm64 | - |
+
+### Multi Container (Development)
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| **RAM** | 1 GB | 2 GB |
+| **CPU** | 2 cores | 4 cores |
+| **Disk** | 2 GB | 5 GB + storage for files |
 
 ## Quick Start
 
-```bash
-# Development
-docker compose up -d
+### Self-Hosted (Single Container)
 
-# Production
+```bash
+# Download compose file
+curl -O https://raw.githubusercontent.com/jpittelkow/Housarr/main/docker-compose.simple.yml
+
+# Generate APP_KEY
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+
+# Edit docker-compose.simple.yml and set your APP_KEY, then:
+docker compose -f docker-compose.simple.yml up -d
+```
+
+### Development (Multi Container)
+
+```bash
+# Clone repo and start development stack
+git clone https://github.com/jpittelkow/Housarr.git
+cd Housarr
+docker compose up -d
+```
+
+### Production (Multi Container with Security Hardening)
+
+```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ## Docker Compose Files
 
+### docker-compose.simple.yml (Self-Hosting)
+
+**Purpose**: Single-container deployment for self-hosted users
+
+**Image**: `ghcr.io/jpittelkow/housarr:latest`
+
+**Features**:
+- Pre-built image (no building required)
+- SQLite database (no external DB needed)
+- File-based cache and sessions (no Redis needed)
+- Single container to manage
+- Automatic migrations on startup
+
+**Volumes**:
+- `housarr_database`: SQLite database file
+- `housarr_storage`: Uploaded files (manuals, images)
+- `housarr_logs`: Application logs
+
+**Required Environment Variables**:
+- `APP_KEY`: Encryption key (generate with `docker run --rm php:8.2-cli php -r "..."`)
+- `APP_URL`: Your server URL (e.g., `http://192.168.1.100:8000`)
+
+---
+
 ### docker-compose.yml (Development)
 
-**Purpose**: Full development stack
+**Purpose**: Full development stack with MySQL and Redis
 
 **Services**:
 - `nginx`: Web server (port 8000)
@@ -208,6 +276,7 @@ services:
 **Server**:
 - Listen: 80
 - Server name: localhost
+- Server tokens: off (hides nginx version)
 - Client max body size: 100M
 
 **Locations**:
@@ -510,10 +579,13 @@ services:
 **Purpose**: Sets up container before starting services
 
 **Actions**:
-1. Fixes permissions for storage, database, bootstrap/cache directories
-2. Creates SQLite database if using SQLite and doesn't exist
-3. Runs config cache and migrations (if artisan exists)
-4. Executes command (supervisord)
+1. **Syncs migrations** from backup to handle volume mount overwrites (always copies from `/var/www/migrations-backup` to ensure latest migrations are present)
+2. Fixes permissions for storage, database, bootstrap/cache directories
+3. Creates SQLite database if using SQLite and doesn't exist
+4. Runs config cache and migrations (if artisan exists)
+5. Executes command (supervisord)
+
+**Migration Sync**: Because the `/var/www/html/database` directory is often mounted as a volume, the container's migrations can be overwritten by an older or empty host directory. The entrypoint always syncs migrations from the backup (baked into the image) to ensure the database schema stays up-to-date.
 
 **Permissions**: Sets www-data ownership and 775 permissions
 

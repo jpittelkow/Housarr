@@ -32,41 +32,60 @@ A modern home inventory and maintenance management application. Track your house
 
 ### Prerequisites
 
-- [Docker](https://www.docker.com/get-started) and Docker Compose
-- Git
+- [Docker](https://www.docker.com/get-started) installed
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/jpittelkow/Housarr.git
-   cd Housarr
-   ```
-
-2. **Start the application**
-   ```bash
-   docker compose up -d
-   ```
-
-3. **Access the application**
-   - Open your browser to [http://localhost:8000](http://localhost:8000)
-   - Create your account and household
-
-That's it! The Docker setup handles everything automatically.
-
-### Production Deployment
-
-For production environments with enhanced security:
+### Option 1: Docker Run (Simplest)
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Generate an APP_KEY first
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+
+# Run Housarr (replace YOUR_KEY with the generated key)
+docker run -d \
+  --name housarr \
+  -p 8000:80 \
+  -v housarr_data:/var/www/html/database \
+  -v housarr_storage:/var/www/html/storage/app \
+  -e APP_KEY=base64:YOUR_KEY_HERE \
+  -e APP_URL=http://localhost:8000 \
+  ghcr.io/jpittelkow/housarr:latest
 ```
 
-### Unraid Deployment
+Open [http://localhost:8000](http://localhost:8000) and create your account!
 
-See the [Unraid Deployment Guide](docker/unraid/README.md) for detailed instructions on deploying Housarr on Unraid using Docker Compose Manager.
+### Option 2: Docker Compose (Recommended)
 
-See [Docker Documentation](docs/DOCUMENTATION_DOCKER.md) for detailed configuration options.
+1. **Download the compose file**
+   ```bash
+   curl -O https://raw.githubusercontent.com/jpittelkow/Housarr/main/docker-compose.simple.yml
+   ```
+
+2. **Generate an APP_KEY and set it**
+   ```bash
+   # Generate key
+   docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+   
+   # Edit docker-compose.simple.yml and paste your key
+   ```
+
+3. **Start Housarr**
+   ```bash
+   docker compose -f docker-compose.simple.yml up -d
+   ```
+
+4. **Access the application**
+   - Open [http://localhost:8000](http://localhost:8000)
+   - Create your account and household
+
+### Platform-Specific Guides
+
+| Platform | Guide |
+|----------|-------|
+| **Unraid** | [Unraid Deployment Guide](docker/unraid/README.md) |
+| **Synology** | Use Docker Compose method above |
+| **TrueNAS** | Use Docker Compose method above |
+
+See [Docker Documentation](docs/DOCUMENTATION_DOCKER.md) for advanced configuration options.
 
 ## 🏗️ Architecture
 
@@ -150,10 +169,16 @@ See [Testing Documentation](docs/DOCUMENTATION_TESTING.md) for details.
    npm run dev
    ```
 
-### Docker Development
+### Docker Development (Multi-Container)
+
+For development with MySQL, Redis, and hot-reload:
 
 ```bash
-# Start all services
+# Clone the repository
+git clone https://github.com/jpittelkow/Housarr.git
+cd Housarr
+
+# Start development stack (MySQL + Redis + PHP + Nginx)
 docker compose up -d
 
 # View logs
@@ -163,15 +188,18 @@ docker compose logs -f
 docker compose down
 ```
 
+> **Note:** The root `docker-compose.yml` starts a full development stack with MySQL and Redis. For simple self-hosted deployments, use `docker-compose.simple.yml` instead.
+
 ### Environment Variables
 
 Key environment variables (set in `.env` or Docker):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `APP_KEY` | Encryption key (required) | - |
+| `APP_URL` | Application URL | `http://localhost:8000` |
 | `APP_PORT` | Web server port | `8000` |
 | `DB_CONNECTION` | Database type | `sqlite` |
-| `DB_PORT` | MySQL port (if used) | `3306` |
 
 ## 🤖 AI Configuration
 

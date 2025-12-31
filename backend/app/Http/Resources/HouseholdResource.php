@@ -13,6 +13,8 @@ class HouseholdResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'address' => $this->address,
+            'latitude' => $this->latitude ? (float) $this->latitude : null,
+            'longitude' => $this->longitude ? (float) $this->longitude : null,
             'images' => FileResource::collection($this->whenLoaded('images')),
             'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
             'created_at' => $this->created_at->toISOString(),

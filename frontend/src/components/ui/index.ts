@@ -104,6 +104,7 @@ export { IconPicker, getIconByName } from './IconPicker'
 export { Tooltip, HelpTooltip } from './Tooltip'
 export { ThemeToggle } from './ThemeToggle'
 export { AddressInput, type AddressInputProps } from './AddressInput'
+export { Map, type MapProps } from './Map'
 
 // Re-export theme icons
 export { Sun, Moon, Monitor } from './Icon'

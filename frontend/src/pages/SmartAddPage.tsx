@@ -447,11 +447,29 @@ export default function SmartAddPage() {
             </div>
 
             <Card>
-              <CardContent className="p-12">
-                <div className="flex gap-4">
+              <CardContent className="p-6 sm:p-12">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Camera button - shown on mobile devices, appears first (on top) */}
+                  {isMobileDevice() && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('camera-input')?.click()}
+                      className={cn(
+                        'flex flex-col items-center justify-center gap-3 py-8 sm:py-0 sm:px-8 border-2 border-dashed rounded-xl transition-colors',
+                        'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 hover:border-primary-400 dark:hover:border-primary-600'
+                      )}
+                    >
+                      <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                        <Icon icon={Camera} size="xl" className="text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <span className="text-base font-medium text-primary-700 dark:text-primary-300">Take Photo</span>
+                    </button>
+                  )}
+                  
+                  {/* Upload area */}
                   <div
                     className={cn(
-                      'flex-1 border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer',
+                      'flex-1 border-2 border-dashed rounded-xl p-8 sm:p-12 text-center transition-colors cursor-pointer',
                       isDragging
                         ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/10'
                         : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
@@ -467,7 +485,7 @@ export default function SmartAddPage() {
                       </div>
                       <div>
                         <p className="text-lg font-medium text-gray-900 dark:text-gray-50">
-                          {isMobileDevice() ? 'Tap to select photo' : 'Drop photo here or click to upload'}
+                          {isMobileDevice() ? 'Select from gallery' : 'Drop photo here or click to upload'}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           Supports JPG, PNG, WebP up to 10MB
@@ -482,23 +500,6 @@ export default function SmartAddPage() {
                       onChange={handleFileInputChange}
                     />
                   </div>
-                  
-                  {/* Camera button - shown on mobile devices */}
-                  {isMobileDevice() && (
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('camera-input')?.click()}
-                      className={cn(
-                        'flex flex-col items-center justify-center gap-3 px-8 border-2 border-dashed rounded-xl transition-colors',
-                        'border-gray-300 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20'
-                      )}
-                    >
-                      <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                        <Icon icon={Camera} size="xl" className="text-primary-600 dark:text-primary-400" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Take Photo</span>
-                    </button>
-                  )}
                 </div>
                 
                 {/* Camera input - uses rear camera for object photos */}

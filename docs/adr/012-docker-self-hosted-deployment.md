@@ -20,25 +20,30 @@ Housarr is designed as a self-hosted application deployed via Docker on home ser
 
 ## Decision
 
-### 1. Migration Backup and Restore
+### 1. Migration Backup and Sync
 
-**Problem**: Volume mount for `/var/www/html/database` overwrites migration files.
+**Problem**: Volume mount for `/var/www/html/database` overwrites migration files. Additionally, if users have an older version of migrations on their host, simply checking for "empty" doesn't capture new migrations from image updates.
 
 **Solution**: 
 - At Docker build time, copy migrations to `/var/www/migrations-backup` (outside any volume mount path)
-- At container startup (entrypoint.sh), restore migrations if the directory is empty
+- At container startup (entrypoint.sh), **always sync** migrations from backup to the mounted volume
 
 ```dockerfile
 # Dockerfile
-RUN cp -r database/migrations /var/www/migrations-backup
+RUN mkdir -p /var/www/migrations-backup && \
+    cp -r /var/www/html/database/migrations/* /var/www/migrations-backup/
 ```
 
 ```bash
-# entrypoint.sh
-if [ ! -d "/var/www/html/database/migrations" ] || [ -z "$(ls -A /var/www/html/database/migrations 2>/dev/null)" ]; then
+# entrypoint.sh - Always sync to ensure latest migrations
+if [ -d "/var/www/migrations-backup" ] && [ -n "$(ls -A /var/www/migrations-backup 2>/dev/null)" ]; then
+    mkdir -p /var/www/html/database/migrations
     cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
+    chown -R www-data:www-data /var/www/html/database/migrations
 fi
 ```
+
+This ensures that even when upgrading from an older image, new migration files are always copied to the host volume.
 
 ### 2. Auto-Configure Sanctum Stateful Domains
 
@@ -79,7 +84,7 @@ chmod 777 /tmp/sessions
 
 - **Zero-config deployment**: Users only need to set `APP_URL` and `APP_KEY`
 - **Works on any private network**: No manual `SANCTUM_STATEFUL_DOMAINS` configuration needed
-- **Resilient to volume mounts**: Migrations are always available regardless of mount configuration
+- **Resilient to volume mounts**: Migrations are always synced from the image, ensuring new migrations from updates are applied
 - **Single-container simplicity**: SQLite + file sessions work out of the box
 
 ### Negative
