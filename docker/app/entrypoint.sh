@@ -1,12 +1,21 @@
 #!/bin/sh
 set -e
 
+echo "=== Housarr Container Starting ==="
+
 # Restore migrations if they were overwritten by volume mount
 if [ ! -d "/var/www/html/database/migrations" ] || [ -z "$(ls -A /var/www/html/database/migrations 2>/dev/null)" ]; then
-    echo "Restoring migrations from backup..."
-    mkdir -p /var/www/html/database/migrations
-    cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
-    chown -R www-data:www-data /var/www/html/database/migrations
+    echo "Migrations directory missing or empty, restoring from backup..."
+    if [ -d "/var/www/migrations-backup" ] && [ -n "$(ls -A /var/www/migrations-backup 2>/dev/null)" ]; then
+        mkdir -p /var/www/html/database/migrations
+        cp -r /var/www/migrations-backup/* /var/www/html/database/migrations/
+        chown -R www-data:www-data /var/www/html/database/migrations
+        echo "Restored $(ls /var/www/html/database/migrations | wc -l) migration files"
+    else
+        echo "WARNING: No migration backup found at /var/www/migrations-backup"
+    fi
+else
+    echo "Migrations present: $(ls /var/www/html/database/migrations | wc -l) files"
 fi
 
 # Fix permissions for storage and database directories

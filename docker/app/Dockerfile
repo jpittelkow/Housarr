@@ -66,7 +66,10 @@ COPY backend/ ./
 RUN composer dump-autoload --optimize
 
 # Backup migrations to a location that won't be overwritten by volume mounts
-RUN cp -r database/migrations /var/www/migrations-backup
+# Use explicit paths and verify the backup succeeded
+RUN mkdir -p /var/www/migrations-backup && \
+    cp -r /var/www/html/database/migrations/* /var/www/migrations-backup/ && \
+    echo "Migrations backed up: $(ls /var/www/migrations-backup | wc -l) files"
 
 # Setup directories
 RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database \
