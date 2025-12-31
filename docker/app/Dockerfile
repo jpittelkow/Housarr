@@ -19,23 +19,33 @@ LABEL org.opencontainers.image.url="https://github.com/jpittelkow/Housarr"
 LABEL org.opencontainers.image.source="https://github.com/jpittelkow/Housarr"
 LABEL org.opencontainers.image.licenses="MIT"
 
-# Install only essential system deps (curl needed for healthchecks)
+# Install system dependencies
 RUN apk add --no-cache \
     nginx \
     supervisor \
     curl \
+    git \
     sqlite \
     libpng \
     libzip \
-    icu-libs
+    icu-libs \
+    oniguruma \
+    libxml2 \
+    freetype \
+    libjpeg-turbo
 
-# Install only required PHP extensions (no mysql/postgres/redis)
+# Install PHP extensions required by Laravel
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
     libpng-dev \
     libzip-dev \
     icu-dev \
     sqlite-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo_sqlite \
         gd \
@@ -43,6 +53,9 @@ RUN apk add --no-cache --virtual .build-deps \
         intl \
         opcache \
         bcmath \
+        mbstring \
+        exif \
+        pcntl \
     && apk del .build-deps \
     && rm -rf /tmp/*
 
