@@ -11,7 +11,8 @@ This folder contains all project documentation.
 | [DOCUMENTATION_LARAVEL.md](DOCUMENTATION_LARAVEL.md) | Backend Laravel/PHP documentation |
 | [DOCUMENTATION_DOCKER.md](DOCUMENTATION_DOCKER.md) | Docker setup and deployment guide |
 | [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) | Testing guide for frontend & backend |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | **Contribution guidelines - READ FIRST!** |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | **Quick reference: Mandatory requirements checklist** |
 
 ## Architecture Decision Records (ADR)
 
@@ -37,4 +38,5 @@ The [adr/](adr/) folder contains Architecture Decision Records documenting signi
 - **Frontend Development**: See [DOCUMENTATION_REACT.md](DOCUMENTATION_REACT.md)
 - **Backend Development**: See [DOCUMENTATION_LARAVEL.md](DOCUMENTATION_LARAVEL.md)
 - **Testing**: See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md)
-- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) - **⚠️ REQUIRED READING before making changes**
+- **Requirements Checklist**: See [REQUIREMENTS.md](REQUIREMENTS.md) - **Quick reference for mandatory requirements**

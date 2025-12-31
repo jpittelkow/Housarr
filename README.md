@@ -237,13 +237,20 @@ Housarr/
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guidelines](docs/CONTRIBUTING.md) before submitting changes.
+Contributions are welcome! **Please read our [Contributing Guidelines](docs/CONTRIBUTING.md) before submitting changes.**
 
-**Key requirements:**
-- ✅ All new features must include tests
-- ✅ Significant changes require an ADR
-- ✅ Follow existing code patterns
-- ✅ Run tests before submitting PRs
+### ⚠️ Mandatory Requirements
+
+Before submitting any changes, ensure you meet these requirements:
+
+- ✅ **Tests are required** - Every feature, bug fix, or change MUST include tests
+- ✅ **Tests must pass** - Run full test suite before submitting
+- ✅ **ADRs for significant changes** - Architecture Decision Records required for major changes
+- ✅ **Documentation updated** - TypeScript types, API docs, README if needed
+
+**Quick Reference**: See [REQUIREMENTS.md](docs/REQUIREMENTS.md) for a condensed checklist of all mandatory requirements.
+
+**Full Guidelines**: See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed explanations, examples, and patterns.
 
 ## 📄 License
 

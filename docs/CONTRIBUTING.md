@@ -4,22 +4,92 @@ This document outlines critical architectural patterns and rules that **MUST** b
 
 ---
 
+## 🚨 STOP: Read This First!
+
+> **⚠️ CRITICAL: Before writing ANY code, you MUST understand these requirements. Your PR will be rejected if these are not met.**
+
+### Quick Checklist
+
+- [ ] **Tests are written** - Every feature/bugfix requires tests (see [Requirements](#-mandatory-requirements) below)
+- [ ] **Tests pass** - Run full test suite before submitting
+- [ ] **ADR created** - If this is a significant change (see [When ADRs Are Required](#2-adrs-are-required-for-significant-changes))
+- [ ] **Documentation updated** - TypeScript types, API docs, README if needed
+
+### Quick Reference: Requirements by Task Type
+
+| Task Type | Tests Required? | ADR Required? | Documentation Required? |
+|-----------|----------------|---------------|------------------------|
+| New API endpoint | ✅ **YES** - Pest PHP feature test | If significant pattern change | ✅ Update TypeScript types, API docs |
+| New React component | ✅ **YES** - Vitest + React Testing Library | ❌ No | ❌ No (unless public API) |
+| New page | ✅ **YES** - Component test + E2E test | ❌ No | ❌ No (unless new pattern) |
+| Bug fix | ✅ **YES** - Regression test proving fix | ❌ No | ❌ No |
+| New Zustand store | ✅ **YES** - Store unit test | ❌ No | ❌ No |
+| New utility function | ✅ **YES** - Unit test | ❌ No | ❌ No |
+| Database schema change | ✅ **YES** - Migration + model tests | ✅ **YES** - Always | ✅ Update model docs |
+| Authentication/Authorization change | ✅ **YES** - Security tests | ✅ **YES** - Always | ✅ Update security docs |
+| New external integration | ✅ **YES** - Integration tests | ✅ **YES** - Always | ✅ Update integration docs |
+| AI system changes | ✅ **YES** - AI service tests | ✅ **YES** - Always | ✅ Update AI docs |
+| Infrastructure changes | ✅ **YES** - Deployment tests | ✅ **YES** - Always | ✅ Update deployment docs |
+
+> **💡 Don't know if an ADR is needed?** If future developers would ask "why was this done this way?", write an ADR. See [ADR Requirements](#2-adrs-are-required-for-significant-changes) for details.
+
+---
+
+## 📋 Pre-Submission Checklist
+
+**Before submitting your PR, verify ALL of these items:**
+
+### 🔒 Security & Architecture (MANDATORY)
+- [ ] Household isolation is maintained (no cross-household data access)
+- [ ] New resources have appropriate Policy with household_id checks
+- [ ] Controllers call `Gate::authorize()` for protected actions
+- [ ] New fields added to Model, Resource, AND TypeScript type (API contract synchronized)
+- [ ] File uploads use household-scoped paths
+- [ ] File deletions clean up storage (use `deleteFile()` method)
+- [ ] No N+1 queries (use eager loading with `with()` or `load()`)
+
+### 🧪 Testing (MANDATORY)
+- [ ] **Backend tests pass**: `cd backend && ./vendor/bin/pest`
+- [ ] **Frontend tests pass**: `cd frontend && npm run test:run`
+- [ ] **New features have tests**: Every new endpoint, component, or function has corresponding tests
+- [ ] **E2E tests pass** (for UI changes): `cd frontend && npm run test:e2e`
+- [ ] **Bug fixes include regression test**: Test proving the bug is fixed
+
+### 📝 Documentation (MANDATORY for significant changes)
+- [ ] **ADR created** for architectural decisions (see [ADR Requirements](#2-adrs-are-required-for-significant-changes) and `docs/adr/`)
+- [ ] **TypeScript types updated** if API response changed (see [API Contract](#critical-rule-2-frontend-backend-api-contract))
+- [ ] **API documentation updated** if endpoints changed
+- [ ] **README updated** if setup process changed
+
+### ✨ Code Quality
+- [ ] Code follows existing patterns in the codebase
+- [ ] No debug/console.log statements left in code
+- [ ] Error handling uses `getApiErrorMessage()` for specific, actionable messages
+- [ ] Loading/error states handled in UI
+
+---
+
 ## ⚠️ Mandatory Requirements
 
 Before ANY code is merged, the following requirements **MUST** be met:
 
-### 1. Tests Are Required
+### 1. ⚠️ CRITICAL: Tests Are Required
 
-**Every new feature, bug fix, or change MUST include tests.**
+> **🚨 EVERY new feature, bug fix, or change MUST include tests. No exceptions.**
 
-| Change Type | Required Tests |
-|-------------|----------------|
-| New API endpoint | Pest PHP feature test |
-| New React component | Vitest + React Testing Library test |
-| New page | Page component test + E2E test (Playwright) |
-| Bug fix | Regression test proving the fix |
-| New Zustand store | Store unit test |
-| New utility function | Unit test |
+**What happens if you skip tests?**
+- ❌ Your PR will be automatically rejected by CI/CD
+- ❌ Code review will request tests before approval
+- ❌ Risk of introducing bugs that could break production
+
+| Change Type | Required Tests | Test Location |
+|-------------|----------------|---------------|
+| New API endpoint | Pest PHP feature test | `backend/tests/Feature/` |
+| New React component | Vitest + React Testing Library test | `frontend/src/components/**/__tests__/` |
+| New page | Page component test + E2E test (Playwright) | `frontend/src/pages/__tests__/` and `frontend/e2e/` |
+| Bug fix | Regression test proving the fix | Same location as feature |
+| New Zustand store | Store unit test | `frontend/src/stores/__tests__/` |
+| New utility function | Unit test | `frontend/src/lib/__tests__/` or `backend/tests/Unit/` |
 
 ```bash
 # Run all tests before submitting changes
@@ -33,25 +103,34 @@ cd backend && ./vendor/bin/pest
 cd frontend && npm run test:e2e
 ```
 
-**Tests MUST pass before merging. CI/CD will automatically reject PRs with failing tests.**
+> **⚠️ Tests MUST pass before merging. CI/CD will automatically reject PRs with failing tests.**
 
-See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) for complete testing guide.
+📖 See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) for complete testing guide with examples.
 
-### 2. ADRs Are Required for Significant Changes
+---
 
-**Architecture Decision Records (ADRs) MUST be written for:**
+### 2. ⚠️ CRITICAL: ADRs Are Required for Significant Changes
 
-- New features that introduce new patterns
-- Changes to authentication/authorization
-- Database schema changes
-- New external integrations (APIs, services)
-- Changes to the AI system
-- Infrastructure changes
-- Any decision that future developers would question "why was this done this way?"
+> **🚨 Architecture Decision Records (ADRs) MUST be written for significant architectural changes. This is mandatory, not optional.**
 
-**ADR Location**: `docs/adr/`
+**What happens if you skip an ADR?**
+- ❌ Future developers won't understand why decisions were made
+- ❌ Code review will request an ADR for significant changes
+- ❌ Risk of re-implementing patterns without understanding context
 
+**ADRs MUST be written for:**
+- ✅ New features that introduce new patterns or architecture
+- ✅ Changes to authentication/authorization (security impact)
+- ✅ Database schema changes (affects all data)
+- ✅ New external integrations (APIs, services, third-party tools)
+- ✅ Changes to the AI system (core functionality)
+- ✅ Infrastructure changes (deployment, Docker, etc.)
+- ✅ Any decision where someone would ask: "why was this done this way?"
+
+**ADR Location**: `docs/adr/`  
 **ADR Template**: See [docs/adr/README.md](adr/README.md)
+
+**When in doubt, write an ADR.** It's better to document too much than too little.
 
 ```markdown
 # ADR [NUMBER]: [TITLE]
@@ -77,7 +156,16 @@ YYYY-MM-DD
 - [Trade-offs or downsides]
 ```
 
-### 3. Run Full Test Suite Before Submitting
+---
+
+### 3. ⚠️ CRITICAL: Run Full Test Suite Before Submitting
+
+> **🚨 Always run the full test suite before submitting your PR. Don't rely only on CI/CD.**
+
+**What happens if tests fail in CI/CD?**
+- ❌ Your PR will be marked as failing
+- ❌ You'll need to fix issues and push again
+- ❌ Slows down the review process
 
 ```bash
 # From project root, run the full test suite:
@@ -479,40 +567,6 @@ Changes to Resource classes affect the frontend. Coordinate changes.
 
 ---
 
-## Pre-Submission Checklist
-
-Before submitting changes, verify ALL items:
-
-### Security & Architecture
-- [ ] Household isolation is maintained (no cross-household data access)
-- [ ] New resources have appropriate Policy
-- [ ] Controllers call `Gate::authorize()` for protected actions
-- [ ] New fields added to Model, Resource, AND TypeScript type
-- [ ] File uploads use household-scoped paths
-- [ ] File deletions clean up storage
-- [ ] No N+1 queries (use eager loading)
-
-### Testing (MANDATORY)
-- [ ] **Backend tests pass**: `cd backend && ./vendor/bin/pest`
-- [ ] **Frontend tests pass**: `cd frontend && npm run test:run`
-- [ ] **New features have tests**: Every new endpoint, component, or function has corresponding tests
-- [ ] **E2E tests pass** (for UI changes): `cd frontend && npm run test:e2e`
-- [ ] **Bug fixes include regression test**: Test proving the bug is fixed
-
-### Documentation (MANDATORY for significant changes)
-- [ ] **ADR created** for architectural decisions (see `docs/adr/`)
-- [ ] **TypeScript types updated** if API response changed
-- [ ] **API documentation updated** if endpoints changed
-- [ ] **README updated** if setup process changed
-
-### Code Quality
-- [ ] Code follows existing patterns in the codebase
-- [ ] No debug/console.log statements left in code
-- [ ] Error handling uses `getApiErrorMessage()` for specific, actionable messages
-- [ ] Loading/error states handled in UI
-
----
-
 ## Testing Patterns
 
 ### Backend Feature Test Example
@@ -605,7 +659,14 @@ test('user can add a new item', async ({ page }) => {
 
 ## Common Patterns Reference
 
+> **⚠️ REMINDER: Before starting any implementation, review the [Pre-Submission Checklist](#-pre-submission-checklist) and [Mandatory Requirements](#️-mandatory-requirements) above. Tests and documentation are required!**
+
 ### Adding a New API Resource
+
+> **📋 Requirements Check:**
+> - ✅ Tests: Pest PHP feature test required
+> - ✅ ADR: Required if introducing new patterns
+> - ✅ Documentation: Update TypeScript types and API docs
 
 1. Create Model with `household_id` (if applicable)
 2. Create Migration
@@ -616,37 +677,52 @@ test('user can add a new item', async ({ page }) => {
 7. Add TypeScript types
 8. Add API service methods
 9. Register Policy in `AuthServiceProvider` (if not auto-discovered)
-10. **Write Pest feature tests** (`backend/tests/Feature/`)
-11. **Write frontend tests** if UI components added
-12. **Create ADR** if introducing new patterns
+10. **⚠️ Write Pest feature tests** (`backend/tests/Feature/`) - **MANDATORY**
+11. **⚠️ Write frontend tests** if UI components added - **MANDATORY**
+12. **⚠️ Create ADR** if introducing new patterns - **MANDATORY if significant**
 
 ### Adding a New Frontend Page
+
+> **📋 Requirements Check:**
+> - ✅ Tests: Page component test + E2E test required
+> - ✅ ADR: Required if introducing new navigation/route patterns
+> - ✅ Documentation: Update types if API changes
 
 1. Create page component in `frontend/src/pages/`
 2. Add route in `frontend/src/App.tsx`
 3. Add navigation link in `frontend/src/components/Layout.tsx`
 4. Create API methods in `frontend/src/services/api.ts`
 5. Update types in `frontend/src/types/index.ts`
-6. **Write page tests** (`frontend/src/pages/__tests__/`)
-7. **Write E2E tests** (`frontend/e2e/`)
+6. **⚠️ Write page tests** (`frontend/src/pages/__tests__/`) - **MANDATORY**
+7. **⚠️ Write E2E tests** (`frontend/e2e/`) - **MANDATORY**
 8. Add `HelpTooltip` for contextual help where appropriate
 
 ### Adding a New Component
 
+> **📋 Requirements Check:**
+> - ✅ Tests: Vitest + React Testing Library test required
+> - ✅ ADR: Not required for simple components
+> - ✅ Documentation: JSDoc comments for props
+
 1. Create component in `frontend/src/components/`
 2. Export from index file if in `/ui/`
-3. **Write component tests** (`frontend/src/components/ui/__tests__/`)
+3. **⚠️ Write component tests** (`frontend/src/components/ui/__tests__/`) - **MANDATORY**
 4. Document props with JSDoc comments
 
 ### Adding a Field to Existing Resource
+
+> **📋 Requirements Check:**
+> - ✅ Tests: Update existing tests to cover new field
+> - ✅ ADR: Not required for simple field additions
+> - ✅ Documentation: Must update TypeScript types (API contract)
 
 1. Migration: Add column
 2. Model: Add to `$fillable`, add cast if needed
 3. Resource: Add to `toArray()` return
 4. Request: Add validation rule
-5. TypeScript: Update interface
+5. TypeScript: Update interface - **⚠️ MANDATORY** (API contract)
 6. Frontend: Update forms/displays
-7. **Update existing tests** to cover new field
+7. **⚠️ Update existing tests** to cover new field - **MANDATORY**
 
 ### Error Handling in Frontend
 
