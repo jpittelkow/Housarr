@@ -3,9 +3,12 @@
 use Laravel\Sanctum\Sanctum;
 
 return [
+    // For self-hosted apps, include common local network patterns
+    // Users can override with SANCTUM_STATEFUL_DOMAINS env var
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,localhost:5173,127.0.0.1,127.0.0.1:8000,::1',
+        '%s%s%s',
+        'localhost,localhost:*,127.0.0.1,127.0.0.1:*,::1,',
+        '192.168.*.*,192.168.*.*:*,10.*.*.*,10.*.*.*:*,172.16.*.*,172.16.*.*:*,',
         Sanctum::currentApplicationUrlWithPort()
     ))),
 

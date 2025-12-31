@@ -240,3 +240,13 @@ docker exec housarr php /var/www/html/artisan config:clear
 docker exec housarr php /var/www/html/artisan cache:clear
 docker restart housarr
 ```
+
+### "Session store not set on request" Error
+
+This means your Unraid IP isn't in the allowed stateful domains. Add this environment variable:
+
+| Key | Value |
+|-----|-------|
+| `SANCTUM_STATEFUL_DOMAINS` | `localhost,127.0.0.1,YOUR_UNRAID_IP,YOUR_UNRAID_IP:8000` |
+
+Replace `YOUR_UNRAID_IP` with your actual IP (e.g., `192.168.1.100`), then restart the container.
