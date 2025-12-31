@@ -14,8 +14,8 @@ return new class extends Migration
             $table->string('type')->default('item')->after('household_id');
         });
 
-        // Set all existing categories to 'item' type (in case any are null)
-        DB::table('categories')->whereNull('type')->update(['type' => 'item']);
+        // Set all existing categories to 'item' type (ensures all have the value)
+        DB::table('categories')->update(['type' => 'item']);
 
         // Make type NOT NULL after setting defaults
         Schema::table('categories', function (Blueprint $table) {
