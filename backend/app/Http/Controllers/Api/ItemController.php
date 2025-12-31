@@ -825,6 +825,38 @@ PROMPT;
     }
 
     /**
+     * Search for a product image by make/model.
+     * Used for Smart Add to display product images in search results.
+     */
+    public function searchProductImage(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'make' => ['required', 'string', 'max:255'],
+            'model' => ['nullable', 'string', 'max:255'],
+            'type' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $imageService = new ProductImageSearchService();
+        $imageUrl = $imageService->getBestImage(
+            $validated['make'],
+            $validated['model'] ?? '',
+            $validated['type'] ?? ''
+        );
+
+        $searchTerm = trim(implode(' ', array_filter([
+            $validated['make'],
+            $validated['model'] ?? '',
+            $validated['type'] ?? '',
+        ])));
+
+        return response()->json([
+            'success' => $imageUrl !== null,
+            'image_url' => $imageUrl,
+            'search_term' => $searchTerm,
+        ]);
+    }
+
+    /**
      * Build the AI prompt for getting maintenance suggestions.
      */
     private function buildSuggestionPrompt(string $make, string $model, ?string $category): string

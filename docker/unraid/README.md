@@ -115,28 +115,26 @@ If you see errors on first startup, wait 10-15 seconds and refresh - the contain
 mkdir -p /mnt/user/appdata/housarr
 cd /mnt/user/appdata/housarr
 git clone https://github.com/jpittelkow/Housarr.git .
-cd docker/unraid
-cp env.example .env
 ```
 
 ### Step 2: Configure
 
-Generate APP_KEY and edit `.env`:
+Generate APP_KEY and edit `docker-compose.yml`:
 ```bash
 docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
-nano .env  # Paste key, set APP_URL
+nano docker-compose.yml  # Paste key in APP_KEY, set APP_URL
 ```
 
 ### Step 3: Start
 
 Using Docker Compose Manager plugin:
 1. **Docker** → **Compose** → **Add New Stack**
-2. Point to `/mnt/user/appdata/housarr/docker/unraid/docker-compose.unraid.yml`
+2. Point to `/mnt/user/appdata/housarr/docker-compose.yml`
 3. Click **Compose Up**
 
 Or via command line:
 ```bash
-docker compose -f docker-compose.unraid.yml up -d
+docker compose up -d
 ```
 
 ---

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { items, categories, locations, files } from '@/services/api'
@@ -106,6 +106,10 @@ export default function SmartAddPage() {
   const [showAgentDetails, setShowAgentDetails] = useState(false)
   const [wasPhotoSearch, setWasPhotoSearch] = useState(false) // Track if original search used a photo
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null) // Selected result's image
+  
+  // Lazy-loaded product images for search results
+  const [productImages, setProductImages] = useState<Record<number, string | null>>({})
+  const [imageLoadingStates, setImageLoadingStates] = useState<Record<number, boolean>>({})
 
   // Queries
   const { data: categoriesData } = useQuery({
@@ -131,6 +135,51 @@ export default function SmartAddPage() {
         typeLC.includes(c.name.toLowerCase())
     )
   }
+
+  // Lazy-load product images when results change
+  useEffect(() => {
+    if (results.length === 0) {
+      // Clear images when results are cleared
+      setProductImages({})
+      setImageLoadingStates({})
+      return
+    }
+
+    // Only search for images for first 5 results to avoid rate limiting
+    const resultsToSearch = results.slice(0, 5)
+    
+    // Initialize loading states
+    const initialLoadingStates: Record<number, boolean> = {}
+    resultsToSearch.forEach((_, index) => {
+      // Don't search if result already has an image_url from backend
+      if (!results[index].image_url) {
+        initialLoadingStates[index] = true
+      }
+    })
+    setImageLoadingStates(initialLoadingStates)
+
+    // Search for images for each result in parallel
+    resultsToSearch.forEach(async (result, index) => {
+      // Skip if result already has an image from backend
+      if (result.image_url) {
+        setProductImages(prev => ({ ...prev, [index]: result.image_url ?? null }))
+        return
+      }
+
+      try {
+        const response = await items.searchProductImage(
+          result.make,
+          result.model,
+          result.type
+        )
+        setProductImages(prev => ({ ...prev, [index]: response.image_url }))
+      } catch {
+        setProductImages(prev => ({ ...prev, [index]: null }))
+      } finally {
+        setImageLoadingStates(prev => ({ ...prev, [index]: false }))
+      }
+    })
+  }, [results])
 
   // Analyze image mutation
   const analyzeMutation = useMutation({
@@ -325,8 +374,9 @@ export default function SmartAddPage() {
     // Find matching category
     const matchedCategory = findMatchingCategory(result.type)
 
-    // Track the selected result's image URL
-    setSelectedImageUrl(result.image_url || null)
+    // Track the selected result's image URL (use lazy-loaded image if available)
+    const imageUrl = productImages[index] ?? result.image_url ?? null
+    setSelectedImageUrl(imageUrl)
 
     // Pre-fill form
     setFormData({
@@ -360,6 +410,8 @@ export default function SmartAddPage() {
     setShowAllResults(false)
     setAgentMetadata(null)
     setShowAgentDetails(false)
+    setProductImages({})
+    setImageLoadingStates({})
   }
 
   // Retry analysis
@@ -769,11 +821,24 @@ export default function SmartAddPage() {
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          {/* Product Image / Brand Placeholder */}
-                          <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                            <span className="text-white font-bold text-xl">
-                              {(result.make || result.model || '?').substring(0, 2).toUpperCase()}
-                            </span>
+                          {/* Product Image with lazy loading */}
+                          <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                            {imageLoadingStates[index] ? (
+                              <div className="w-full h-full animate-pulse bg-gray-200 dark:bg-gray-700" />
+                            ) : productImages[index] ? (
+                              <img
+                                src={productImages[index]!}
+                                alt={`${result.make} ${result.model}`}
+                                className="w-full h-full object-cover"
+                                onError={() => setProductImages(prev => ({ ...prev, [index]: null }))}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
+                                <span className="text-white font-bold text-xl">
+                                  {(result.make || result.model || '?').substring(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+                            )}
                           </div>
                           {/* Radio button */}
                           <div

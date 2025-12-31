@@ -68,6 +68,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // Items
     Route::post('/items/analyze-image', [ItemController::class, 'analyzeImage']);
+    Route::post('/items/search-product-image', [ItemController::class, 'searchProductImage']);
     Route::apiResource('items', ItemController::class);
     Route::post('/items/{item}/manual', [ItemController::class, 'uploadManual']);
     Route::post('/items/{item}/download-manual', [ItemController::class, 'downloadManual']);

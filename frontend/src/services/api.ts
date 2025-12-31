@@ -459,6 +459,15 @@ export const items = {
     const response = await api.post(`/items/${itemId}/search-part-image`, { search_term: searchTerm, part_name: partName }, { timeout: 10000 })
     return response.data
   },
+
+  searchProductImage: async (make: string, model?: string, type?: string): Promise<{
+    success: boolean
+    image_url: string | null
+    search_term: string
+  }> => {
+    const response = await api.post('/items/search-product-image', { make, model, type }, { timeout: 10000 })
+    return response.data
+  },
 }
 
 // Parts

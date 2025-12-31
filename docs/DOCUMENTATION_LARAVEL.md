@@ -873,12 +873,7 @@ All migrations in `database/migrations/`:
 
 **Default Connection**: SQLite (`database/database.sqlite`)
 
-**Supported Connections**:
-- `sqlite`: SQLite database
-- `mysql`: MySQL/MariaDB
-- `pgsql`: PostgreSQL
-
-**Redis Configuration**: Configured for cache and sessions
+SQLite is the default and recommended database for Housarr - it's simple, requires no configuration, and is more than capable of handling home inventory data.
 
 ### Auth (`config/auth.php`)
 

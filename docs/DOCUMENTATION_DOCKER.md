@@ -1,19 +1,16 @@
-# Docker Infrastructure Documentation
+# Docker Documentation
 
 ## Overview
 
-Housarr offers two deployment modes:
+Housarr is deployed as a single Docker container with everything included:
+- PHP-FPM 8.3
+- Nginx web server
+- SQLite database (embedded)
+- React frontend (pre-built)
 
-| Mode | Use Case | Database | Files |
-|------|----------|----------|-------|
-| **Single Container** | Self-hosted (Unraid, Synology, etc.) | SQLite | `docker-compose.simple.yml` or `docker/app/Dockerfile` |
-| **Multi Container** | Development / Advanced users | MySQL + Redis | `docker-compose.yml` |
-
-**Most self-hosted users should use the single-container deployment** - it's simpler and requires no external database.
+**No external database or Redis required.**
 
 ## System Requirements
-
-### Single Container (Recommended for Self-Hosting)
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
@@ -22,738 +19,297 @@ Housarr offers two deployment modes:
 | **Disk** | 500 MB | 1 GB + storage for files |
 | **Architecture** | amd64, arm64 | - |
 
-### Multi Container (Development)
-
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| **RAM** | 1 GB | 2 GB |
-| **CPU** | 2 cores | 4 cores |
-| **Disk** | 2 GB | 5 GB + storage for files |
-
 ## Quick Start
 
-### Self-Hosted (Single Container)
+### Option 1: Docker Run
 
 ```bash
-# Download compose file
-curl -O https://raw.githubusercontent.com/jpittelkow/Housarr/main/docker-compose.simple.yml
+# Generate an APP_KEY
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+
+# Run Housarr (replace YOUR_KEY with the generated key)
+docker run -d \
+  --name housarr \
+  -p 8000:80 \
+  -v housarr_data:/var/www/html/database \
+  -v housarr_storage:/var/www/html/storage/app \
+  -e APP_KEY=base64:YOUR_KEY_HERE \
+  -e APP_URL=http://localhost:8000 \
+  ghcr.io/jpittelkow/housarr:latest
+```
+
+### Option 2: Docker Compose (Recommended)
+
+```bash
+# Clone the repo
+git clone https://github.com/jpittelkow/Housarr.git
+cd Housarr
 
 # Generate APP_KEY
 docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
 
-# Edit docker-compose.simple.yml and set your APP_KEY, then:
-docker compose -f docker-compose.simple.yml up -d
-```
-
-### Development (Multi Container)
-
-```bash
-# Clone repo and start development stack
-git clone https://github.com/jpittelkow/Housarr.git
-cd Housarr
+# Edit docker-compose.yml and set your APP_KEY, then:
 docker compose up -d
 ```
 
-### Production (Multi Container with Security Hardening)
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-## Docker Compose Files
-
-### docker-compose.simple.yml (Self-Hosting)
-
-**Purpose**: Single-container deployment for self-hosted users
-
-**Image**: `ghcr.io/jpittelkow/housarr:latest`
-
-**Features**:
-- Pre-built image (no building required)
-- SQLite database (no external DB needed)
-- File-based cache and sessions (no Redis needed)
-- Single container to manage
-- Automatic migrations on startup
-
-**Volumes**:
-- `housarr_database`: SQLite database file
-- `housarr_storage`: Uploaded files (manuals, images)
-- `housarr_logs`: Application logs
-
-**Required Environment Variables**:
-- `APP_KEY`: Encryption key (generate with `docker run --rm php:8.2-cli php -r "..."`)
-- `APP_URL`: Your server URL (e.g., `http://192.168.1.100:8000`)
-
----
-
-### docker-compose.yml (Development)
-
-**Purpose**: Full development stack with MySQL and Redis
-
-**Services**:
-- `nginx`: Web server (port 8000)
-- `php`: PHP-FPM application server
-- `mysql`: MySQL 8.0 database
-- `redis`: Redis cache/queue
-- `scheduler`: Laravel task scheduler
-- `worker`: Laravel queue worker
-- `node`: Vite dev server (optional, use `--profile dev`)
-
-**Configuration**:
-```yaml
-services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "${APP_PORT:-8000}:80"
-  php:
-    build:
-      dockerfile: docker/php/Dockerfile
-      target: development
-  mysql:
-    image: mysql:8.0
-    ports:
-      - "${DB_PORT:-3306}:3306"
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-```
-
-**Ports**:
-- `8000`: Web application (configurable via APP_PORT)
-- `3306`: MySQL (configurable via DB_PORT)
-- `6379`: Redis (configurable via REDIS_PORT)
-- `5173`: Vite dev server (with `--profile dev`)
-
-**Volumes**:
-- `./backend`: Laravel application code (mounted)
-- `./data`: Persistent storage (mapped to Laravel storage/app)
-- `mysql_data`: MySQL data persistence
-- `redis_data`: Redis data persistence
-
-### docker-compose.prod.yml (Production Overlay)
-
-**Purpose**: Production multi-container setup
-
-**Usage**: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
-
-**Services**:
-
-#### nginx
-- **Volumes**: Production nginx config
-- **Ports**: Exposed only (no direct access)
-- **Read-only**: true
-- **Tmpfs**: `/var/cache/nginx`, `/var/run`
-- **Security**: `no-new-privileges:true`
-
-#### php
-- **Build Target**: production
-- **Environment**: `APP_ENV=production`, `APP_DEBUG=false`
-- **Read-only**: true
-- **Tmpfs**: `/tmp`
-- **Volumes**: 
-  - `./backend:/var/www/html:cached,ro` (read-only)
-  - `./backend/storage:/var/www/html/storage:cached` (writable)
-  - `./backend/bootstrap/cache:/var/www/html/bootstrap/cache:cached` (writable)
-- **Security**: `no-new-privileges:true`
-
-#### mysql
-- **Ports**: Exposed only (no direct access)
-- **Expose**: 3306
-
-#### redis
-- **Ports**: Exposed only (no direct access)
-- **Expose**: 6379
-- **Command**: Redis server with appendonly, maxmemory 256mb, LRU policy, password required
-
-#### scheduler
-- **Build Target**: production
-- **Environment**: `APP_ENV=production`
-- **Read-only**: true
-- **Tmpfs**: `/tmp`
-- **Volumes**: Same as php service
-- **Security**: `no-new-privileges:true`
-- **Purpose**: Runs Laravel scheduler (`schedule:run`)
-
-#### worker
-- **Build Target**: production
-- **Environment**: `APP_ENV=production`
-- **Read-only**: true
-- **Tmpfs**: `/tmp`
-- **Volumes**: Same as php service
-- **Security**: `no-new-privileges:true`
-- **Deploy**: 
-  - Replicas: 2
-  - Memory limit: 256M
-  - CPU limit: 0.5
-  - Memory reservation: 128M
-  - CPU reservation: 0.25
-- **Purpose**: Processes Laravel queue jobs
-
-#### node
-- **Profile**: `donotstart` (not started in production)
-- **Purpose**: Frontend should be pre-built
-
-## Dockerfiles
-
-### Single Container Dockerfile (`docker/app/Dockerfile`)
-
-**Base Image**: `php:8.3-fpm-alpine`
-
-**Stages**:
-
-#### Stage 1: Frontend Builder
-- **Base**: `node:20-alpine`
-- **Steps**:
-  1. Copy package files
-  2. Install dependencies (`npm ci`)
-  3. Copy frontend source
-  4. Build frontend (`npm run build`)
-
-#### Stage 2: PHP + Nginx
-- **Base**: `php:8.3-fpm-alpine`
-- **System Dependencies**: nginx, supervisor, libpng, libzip, oniguruma, libxml2, icu-libs, git, curl, sqlite, postgresql-libs
-- **PHP Extensions**: pdo_mysql, pdo_pgsql, pdo_sqlite, mbstring, exif, pcntl, bcmath, gd, zip, intl, opcache, redis
-- **Composer**: Copied from composer:2 image
-- **Nginx Config**: Copied from `docker/app/nginx.conf`
-- **PHP Config**: Copied from `docker/app/php.ini`
-- **Supervisor Config**: Copied from `docker/app/supervisord.conf`
-- **Entrypoint**: `docker/app/entrypoint.sh`
-- **Frontend**: Copied from builder stage to `/var/www/frontend`
-- **Working Directory**: `/var/www/html`
-- **Storage Directories**: Created with www-data ownership
-- **Expose**: Port 80
-- **CMD**: Supervisor runs nginx and PHP-FPM
-
-### PHP Dockerfile (`docker/php/Dockerfile`)
-
-**Base Image**: `php:8.3-fpm-alpine`
-
-**Stages**:
-
-#### Stage 1: Base
-- **System Dependencies**: libpng, libzip, oniguruma, libxml2, icu-libs, linux-headers
-- **PHP Extensions**: pdo_mysql, mbstring, exif, pcntl, bcmath, gd, zip, intl, opcache, redis
-- **User**: Creates www user (UID 1000, GID 1000)
-- **Working Directory**: `/var/www/html`
-
-#### Stage 2: Development
-- **Extends**: base
-- **Development Tools**: git, curl, bash, nano, fcgi
-- **Composer**: Copied from composer:2
-- **PHP Config**: Development configs (`php.ini`, `php-fpm.conf`)
-- **Healthcheck**: php-fpm-healthcheck script
-- **Scheduler Script**: Copied from `docker/php/scheduler.sh`
-- **User**: www (non-root)
-- **Expose**: Port 9000
-- **CMD**: php-fpm
-
-#### Stage 3: Build
-- **Extends**: base
-- **Composer**: Copied from composer:2
-- **Git**: Installed for composer
-- **Dependencies**: Installs composer dependencies (no-dev, optimized)
-- **Application Code**: Copied from backend
-- **Autoloader**: Generated optimized autoloader
-
-#### Stage 4: Production
-- **Extends**: base
-- **PHP Config**: Production configs (`php.prod.ini`, `php-fpm.prod.conf`)
-- **Healthcheck**: php-fpm-healthcheck script
-- **Scheduler Script**: Copied from `docker/php/scheduler.sh`
-- **Application**: Copied from build stage
-- **Storage**: Directories created with www ownership and permissions
-- **User**: www (non-root)
-- **Healthcheck**: PHP-FPM healthcheck (30s interval, 10s timeout, 3 retries, 30s start period)
-- **Expose**: Port 9000
-- **CMD**: php-fpm
-
-## Nginx Configurations
-
-### Single Container Config (`docker/app/nginx.conf`)
-
-**Server**:
-- Listen: 80
-- Server name: localhost
-- Server tokens: off (hides nginx version)
-- Client max body size: 100M
-
-**Locations**:
-
-1. **Frontend** (`/`):
-   - Root: `/var/www/frontend`
-   - Index: `index.html`
-   - Try files: SPA fallback to `index.html`
-
-2. **API** (`/api`):
-   - Root: `/var/www/html/public`
-   - Try files: Laravel routing
-
-3. **Sanctum** (`/sanctum`):
-   - Root: `/var/www/html/public`
-   - Try files: Laravel routing
-
-4. **Storage** (`/storage`):
-   - Alias: `/var/www/html/storage/app/public`
-   - Try files: 404 if not found
-
-5. **PHP** (`~ \.php$`):
-   - Root: `/var/www/html/public`
-   - FastCGI: `127.0.0.1:9000` (PHP-FPM)
-   - Script filename: `$realpath_root$fastcgi_script_name`
-
-6. **Hidden Files** (`~ /\.(?!well-known).*`):
-   - Deny all
-
-### Development Config (`docker/nginx/default.conf`)
-
-**Server**:
-- Listen: 80
-- Server name: localhost
-- Root: `/var/www/html/public`
-- Index: `index.php index.html`
-- Server tokens: off
-
-**Security Headers**:
-- X-Frame-Options: SAMEORIGIN
-- X-Content-Type-Options: nosniff
-- X-XSS-Protection: 1; mode=block
-- Referrer-Policy: strict-origin-when-cross-origin
-
-**Logging**:
-- Access log: `/var/log/nginx/access.log`
-- Error log: `/var/log/nginx/error.log`
-
-**Client Settings**:
-- Max body size: 100M
-- Body buffer: 128k
-
-**Gzip**: Enabled with compression level 6
-
-**Locations**:
-
-1. **Health Check** (`/up`):
-   - Returns 200 OK
-   - No access logging
-
-2. **Main** (`/`):
-   - Try files: Laravel routing
-
-3. **PHP** (`~ \.php$`):
-   - FastCGI: `php:9000`
-   - Timeouts: 60s connect, 300s send/read
-   - Buffers: 16k buffer, 16 buffers
-
-4. **Hidden Files**: Deny all
-
-5. **Sensitive Files**: Deny common extensions
-
-6. **Static Files**: 1 day cache
-
-### Production Config (`docker/nginx/production.conf`)
-
-**Server**:
-- Listen: 80
-- Server name: _ (any)
-- Root: `/var/www/html/public`
-- Index: `index.php`
-- Server tokens: off
-
-**Rate Limiting Zones**:
-- `api`: 10r/s per IP
-- `login`: 5r/m per IP
-- `conn`: 20 connections per IP
-
-**Security Headers** (Hardened):
-- X-Frame-Options: DENY
-- X-Content-Type-Options: nosniff
-- X-XSS-Protection: 1; mode=block
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: Disables various features
-- Content-Security-Policy: Restrictive policy
-
-**Logging**:
-- Access log: Buffered (512k buffer, 1m flush)
-- Error log: Warn level
-
-**Client Settings**:
-- Max body size: 50M
-- Body buffer: 128k
-- Timeouts: 60s
-
-**Connection Limits**: 20 per IP
-
-**Gzip**: Enabled, level 6
-
-**Locations**:
-
-1. **Health Check** (`/up`):
-   - Returns 200 OK
-   - No access logging
-
-2. **API** (`/api/`):
-   - Rate limit: 10r/s burst 20
-   - Status 429 on limit
-   - Laravel routing
-
-3. **Login** (`~* ^/api/auth/(login|register)`):
-   - Rate limit: 5r/m burst 3
-   - Status 429 on limit
-   - Laravel routing
-
-4. **Main** (`/`):
-   - Laravel routing
-
-5. **PHP** (`~ \.php$`):
-   - FastCGI: `php:9000`
-   - Timeouts: 60s connect, 120s send/read
-   - Buffers: 32k buffer, 32 buffers
-   - Hide PHP headers
-   - Security params
-
-6. **Hidden Files**: Deny all
-
-7. **Sensitive Files**: Deny common extensions
-
-8. **Exploit Paths**: Block wp-admin, phpmyadmin, etc.
-
-9. **Static Files**: 30 day cache, immutable
-
-10. **Favicon/Robots**: No logging
-
-## PHP Configuration
-
-### Development PHP (`docker/app/php.ini`)
-
-**Error Handling**:
-- Display errors: On
-- Display startup errors: On
-- Error reporting: E_ALL
-- Log errors: On
-- Error log: `/var/www/html/storage/logs/php_errors.log`
-
-**Resource Limits**:
-- Memory limit: 256M
-- Max execution time: 300s
-- Max input time: 300s
-- Max input vars: 3000
-
-**Upload Limits**:
-- Upload max filesize: 100M
-- Post max size: 100M
-
-**Security**:
-- Expose PHP: Off
-- Allow URL fopen: On
-- Allow URL include: Off
-
-**Session**:
-- Cookie httponly: 1
-- Cookie secure: 0
-- Use strict mode: 1
-- Cookie samesite: Lax
-
-**Timezone**: UTC
-
-**OPcache**:
-- Enable: 1
-- Memory consumption: 128M
-- Interned strings buffer: 16M
-- Max accelerated files: 10000
-- Validate timestamps: 1
-- Revalidate freq: 0
-- Save comments: 1
-
-### Development PHP-FPM (`docker/php/php-fpm.conf`)
-
-**Process Management**:
-- PM: dynamic
-- Max children: 10
-- Start servers: 2
-- Min spare: 1
-- Max spare: 3
-- Max requests: 500
-
-**Status Page**:
-- Status path: `/status`
-- Ping path: `/ping`
-- Ping response: pong
-
-**Logging**:
-- Access log: `/var/www/html/storage/logs/php-fpm-access.log`
-- Slow log: `/var/www/html/storage/logs/php-fpm-slow.log`
-- Slow log timeout: 5s
-
-**Security**:
-- Limit extensions: .php
-
-**Environment**: Clear env: no
-
-### Production PHP (`docker/php/php.prod.ini`)
-
-**Error Handling**:
-- Display errors: Off
-- Display startup errors: Off
-- Error reporting: E_ALL & ~E_DEPRECATED & ~E_STRICT
-- Log errors: On
-- Error log: `/var/www/html/storage/logs/php_errors.log`
-
-**Resource Limits**:
-- Memory limit: 256M
-- Max execution time: 60s
-- Max input time: 60s
-- Max input vars: 3000
-
-**Upload Limits**:
-- Upload max filesize: 50M
-- Post max size: 50M
-
-**Security**:
-- Expose PHP: Off
-- Allow URL fopen: Off
-- Allow URL include: Off
-
-**Session**:
-- Cookie httponly: 1
-- Cookie secure: 1 (HTTPS)
-- Use strict mode: 1
-- Cookie samesite: Strict
-
-**Timezone**: UTC
-
-**OPcache**:
-- Enable: 1
-- Enable CLI: 1
-- Memory consumption: 256M
-- Interned strings buffer: 32M
-- Max accelerated files: 20000
-- Validate timestamps: 0 (production)
-- Revalidate freq: 0
-- Save comments: 0 (production)
-- Fast shutdown: 1
-- Enable file override: 1
-- Max wasted percentage: 10
-- JIT: 1255
-- JIT buffer size: 128M
-
-**Realpath Cache**:
-- Cache size: 4096K
-- Cache TTL: 600s
-
-**Disabled Functions**: exec, passthru, shell_exec, system, proc_open, popen, curl_multi_exec, parse_ini_file, show_source, pcntl_exec
-
-### Production PHP-FPM (`docker/php/php-fpm.prod.conf`)
-
-**Process Management**:
-- PM: dynamic
-- Max children: 50
-- Start servers: 5
-- Min spare: 5
-- Max spare: 35
-- Max requests: 1000
-- Process idle timeout: 10s
-
-**Status Page**:
-- Status path: `/status`
-- Ping path: `/ping`
-- Ping response: pong
-
-**Logging**:
-- Access log: `/dev/null` (disabled in production)
-- Slow log: `/var/www/html/storage/logs/php-fpm-slow.log`
-- Slow log timeout: 10s
-- Request terminate timeout: 120s
-- Catch workers output: yes
-- Decorate workers output: no
-
-**Security**:
-- Limit extensions: .php
-
-**Environment**: Clear env: yes
-
-## Scripts
-
-### Entrypoint (`docker/app/entrypoint.sh`)
-
-**Purpose**: Sets up container before starting services
-
-**Actions**:
-1. **Syncs migrations** from backup to handle volume mount overwrites (always copies from `/var/www/migrations-backup` to ensure latest migrations are present)
-2. Fixes permissions for storage, database, bootstrap/cache directories
-3. Creates SQLite database if using SQLite and doesn't exist
-4. Runs config cache and migrations (if artisan exists)
-5. Executes command (supervisord)
-
-**Migration Sync**: Because the `/var/www/html/database` directory is often mounted as a volume, the container's migrations can be overwritten by an older or empty host directory. The entrypoint always syncs migrations from the backup (baked into the image) to ensure the database schema stays up-to-date.
-
-**Permissions**: Sets www-data ownership and 775 permissions
-
-### Scheduler (`docker/php/scheduler.sh`)
-
-**Purpose**: Runs Laravel scheduler in production
-
-**Actions**:
-1. Traps SIGTERM/SIGINT/SIGQUIT for graceful shutdown
-2. Waits 5 seconds for PHP-FPM
-3. Runs `php artisan schedule:run` every 60 seconds
-4. Checks for signals every second during sleep
-
-**Usage**: Used by scheduler container in production
-
-## Supervisor Configuration (`docker/app/supervisord.conf`)
-
-**Purpose**: Manages nginx and PHP-FPM processes in single container
-
-**Configuration**:
-- Nodaemon: true
-- User: root
-- Logfile: stdout
-- PID file: `/run/supervisord.pid`
-
-**Programs**:
-
-1. **php-fpm**:
-   - Command: `php-fpm -F`
-   - Autostart: true
-   - Autorestart: true
-   - Logs: stdout/stderr
-
-2. **nginx**:
-   - Command: `nginx -g "daemon off;"`
-   - Autostart: true
-   - Autorestart: true
-   - Logs: stdout/stderr
-
-## MySQL Configuration (`docker/mysql/my.cnf`)
-
-**Purpose**: MySQL server configuration for production
-
-**Character Set**:
-- Server: utf8mb4
-- Collation: utf8mb4_unicode_ci
-- Client default: utf8mb4
-
-**Performance**:
-- InnoDB buffer pool: 256M
-- InnoDB log file: 64M
-- InnoDB flush log at commit: 2
-- InnoDB flush method: O_DIRECT
-
-**Connections**:
-- Max connections: 100
-- Max connect errors: 10
-- Wait timeout: 600s
-- Interactive timeout: 600s
-
-**Logging**:
-- Slow query log: Enabled
-- Slow query log file: `/var/lib/mysql/slow.log`
-- Long query time: 2s
-- Log queries not using indexes: Enabled
-
-**Security**:
-- Local infile: Disabled
-- Skip symbolic links: Enabled
-
-**Binary Logging**: Commented out (uncomment for replication/backup)
-
-## Volume Mounts
-
-### Single Container
-- `./backend` → `/var/www/html`: Laravel application (mounted, writable)
-- `./data` → `/var/www/html/storage/app`: Persistent storage
-
-### Production Containers
-- `./backend` → `/var/www/html`: Laravel application (read-only, cached)
-- `./backend/storage` → `/var/www/html/storage`: Storage directory (writable, cached)
-- `./backend/bootstrap/cache` → `/var/www/html/bootstrap/cache`: Cache directory (writable, cached)
+Open [http://localhost:8000](http://localhost:8000) and create your account!
 
 ## Environment Variables
 
-### Application
-- `APP_PORT`: Port for single container (default: 8000)
-- `APP_ENV`: Environment (production/development)
-- `APP_DEBUG`: Debug mode (false in production)
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `APP_KEY` | ✅ | Encryption key | - |
+| `APP_URL` | ✅ | Your server URL | `http://localhost:8000` |
+| `APP_PORT` | ❌ | Port to expose | `8000` |
+| `TZ` | ❌ | Timezone | `UTC` |
 
-### Database
-- `DB_CONNECTION`: Database driver (sqlite/mysql/pgsql)
-- `DB_DATABASE`: Database name
-- `DB_HOST`: Database host
-- `DB_PORT`: Database port
-- `DB_USERNAME`: Database username
-- `DB_PASSWORD`: Database password
+### AI Configuration (Optional)
 
-### Redis
-- `REDIS_PASSWORD`: Redis password (required in production)
+| Variable | Description |
+|----------|-------------|
+| `AI_PROVIDER` | `anthropic`, `openai`, `gemini`, or `ollama` |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `OLLAMA_HOST` | Ollama server URL (e.g., `http://host.docker.internal:11434`) |
 
-### Other
-- Various Laravel environment variables for mail, storage, AI, etc.
+### Mail Configuration (Optional)
 
-## Security Features
+| Variable | Description |
+|----------|-------------|
+| `MAIL_MAILER` | `smtp`, `sendmail`, or `log` |
+| `MAIL_HOST` | SMTP server hostname |
+| `MAIL_PORT` | SMTP port (587 for TLS) |
+| `MAIL_USERNAME` | SMTP username |
+| `MAIL_PASSWORD` | SMTP password |
+| `MAIL_FROM_ADDRESS` | From email address |
 
-### Production
-- Read-only filesystem (except storage/cache)
-- Non-root user (www, UID 1000)
-- Security headers in nginx
-- Rate limiting
-- No new privileges
-- Tmpfs for temporary files
-- Resource limits on workers
-- OPcache validation disabled (production)
-- Error display disabled
-- Session secure cookies
+## Volumes
 
-### Development
-- Writable filesystem
-- Error display enabled
-- More permissive settings
-- OPcache validates timestamps
+Housarr persists data in two volumes:
 
-## Health Checks
+| Volume | Container Path | Purpose |
+|--------|----------------|---------|
+| `housarr_database` | `/var/www/html/database` | SQLite database |
+| `housarr_storage` | `/var/www/html/storage/app` | Uploaded files (manuals, images) |
 
-### PHP-FPM Healthcheck
-- **Script**: php-fpm-healthcheck (from GitHub)
-- **Interval**: 30s
-- **Timeout**: 10s
-- **Retries**: 3
-- **Start Period**: 30s
-- **Endpoints**: `/ping` (returns pong), `/status` (status page)
+### Backup
 
-### Nginx Healthcheck
-- **Endpoint**: `/up`
-- **Response**: 200 OK
-- **No logging**: Access log disabled
+To backup your Housarr data:
 
-## Build Process
+```bash
+# Stop the container (optional, but recommended)
+docker compose stop
 
-### Single Container
-1. Build frontend (Node.js stage)
-2. Build PHP + Nginx stage
-3. Copy frontend build to `/var/www/frontend`
-4. Configure nginx, PHP, supervisor
-5. Set up entrypoint
+# Backup database
+docker run --rm -v housarr_database:/data -v $(pwd):/backup alpine tar czf /backup/housarr-db.tar.gz -C /data .
 
-### Production PHP
-1. Build base stage (PHP extensions)
-2. Build development stage (dev tools)
-3. Build build stage (install dependencies)
-4. Build production stage (copy from build, configure)
+# Backup storage
+docker run --rm -v housarr_storage:/data -v $(pwd):/backup alpine tar czf /backup/housarr-storage.tar.gz -C /data .
 
-## Deployment Notes
+# Restart
+docker compose start
+```
 
-### Single Container
-- Suitable for development and simple deployments
-- All services in one container
-- Frontend pre-built and served by nginx
-- PHP-FPM and nginx managed by supervisor
-- Easy to start: `docker compose up -d`
+### Restore
 
-### Production Multi-Container
-- Separate containers for each service
-- Scalable (multiple workers)
-- Read-only application code
-- Resource limits
-- Security hardened
-- Requires reverse proxy in front
-- Start: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+```bash
+# Stop the container
+docker compose stop
+
+# Restore database
+docker run --rm -v housarr_database:/data -v $(pwd):/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/housarr-db.tar.gz -C /data"
+
+# Restore storage
+docker run --rm -v housarr_storage:/data -v $(pwd):/backup alpine sh -c "rm -rf /data/* && tar xzf /backup/housarr-storage.tar.gz -C /data"
+
+# Start
+docker compose start
+```
+
+## Platform Guides
+
+### Unraid
+
+See [docker/unraid/README.md](../docker/unraid/README.md) for Unraid-specific setup.
+
+### Synology / TrueNAS
+
+Use the Docker Compose method above. Map volumes to your preferred storage location:
+
+```yaml
+volumes:
+  - /volume1/docker/housarr/database:/var/www/html/database
+  - /volume1/docker/housarr/storage:/var/www/html/storage/app
+```
+
+### Reverse Proxy
+
+If running behind a reverse proxy (Traefik, Nginx Proxy Manager, Caddy):
+
+1. Set `APP_URL` to your external URL (e.g., `https://housarr.example.com`)
+2. Remove the `ports` section from docker-compose.yml
+3. Connect the container to your proxy network
+
+**Traefik example:**
+
+```yaml
+services:
+  housarr:
+    image: ghcr.io/jpittelkow/housarr:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.housarr.rule=Host(`housarr.example.com`)"
+      - "traefik.http.services.housarr.loadbalancer.server.port=80"
+    networks:
+      - proxy
+    environment:
+      APP_KEY: base64:your-key-here
+      APP_URL: https://housarr.example.com
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              housarr container               │
+│                                             │
+│  ┌─────────────┐     ┌─────────────────┐   │
+│  │    Nginx    │────▶│  React Frontend │   │
+│  │   (port 80) │     │  /var/www/frontend  │
+│  └──────┬──────┘     └─────────────────┘   │
+│         │ /api/*                            │
+│         ▼                                   │
+│  ┌─────────────┐     ┌─────────────────┐   │
+│  │   PHP-FPM   │────▶│  SQLite Database │   │
+│  │   Laravel   │     │  /var/www/html/database │
+│  └─────────────┘     └─────────────────┘   │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+### Container Details
+
+**Image:** `ghcr.io/jpittelkow/housarr:latest`
+
+**Base:** `php:8.3-fpm-alpine`
+
+**Exposed Port:** 80
+
+**Processes (managed by Supervisor):**
+- Nginx
+- PHP-FPM
+
+**PHP Extensions:**
+- pdo_sqlite, pdo_mysql, pdo_pgsql
+- mbstring, gd, zip, intl
+- opcache, redis
+
+## Files
+
+### docker-compose.yml
+
+The main compose file for deployment.
+
+### docker/app/Dockerfile
+
+Multi-stage build:
+1. **Stage 1 (frontend):** Builds React frontend with Node.js
+2. **Stage 2 (app):** PHP-FPM + Nginx + compiled frontend
+
+### docker/app/entrypoint.sh
+
+Startup script that:
+1. Syncs migrations from backup (handles volume mount overwrites)
+2. Sets correct permissions
+3. Creates SQLite database if needed
+4. Runs migrations
+
+### docker/app/nginx.conf
+
+Nginx configuration:
+- Serves React frontend at `/`
+- Proxies `/api/*` and `/sanctum/*` to PHP-FPM
+- Serves uploaded files from `/storage`
+
+### docker/app/supervisord.conf
+
+Manages Nginx and PHP-FPM processes.
+
+## Troubleshooting
+
+### Container won't start
+
+Check logs:
+```bash
+docker compose logs housarr
+```
+
+Common issues:
+- **Missing APP_KEY:** Generate one with the command above
+- **Permission denied:** The container handles permissions automatically, but host volume permissions may need adjustment
+
+### Session errors / "Unauthenticated"
+
+Ensure `APP_URL` matches how you access the app:
+- ✅ `APP_URL=http://192.168.1.100:8000` → access via `http://192.168.1.100:8000`
+- ❌ `APP_URL=http://localhost:8000` → accessing via IP won't work
+
+### Database errors
+
+The SQLite database is created automatically. If you have issues:
+
+```bash
+# Enter the container
+docker compose exec housarr sh
+
+# Check database
+ls -la /var/www/html/database/
+
+# Run migrations manually
+php artisan migrate --force
+```
+
+### File upload issues
+
+Ensure the storage volume is mounted correctly and has write permissions:
+
+```bash
+docker compose exec housarr ls -la /var/www/html/storage/app/
+```
+
+## Development
+
+For local development without Docker:
+
+```bash
+# Backend
+cd backend
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+## Building the Image
+
+To build locally:
+
+```bash
+docker build -f docker/app/Dockerfile -t housarr:local .
+```
+
+To build for multiple architectures:
+
+```bash
+docker buildx build -f docker/app/Dockerfile \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/jpittelkow/housarr:latest \
+  --push .
+```

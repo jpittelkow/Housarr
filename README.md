@@ -55,9 +55,10 @@ Open [http://localhost:8000](http://localhost:8000) and create your account!
 
 ### Option 2: Docker Compose (Recommended)
 
-1. **Download the compose file**
+1. **Clone or download the compose file**
    ```bash
-   curl -O https://raw.githubusercontent.com/jpittelkow/Housarr/main/docker-compose.simple.yml
+   git clone https://github.com/jpittelkow/Housarr.git
+   cd Housarr
    ```
 
 2. **Generate an APP_KEY and set it**
@@ -65,12 +66,12 @@ Open [http://localhost:8000](http://localhost:8000) and create your account!
    # Generate key
    docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
    
-   # Edit docker-compose.simple.yml and paste your key
+   # Edit docker-compose.yml and paste your key in the APP_KEY field
    ```
 
 3. **Start Housarr**
    ```bash
-   docker compose -f docker-compose.simple.yml up -d
+   docker compose up -d
    ```
 
 4. **Access the application**
@@ -113,7 +114,7 @@ Housarr uses a modern, decoupled architecture:
                           │
 ┌─────────────────────────────────────────────────────────┐
 │                      Database                            │
-│  • SQLite (default) / MySQL / PostgreSQL                │
+│  • SQLite (embedded, zero-config)                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -169,37 +170,33 @@ See [Testing Documentation](docs/DOCUMENTATION_TESTING.md) for details.
    npm run dev
    ```
 
-### Docker Development (Multi-Container)
-
-For development with MySQL, Redis, and hot-reload:
+### Docker Development
 
 ```bash
 # Clone the repository
 git clone https://github.com/jpittelkow/Housarr.git
 cd Housarr
 
-# Start development stack (MySQL + Redis + PHP + Nginx)
+# Start Housarr (single container with SQLite)
 docker compose up -d
 
 # View logs
 docker compose logs -f
 
-# Stop services
+# Stop
 docker compose down
 ```
 
-> **Note:** The root `docker-compose.yml` starts a full development stack with MySQL and Redis. For simple self-hosted deployments, use `docker-compose.simple.yml` instead.
-
 ### Environment Variables
 
-Key environment variables (set in `.env` or Docker):
+Key environment variables (set in `docker-compose.yml`):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `APP_KEY` | Encryption key (required) | - |
 | `APP_URL` | Application URL | `http://localhost:8000` |
 | `APP_PORT` | Web server port | `8000` |
-| `DB_CONNECTION` | Database type | `sqlite` |
+| `TZ` | Timezone | `UTC` |
 
 ## 🤖 AI Configuration
 

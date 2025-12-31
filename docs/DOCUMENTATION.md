@@ -12,7 +12,7 @@ The application uses a decoupled architecture:
 - **Frontend**: React 18 SPA (TypeScript) with Vite build tool
 - **Infrastructure**: Docker-based deployment with multiple configuration options
 - **Authentication**: Laravel Sanctum for session-based authentication
-- **Database**: Supports SQLite (default), MySQL, and PostgreSQL
+- **Database**: SQLite (embedded, zero-config)
 
 ## Technology Stack
 
@@ -20,7 +20,7 @@ The application uses a decoupled architecture:
 - Laravel 11.0
 - PHP 8.2+
 - Laravel Sanctum 4.0
-- SQLite/MySQL/PostgreSQL support
+- SQLite database
 
 ### Frontend
 - React 18.3.1
@@ -34,12 +34,11 @@ The application uses a decoupled architecture:
 - Zod 3.23.8 (validation)
 
 ### Infrastructure
-- Docker & Docker Compose
+- Docker (single container deployment)
 - Nginx (web server)
 - PHP-FPM (PHP processor)
 - Supervisor (process management)
-- Redis (caching, optional)
-- MySQL (optional, for production)
+- SQLite (embedded database)
 
 ## Project Structure
 
@@ -50,15 +49,20 @@ Housarr/
 ├── docker/                     # Docker configuration files
 ├── data/                       # Persistent data storage
 ├── docs/                       # Documentation and ADRs
-├── docker-compose.yml          # Development stack (nginx, php, mysql, redis, etc.)
-└── docker-compose.prod.yml     # Production overlay
+└── docker-compose.yml          # Single-container deployment
 ```
 
 ## Quick Start
 
-### Development
+### Docker Deployment
 
 ```bash
+# Generate APP_KEY
+docker run --rm php:8.2-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+
+# Edit docker-compose.yml and set your APP_KEY
+
+# Start Housarr
 docker compose up -d
 ```
 
@@ -66,17 +70,22 @@ Access the application:
 - Frontend: http://localhost:8000
 - API: http://localhost:8000/api
 
-### Production
+### Local Development
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
+# Backend
+cd backend
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve
 
-Production includes:
-- Read-only filesystem for security
-- Resource limits and scaling
-- No exposed database/redis ports
-- Production-optimized configurations
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
+```
 
 ## Documentation Index
 
@@ -161,8 +170,10 @@ The frontend is a single-page application with:
 
 ## Deployment
 
-The application supports two deployment modes:
-1. **Single Container**: All-in-one container with nginx, PHP-FPM, and built frontend (development)
-2. **Multi-Container**: Separate containers for nginx, PHP-FPM, MySQL, Redis, scheduler, and workers (production)
+Housarr is deployed as a **single Docker container** with everything included:
+- Nginx web server
+- PHP-FPM 8.3
+- SQLite database (embedded)
+- React frontend (pre-built)
 
-See the [Docker Documentation](DOCUMENTATION_DOCKER.md) for detailed deployment information.
+No external database or Redis required. See the [Docker Documentation](DOCUMENTATION_DOCKER.md) for detailed deployment information.
