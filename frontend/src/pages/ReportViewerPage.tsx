@@ -114,13 +114,6 @@ export default function ReportViewerPage() {
     })
   }
 
-  const handleRegenerate = () => {
-    if (conversationHistory.length === 0) {
-      toast.error('Please provide conversation history for regeneration')
-      return
-    }
-    regenerateMutation.mutate()
-  }
 
   if (isLoading) {
     return (
@@ -227,7 +220,7 @@ export default function ReportViewerPage() {
 
       {/* Edit Modal */}
       <Modal
-        open={showEditModal}
+        isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Edit Report"
       >
@@ -270,7 +263,7 @@ export default function ReportViewerPage() {
 
       {/* Regenerate Modal */}
       <Modal
-        open={showRegenerateModal}
+        isOpen={showRegenerateModal}
         onClose={() => setShowRegenerateModal(false)}
         title="Regenerate Report"
       >

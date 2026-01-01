@@ -198,7 +198,7 @@ export default function ReportCreatorPage() {
 
       {/* Save Modal */}
       <Modal
-        open={showSaveModal}
+        isOpen={showSaveModal}
         onClose={() => {
           if (!isGenerating) {
             setShowSaveModal(false)
