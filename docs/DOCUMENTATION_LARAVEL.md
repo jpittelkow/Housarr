@@ -297,6 +297,26 @@ backend/
 - `user()`: BelongsTo User
 - `item()`: BelongsTo Item
 
+### Report Model (`app/Models/Report.php`)
+
+**Fillable Fields**:
+- `household_id`
+- `created_by_user_id` (nullable)
+- `name`
+- `description` (nullable)
+- `prompt_used` (nullable, JSON array - conversation history)
+- `file_path` (nullable, path to stored HTML file)
+
+**Casts**:
+- `prompt_used`: array
+
+**Relationships**:
+- `household()`: BelongsTo Household
+- `createdBy()`: BelongsTo User (via created_by_user_id)
+
+**Scopes**:
+- `scopeForHousehold($query, int $householdId)`: Filters reports by household
+
 **Scopes**:
 - `scopeIncomplete($query)`: Filters completed_at is null
 - `scopeCompleted($query)`: Filters completed_at is not null
@@ -510,6 +530,32 @@ All controllers are in `app/Http/Controllers/Api/` namespace.
 - `update(Request)`: Updates profile (name, email)
 - `updatePassword(Request)`: Updates password
 
+### ReportController
+
+**Methods**:
+- `index(Request)`: Lists all reports for household
+- `store(Request)`: Creates new report via chat conversation (requires AI configuration)
+- `show(Request, Report)`: Returns report metadata
+- `view(Request, Report)`: Returns report HTML content
+- `update(Request, Report)`: Updates report name and description
+- `destroy(Request, Report)`: Deletes report and associated file
+- `regenerate(Request, Report)`: Regenerates report with new conversation history
+
+**Authorization**: All methods ensure reports belong to user's household
+
+### ReportDataController
+
+**Methods**: Provides data endpoints for generated reports to fetch fresh data
+- `items(Request)`: Returns all items with relationships
+- `reminders(Request)`: Returns all reminders
+- `todos(Request)`: Returns all todos
+- `maintenanceLogs(Request)`: Returns all maintenance logs
+- `vendors(Request)`: Returns all vendors
+- `locations(Request)`: Returns all locations
+- `dashboard(Request)`: Returns dashboard summary data
+
+**Authorization**: All endpoints are household-scoped
+
 ## Routes
 
 All API routes are defined in `routes/api.php`.
@@ -610,6 +656,24 @@ All API routes are defined in `routes/api.php`.
 - `PATCH /api/todos/{todo}`
 - `DELETE /api/todos/{todo}`
 - `POST /api/todos/{todo}/complete`
+
+**Reports**:
+- `GET /api/reports` - List all reports for household
+- `POST /api/reports` - Create new report (requires conversation_history)
+- `GET /api/reports/{report}` - Get report metadata
+- `GET /api/reports/{report}/view` - Get report HTML content
+- `PATCH /api/reports/{report}` - Update report name/description
+- `DELETE /api/reports/{report}` - Delete report
+- `POST /api/reports/{report}/regenerate` - Regenerate report with new conversation
+
+**Report Data** (for generated reports to fetch fresh data):
+- `GET /api/reports/data/items` - All items with relationships
+- `GET /api/reports/data/reminders` - All reminders
+- `GET /api/reports/data/todos` - All todos
+- `GET /api/reports/data/maintenance-logs` - All maintenance logs
+- `GET /api/reports/data/vendors` - All vendors
+- `GET /api/reports/data/locations` - All locations
+- `GET /api/reports/data/dashboard` - Dashboard summary data
 
 **Notifications**:
 - `GET /api/notifications`
@@ -746,6 +810,33 @@ All policies use `Gate::authorize()` in controllers.
 **Implementation Strategy**:
 1. **Primary**: DuckDuckGo Image Search - Extracts image URLs directly from HTML results
 2. **Fallback**: Google Images - Used when DuckDuckGo doesn't return results
+
+### ReportService (`app/Services/ReportService.php`)
+
+**Purpose**: Generates AI-powered HTML/React reports using Claude based on user chat conversations
+
+**Constructor**: `__construct(?int $householdId = null)`
+
+**Static Methods**:
+- `forHousehold(?int $householdId)`: Creates instance for household
+
+**Public Methods**:
+- `isAvailable()`: Checks if AI is configured for report generation
+- `generateReport(array $conversationHistory)`: Generates report HTML from conversation history
+- `saveReportFile(string $html, int $reportId)`: Saves generated HTML to storage
+- `deleteReportFile(string $filePath)`: Deletes report file from storage
+- `getReportFileContent(string $filePath)`: Retrieves report file content
+- `getAvailableDataTypes()`: Returns available data types and their API endpoints
+
+**Report Generation**:
+- Uses Claude API to generate standalone HTML files with embedded React
+- Includes Tailwind CSS design system for consistency
+- Reports fetch fresh data from dedicated API endpoints when viewed
+- Validates generated HTML structure before saving
+
+**Storage**:
+- Reports stored in `storage/app/reports/{household_id}/{report_id}.html`
+- Uses StorageService to support both local and S3 storage
 
 **Important**: Does NOT construct Amazon URLs from ASINs (which would fail with 400 errors). Instead, extracts actual working image URLs from search engine results.
 

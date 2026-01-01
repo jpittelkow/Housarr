@@ -121,6 +121,40 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 - Category suggestions
 - Quick item creation from AI results
 
+### ReportsPage (`src/pages/ReportsPage.tsx`)
+
+**Purpose**: List and manage AI-generated reports
+
+**Features**:
+- List all saved reports
+- View report details
+- Create new report
+- Edit report metadata
+- Delete reports
+- Regenerate reports
+
+### ReportCreatorPage (`src/pages/ReportCreatorPage.tsx`)
+
+**Purpose**: Create new reports by chatting with Claude
+
+**Features**:
+- Chat interface with Claude
+- Available data types information
+- Suggested questions for report creation
+- Generate report from conversation
+- Save report with name and description
+
+### ReportViewerPage (`src/pages/ReportViewerPage.tsx`)
+
+**Purpose**: Display generated reports with fresh data
+
+**Features**:
+- View report HTML in iframe
+- Edit report metadata
+- Regenerate report
+- Delete report
+- Reports fetch fresh data from API when viewed
+
 ### VendorsPage (`src/pages/VendorsPage.tsx`)
 
 **Purpose**: Manage vendors/service providers
@@ -565,6 +599,22 @@ All UI components follow a consistent design system (Untitled UI style).
 - `settings.checkAI()`: Checks AI config
 - `settings.testAI(settings?)`: Tests AI connection
 
+#### Reports
+- `reports.list()`: Lists all reports for household
+- `reports.create(conversationHistory, name, description?)`: Creates new report (timeout: 180s)
+- `reports.get(id)`: Gets report metadata
+- `reports.view(id)`: Gets report HTML content (returns text)
+- `reports.update(id, data)`: Updates report name/description
+- `reports.delete(id)`: Deletes report
+- `reports.regenerate(id, conversationHistory)`: Regenerates report (timeout: 180s)
+- `reports.getDataTypes()`: Returns available data types and endpoints
+
+#### Chat
+- `chat.checkAvailability()`: Checks if AI chat is available
+- `chat.send(message, history?)`: Sends chat message (timeout: 120s)
+- `chat.sendWithItem(itemId, message, history?, options?)`: Sends chat with item context
+- `chat.getSuggestedQuestions(itemId)`: Gets suggested questions for item
+
 ## Types
 
 All TypeScript types defined in `src/types/index.ts`:
@@ -772,6 +822,34 @@ interface Notification {
   read_at: string | null
   created_at: string
   updated_at: string
+}
+```
+
+### Report
+```typescript
+interface Report {
+  id: number
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
+  created_by?: {
+    id: number
+    name: string
+  } | null
+}
+```
+
+### ReportDataTypes
+```typescript
+interface ReportDataTypes {
+  items: { description: string; endpoint: string; fields: string[] }
+  reminders: { description: string; endpoint: string; fields: string[] }
+  todos: { description: string; endpoint: string; fields: string[] }
+  maintenance_logs: { description: string; endpoint: string; fields: string[] }
+  vendors: { description: string; endpoint: string; fields: string[] }
+  locations: { description: string; endpoint: string; fields: string[] }
+  dashboard: { description: string; endpoint: string; fields: string[] }
 }
 ```
 

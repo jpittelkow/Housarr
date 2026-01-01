@@ -17,6 +17,9 @@ const ItemDetailPage = lazy(() => import('@/pages/ItemDetailPage'))
 const SmartAddPage = lazy(() => import('@/pages/SmartAddPage'))
 const RoomsPage = lazy(() => import('@/pages/RoomsPage'))
 const RoomDetailPage = lazy(() => import('@/pages/RoomDetailPage'))
+const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
+const ReportCreatorPage = lazy(() => import('@/pages/ReportCreatorPage'))
+const ReportViewerPage = lazy(() => import('@/pages/ReportViewerPage'))
 const VendorsPage = lazy(() => import('@/pages/VendorsPage'))
 const RemindersPage = lazy(() => import('@/pages/RemindersPage'))
 const TodosPage = lazy(() => import('@/pages/TodosPage'))
@@ -112,6 +115,9 @@ function App() {
             <Route path="rooms" element={<RoomsPage />} />
             <Route path="rooms/:id" element={<RoomDetailPage />} />
             <Route path="smart-add" element={<SmartAddPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/create" element={<ReportCreatorPage />} />
+            <Route path="reports/:id" element={<ReportViewerPage />} />
             <Route path="vendors" element={<VendorsPage />} />
             <Route path="reminders" element={<RemindersPage />} />
             <Route path="todos" element={<TodosPage />} />

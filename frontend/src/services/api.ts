@@ -15,6 +15,8 @@ import type {
   AuthResponse,
   FileRecord,
   FileableType,
+  Report,
+  ReportDataTypes,
 } from '@/types'
 
 const api = axios.create({
@@ -1057,6 +1059,98 @@ export const address = {
   }> => {
     const response = await api.get('/address/reverse', { params: { lat, lon } })
     return response.data
+  },
+}
+
+// Reports
+export const reports = {
+  list: async (): Promise<{ reports: Report[] }> => {
+    const response = await api.get('/reports')
+    return response.data
+  },
+
+  create: async (
+    conversationHistory: ChatMessage[],
+    name: string,
+    description?: string
+  ): Promise<{ report: Report }> => {
+    const response = await api.post('/reports', {
+      name,
+      description: description || null,
+      conversation_history: conversationHistory,
+    }, { timeout: 180000 }) // 3 minute timeout for report generation
+    return response.data
+  },
+
+  get: async (id: number): Promise<{ report: Report }> => {
+    const response = await api.get(`/reports/${id}`)
+    return response.data
+  },
+
+  view: async (id: number): Promise<string> => {
+    const response = await api.get(`/reports/${id}/view`, {
+      responseType: 'text',
+    })
+    return response.data
+  },
+
+  update: async (id: number, data: { name?: string; description?: string }): Promise<{ report: Report }> => {
+    const response = await api.patch(`/reports/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/reports/${id}`)
+    return response.data
+  },
+
+  regenerate: async (id: number, conversationHistory: ChatMessage[]): Promise<{ report: Report }> => {
+    const response = await api.post(`/reports/${id}/regenerate`, {
+      conversation_history: conversationHistory,
+    }, { timeout: 180000 }) // 3 minute timeout for report generation
+    return response.data
+  },
+
+  getDataTypes: async (): Promise<ReportDataTypes> => {
+    // This would typically come from the backend, but for now we'll return a static structure
+    // that matches what ReportService provides
+    return {
+      items: {
+        description: 'All household items with their details, categories, locations, and relationships',
+        endpoint: '/api/reports/data/items',
+        fields: ['id', 'name', 'make', 'model', 'category', 'location', 'vendor', 'install_date', 'warranty_years', 'maintenance_interval_months'],
+      },
+      reminders: {
+        description: 'All reminders with due dates, status, and associated items',
+        endpoint: '/api/reports/data/reminders',
+        fields: ['id', 'title', 'description', 'due_date', 'status', 'item', 'user'],
+      },
+      todos: {
+        description: 'All todos with priorities, due dates, and completion status',
+        endpoint: '/api/reports/data/todos',
+        fields: ['id', 'title', 'description', 'priority', 'due_date', 'completed_at', 'item', 'user'],
+      },
+      maintenance_logs: {
+        description: 'All maintenance and service history records',
+        endpoint: '/api/reports/data/maintenance-logs',
+        fields: ['id', 'item', 'type', 'date', 'cost', 'vendor', 'notes', 'parts'],
+      },
+      vendors: {
+        description: 'All vendors with contact information and categories',
+        endpoint: '/api/reports/data/vendors',
+        fields: ['id', 'name', 'category', 'phone', 'email', 'website', 'address'],
+      },
+      locations: {
+        description: 'All locations/rooms with paint colors and details',
+        endpoint: '/api/reports/data/locations',
+        fields: ['id', 'name', 'type', 'paint_colors', 'images'],
+      },
+      dashboard: {
+        description: 'Dashboard summary with counts and overview statistics',
+        endpoint: '/api/reports/data/dashboard',
+        fields: ['items_count', 'upcoming_reminders', 'overdue_reminders', 'incomplete_todos_count'],
+      },
+    }
   },
 }
 

@@ -141,6 +141,7 @@ Development guidelines including:
 - **Todos**: Task management with priorities and due dates
 - **File Management**: Upload and attach files (manuals, images) to items
 - **AI Integration**: Image analysis and AI suggestions for items (Claude, OpenAI, Gemini, Local)
+- **AI Report Creator**: Chat with Claude to generate custom HTML/React reports with always up-to-date data
 - **Manual Search**: Automated search and download of product manuals
 - **Vendors**: Track service providers and vendors
 - **Locations**: Organize items by physical location

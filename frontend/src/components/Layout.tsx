@@ -19,6 +19,7 @@ import {
   HelpCircle,
   Sparkles,
   ThemeToggle,
+  FileText,
 } from '@/components/ui'
 import type { LucideIcon } from 'lucide-react'
 
@@ -27,6 +28,7 @@ const navigation: { name: string; href: string; icon: LucideIcon }[] = [
   { name: 'Items', href: '/items', icon: Package },
   { name: 'Rooms', href: '/rooms', icon: Home },
   { name: 'Smart Add', href: '/smart-add', icon: Sparkles },
+  { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Vendors', href: '/vendors', icon: Users },
   { name: 'Reminders', href: '/reminders', icon: Bell },
   { name: 'Todos', href: '/todos', icon: CheckSquare },
@@ -73,6 +75,9 @@ export default function Layout() {
     '/items/:id': () => import('@/pages/ItemDetailPage'),
     '/rooms': () => import('@/pages/RoomsPage'),
     '/smart-add': () => import('@/pages/SmartAddPage'),
+    '/reports': () => import('@/pages/ReportsPage'),
+    '/reports/create': () => import('@/pages/ReportCreatorPage'),
+    '/reports/:id': () => import('@/pages/ReportViewerPage'),
     '/vendors': () => import('@/pages/VendorsPage'),
     '/reminders': () => import('@/pages/RemindersPage'),
     '/todos': () => import('@/pages/TodosPage'),

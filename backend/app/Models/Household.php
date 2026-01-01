@@ -54,6 +54,11 @@ class Household extends Model
         return $this->hasMany(Todo::class);
     }
 
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class);
+    }
+
     public function allFiles(): HasMany
     {
         return $this->hasMany(File::class);

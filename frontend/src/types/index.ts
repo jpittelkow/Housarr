@@ -223,3 +223,53 @@ export interface AuthResponse {
 export interface ApiResponse<T> {
   data: T
 }
+
+export interface Report {
+  id: number
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
+  created_by?: {
+    id: number
+    name: string
+  } | null
+}
+
+export interface ReportDataTypes {
+  items: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  reminders: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  todos: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  maintenance_logs: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  vendors: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  locations: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+  dashboard: {
+    description: string
+    endpoint: string
+    fields: string[]
+  }
+}

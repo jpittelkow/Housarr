@@ -26,6 +26,7 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 | [014](014-smart-add-product-image-search.md) | Smart Add Product Image Search | Accepted | 2024-12-30 |
 | [015](015-separate-item-vendor-categories.md) | Separate Item and Vendor Categories | Accepted | 2025-01-02 |
 | [016](016-room-detail-page-and-image-upload.md) | Room Detail Page and Image Upload Improvements | Accepted | 2025-01-01 |
+| [017](017-ai-report-creator.md) | AI Report Creator | Accepted | 2025-01-03 |
 
 ## ADR Template
 

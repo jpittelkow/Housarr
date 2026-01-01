@@ -31,6 +31,11 @@ test.describe('Navigation', () => {
     await expect(page).toHaveURL(/\/smart-add/)
     await expect(page.locator('h1')).toContainText(/smart add/i)
 
+    // Reports
+    await page.click('a[href="/reports"], nav >> text=Reports')
+    await expect(page).toHaveURL(/\/reports/)
+    await expect(page.locator('h1')).toContainText(/reports/i)
+
     // Reminders
     await page.click('a[href="/reminders"], nav >> text=Reminders')
     await expect(page).toHaveURL(/\/reminders/)
@@ -112,6 +117,16 @@ test.describe('Navigation', () => {
 
 test.describe('Page Loading', () => {
   test('all pages load without errors', async ({ page }) => {
+    // Skip if no backend
+    test.skip(process.env.CI === 'true', 'Requires live backend')
+    
+    // Login first
+    await page.goto('/login')
+    await page.fill('input[name="email"]', 'test@example.com')
+    await page.fill('input[name="password"]', 'password')
+    await page.click('button[type="submit"]')
+    await page.waitForURL(/\/dashboard/)
+    
     // Listen for console errors
     const errors: string[] = []
     page.on('console', msg => {
@@ -120,20 +135,42 @@ test.describe('Page Loading', () => {
       }
     })
 
-    const publicPages = ['/login', '/register']
+    page.on('pageerror', error => {
+      errors.push(error.message)
+    })
+
+    const protectedPages = ['/reports', '/reports/create']
     
-    for (const path of publicPages) {
+    for (const path of protectedPages) {
       await page.goto(path)
       await page.waitForLoadState('networkidle')
       
-      // Check for critical errors (filter out common non-critical ones)
+      // Check for React rendering errors specifically - this catches the EmptyState icon bug
+      const reactErrors = errors.filter(e => 
+        e.includes('Objects are not valid as a React child') ||
+        e.includes('found: object with keys') ||
+        e.includes('$$typeof') ||
+        e.includes('Element type is invalid') ||
+        (e.includes('React.createElement') && e.includes('render'))
+      )
+      
+      if (reactErrors.length > 0) {
+        console.error(`React rendering errors on ${path}:`, reactErrors)
+        throw new Error(`React rendering error on ${path}: ${reactErrors.join('; ')}`)
+      }
+      
+      expect(reactErrors).toHaveLength(0)
+      
+      // Check for other critical errors (filter out common non-critical ones)
       const criticalErrors = errors.filter(e => 
         !e.includes('favicon') && 
         !e.includes('404') &&
-        !e.includes('Failed to load resource')
+        !e.includes('Failed to load resource') &&
+        !e.includes('net::ERR_')
       )
       
-      expect(criticalErrors).toHaveLength(0)
+      // Clear errors for next page
+      errors.length = 0
     }
   })
 

@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\PaintColorController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReminderController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReportDataController;
 use App\Http\Controllers\Api\RoomColorAnalysisController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\TodoController;
@@ -146,4 +148,22 @@ Route::middleware(['auth:sanctum', 'throttle:1000,1'])->group(function () {
     Route::post('/chat', [ChatController::class, 'chat']);
     Route::post('/items/{item}/chat', [ChatController::class, 'chatWithItem']);
     Route::get('/items/{item}/chat/suggestions', [ChatController::class, 'getSuggestedQuestions']);
+
+    // Reports
+    Route::get('/reports', [ReportController::class, 'index']);
+    Route::post('/reports', [ReportController::class, 'store']);
+    Route::get('/reports/{report}', [ReportController::class, 'show']);
+    Route::get('/reports/{report}/view', [ReportController::class, 'view']);
+    Route::patch('/reports/{report}', [ReportController::class, 'update']);
+    Route::delete('/reports/{report}', [ReportController::class, 'destroy']);
+    Route::post('/reports/{report}/regenerate', [ReportController::class, 'regenerate']);
+
+    // Report Data Endpoints (for generated reports to fetch fresh data)
+    Route::get('/reports/data/items', [ReportDataController::class, 'items']);
+    Route::get('/reports/data/reminders', [ReportDataController::class, 'reminders']);
+    Route::get('/reports/data/todos', [ReportDataController::class, 'todos']);
+    Route::get('/reports/data/maintenance-logs', [ReportDataController::class, 'maintenanceLogs']);
+    Route::get('/reports/data/vendors', [ReportDataController::class, 'vendors']);
+    Route::get('/reports/data/locations', [ReportDataController::class, 'locations']);
+    Route::get('/reports/data/dashboard', [ReportDataController::class, 'dashboard']);
 });
