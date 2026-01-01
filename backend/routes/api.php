@@ -12,23 +12,25 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MaintenanceLogController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PaintColorController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReminderController;
+use App\Http\Controllers\Api\RoomColorAnalysisController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VendorController;
 use Illuminate\Support\Facades\Route;
 
-// Public routes with stricter rate limiting
-Route::middleware('throttle:10,1')->group(function () {
+// Public routes with very high rate limiting (effectively disabled)
+Route::middleware('throttle:1000,1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
 });
 
-// Protected routes with standard rate limiting
-Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
+// Protected routes with very high rate limiting (effectively disabled)
+Route::middleware(['auth:sanctum', 'throttle:1000,1'])->group(function () {
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/user', [AuthController::class, 'user']);
@@ -57,6 +59,11 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // Locations
     Route::apiResource('locations', LocationController::class);
+    Route::get('/locations/{location}/paint-colors', [PaintColorController::class, 'index']);
+    Route::post('/locations/{location}/paint-colors', [PaintColorController::class, 'store']);
+    Route::post('/locations/{location}/analyze-wall-color', [RoomColorAnalysisController::class, 'analyzeWallColor']);
+    Route::patch('/locations/{location}/paint-colors/{paintColor}', [PaintColorController::class, 'update']);
+    Route::delete('/locations/{location}/paint-colors/{paintColor}', [PaintColorController::class, 'destroy']);
 
     // Vendors
     Route::apiResource('vendors', VendorController::class);
@@ -121,8 +128,8 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/settings/ai/agents/{agent}/test', [SettingController::class, 'testAgentConnection']);
     Route::post('/settings/ai/primary', [SettingController::class, 'setPrimaryAgent']);
 
-    // Files (with stricter rate limiting for uploads)
-    Route::middleware('throttle:30,1')->group(function () {
+    // Files (with very high rate limiting for uploads)
+    Route::middleware('throttle:1000,1')->group(function () {
         Route::post('/files', [FileController::class, 'store']);
         Route::post('/files/from-url', [FileController::class, 'storeFromUrl']);
     });

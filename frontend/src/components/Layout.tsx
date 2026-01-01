@@ -25,6 +25,7 @@ import type { LucideIcon } from 'lucide-react'
 const navigation: { name: string; href: string; icon: LucideIcon }[] = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Items', href: '/items', icon: Package },
+  { name: 'Rooms', href: '/rooms', icon: Home },
   { name: 'Smart Add', href: '/smart-add', icon: Sparkles },
   { name: 'Vendors', href: '/vendors', icon: Users },
   { name: 'Reminders', href: '/reminders', icon: Bell },
@@ -70,6 +71,7 @@ export default function Layout() {
     '/': () => import('@/pages/DashboardPage'),
     '/items': () => import('@/pages/ItemsPage'),
     '/items/:id': () => import('@/pages/ItemDetailPage'),
+    '/rooms': () => import('@/pages/RoomsPage'),
     '/smart-add': () => import('@/pages/SmartAddPage'),
     '/vendors': () => import('@/pages/VendorsPage'),
     '/reminders': () => import('@/pages/RemindersPage'),

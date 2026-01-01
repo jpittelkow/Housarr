@@ -15,6 +15,8 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const ItemsPage = lazy(() => import('@/pages/ItemsPage'))
 const ItemDetailPage = lazy(() => import('@/pages/ItemDetailPage'))
 const SmartAddPage = lazy(() => import('@/pages/SmartAddPage'))
+const RoomsPage = lazy(() => import('@/pages/RoomsPage'))
+const RoomDetailPage = lazy(() => import('@/pages/RoomDetailPage'))
 const VendorsPage = lazy(() => import('@/pages/VendorsPage'))
 const RemindersPage = lazy(() => import('@/pages/RemindersPage'))
 const TodosPage = lazy(() => import('@/pages/TodosPage'))
@@ -107,6 +109,8 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="items" element={<ItemsPage />} />
             <Route path="items/:id" element={<ItemDetailPage />} />
+            <Route path="rooms" element={<RoomsPage />} />
+            <Route path="rooms/:id" element={<RoomDetailPage />} />
             <Route path="smart-add" element={<SmartAddPage />} />
             <Route path="vendors" element={<VendorsPage />} />
             <Route path="reminders" element={<RemindersPage />} />

@@ -32,11 +32,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   // Note: login/register are now handled by static HTML pages
   // These methods remain for API completeness
   login: async (email: string, password: string) => {
-    await auth.csrf()
-    const response = await auth.login({ email, password })
-    set({ user: response.user, isAuthenticated: true, isPreloading: true })
-    await preloadProtectedPages()
-    set({ isPreloading: false })
+    try {
+      await auth.csrf()
+      const response = await auth.login({ email, password })
+      set({ user: response.user, isAuthenticated: true, isPreloading: true })
+      await preloadProtectedPages()
+      set({ isPreloading: false })
+    } catch (error: any) {
+      throw error
+    }
   },
 
   register: async (data) => {

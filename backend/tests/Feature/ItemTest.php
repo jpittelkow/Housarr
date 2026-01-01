@@ -74,6 +74,46 @@ describe('items index', function () {
         $response->assertOk()
             ->assertJsonCount(1, 'items');
     });
+
+    it('filters by location_id', function () {
+        $location1 = Location::factory()->create(['household_id' => $this->household->id]);
+        $location2 = Location::factory()->create(['household_id' => $this->household->id]);
+        
+        Item::factory()->count(2)->create([
+            'household_id' => $this->household->id,
+            'location_id' => $location1->id,
+        ]);
+        Item::factory()->create([
+            'household_id' => $this->household->id,
+            'location_id' => $location2->id,
+        ]);
+
+        $response = $this->getJson("/api/items?location_id={$location1->id}");
+
+        $response->assertOk()
+            ->assertJsonCount(2, 'items');
+    });
+
+    it('does not show items from other household locations when filtering by location_id', function () {
+        $otherHousehold = Household::factory()->create();
+        $otherLocation = Location::factory()->create(['household_id' => $otherHousehold->id]);
+        $myLocation = Location::factory()->create(['household_id' => $this->household->id]);
+        
+        Item::factory()->create([
+            'household_id' => $otherHousehold->id,
+            'location_id' => $otherLocation->id,
+        ]);
+        Item::factory()->create([
+            'household_id' => $this->household->id,
+            'location_id' => $myLocation->id,
+        ]);
+
+        // Try to filter by other household's location - should return empty or only our items
+        $response = $this->getJson("/api/items?location_id={$otherLocation->id}");
+
+        $response->assertOk()
+            ->assertJsonCount(0, 'items');
+    });
 });
 
 describe('items store', function () {

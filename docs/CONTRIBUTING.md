@@ -35,6 +35,36 @@ This document outlines critical architectural patterns and rules that **MUST** b
 
 ---
 
+## 📐 Planning Your Implementation
+
+> **⚠️ CRITICAL: When creating implementation plans, ADR creation and documentation updates MUST be included as separate, trackable steps when required.**
+
+Before writing code, create an implementation plan that includes all required steps. **Implementation plans MUST explicitly include:**
+
+- **ADR creation steps** - When the change requires an ADR (see [When ADRs Are Required](#2-adrs-are-required-for-significant-changes)), the plan MUST include a step to create the ADR document. This should be a separate, trackable todo item, not just mentioned in passing.
+- **Documentation update steps** - When documentation is required (TypeScript types, API docs, README, etc.), the plan MUST include specific steps to update each affected documentation file. These should be explicit, actionable todos (e.g., "Update TypeScript types in `frontend/src/types/index.ts`").
+- **Test verification steps** - Plans MUST include steps to run the full test suite after major implementation milestones to ensure nothing broke. These should be explicit, actionable todos (e.g., "Run backend tests: `cd backend && ./vendor/bin/pest`", "Run frontend tests: `cd frontend && npm run test:run`").
+- **Test writing verification** - Plans MUST verify that required tests have been written and are passing. After writing new code, the plan must include a step to verify tests exist and pass.
+
+**Why this matters:**
+- Plans that omit ADR/documentation steps lead to incomplete implementations
+- Plans that omit test verification steps risk breaking existing functionality
+- These steps are often forgotten if not explicitly tracked in the plan
+- Reviewers need to see these steps in the plan to verify completeness
+
+**Example of a good plan step:**
+- ✅ "Create ADR 016 in `docs/adr/016-feature-name.md` documenting the decision to use X pattern"
+- ✅ "Update TypeScript types in `frontend/src/types/index.ts` to include new `status` field"
+- ✅ "Run backend tests: `cd backend && ./vendor/bin/pest` to verify no regressions"
+- ✅ "Run frontend tests: `cd frontend && npm run test:run` to verify new component tests pass"
+
+**Example of a bad plan step:**
+- ❌ "Implement feature" (doesn't mention ADR, documentation, or test verification)
+- ❌ "Update documentation" (too vague, doesn't specify which files)
+- ❌ "Run tests" (too vague, doesn't specify which tests or when)
+
+---
+
 ## 📋 Pre-Submission Checklist
 
 **Before submitting your PR, verify ALL of these items:**
@@ -49,17 +79,30 @@ This document outlines critical architectural patterns and rules that **MUST** b
 - [ ] No N+1 queries (use eager loading with `with()` or `load()`)
 
 ### 🧪 Testing (MANDATORY)
-- [ ] **Backend tests pass**: `cd backend && ./vendor/bin/pest`
-- [ ] **Frontend tests pass**: `cd frontend && npm run test:run`
+
+> **⚠️ CRITICAL: ALL tests MUST pass before submission. Running tests is not optional - it's required to ensure you didn't break existing functionality.**
+
+- [ ] **Backend tests pass**: `cd backend && ./vendor/bin/pest` - **MUST pass before submission**
+- [ ] **Frontend tests pass**: `cd frontend && npm run test:run` - **MUST pass before submission**
 - [ ] **New features have tests**: Every new endpoint, component, or function has corresponding tests
-- [ ] **E2E tests pass** (for UI changes): `cd frontend && npm run test:e2e`
+- [ ] **Tests were written for new code**: Verify that all new code has corresponding tests (check test files exist and are not empty)
+- [ ] **E2E tests pass** (for UI changes): `cd frontend && npm run test:e2e` - **MUST pass if UI changed**
 - [ ] **Bug fixes include regression test**: Test proving the bug is fixed
+- [ ] **Tests run after major changes**: Tests were run after completing major implementation steps (not just at the end)
+
+> **💡 When to run tests:**
+> - After completing each major implementation step (e.g., after adding a new API endpoint, after adding a new component)
+> - Before marking any plan as complete
+> - As a final verification before PR submission
+> - If any test fails, fix the issue before proceeding
 
 ### 📝 Documentation (MANDATORY for significant changes)
 - [ ] **ADR created** for architectural decisions (see [ADR Requirements](#2-adrs-are-required-for-significant-changes) and `docs/adr/`)
 - [ ] **TypeScript types updated** if API response changed (see [API Contract](#critical-rule-2-frontend-backend-api-contract))
 - [ ] **API documentation updated** if endpoints changed
 - [ ] **README updated** if setup process changed
+
+> **⚠️ Planning Requirement:** When creating implementation plans for changes that require documentation updates, the plan MUST include specific documentation update steps. These should be explicit, actionable todos that specify which files need to be updated (e.g., "Update TypeScript types in `frontend/src/types/index.ts` to include new `status` field"). Vague steps like "update documentation" are not sufficient.
 
 ### ✨ Code Quality
 - [ ] Code follows existing patterns in the codebase
@@ -103,6 +146,12 @@ cd backend && ./vendor/bin/pest
 cd frontend && npm run test:e2e
 ```
 
+**When to run tests:**
+- ✅ **After completing major implementation steps** - Run tests after adding a new API endpoint, component, or significant feature to catch regressions early
+- ✅ **Before marking any plan as complete** - Never mark a plan as finished without verifying all tests pass
+- ✅ **As a final verification before PR submission** - Always run the full test suite one final time before submitting
+- ✅ **If any test fails, fix the issue before proceeding** - Don't continue with implementation if tests are failing
+
 > **⚠️ Tests MUST pass before merging. CI/CD will automatically reject PRs with failing tests.**
 
 📖 See [DOCUMENTATION_TESTING.md](DOCUMENTATION_TESTING.md) for complete testing guide with examples.
@@ -131,6 +180,8 @@ cd frontend && npm run test:e2e
 **ADR Template**: See [docs/adr/README.md](adr/README.md)
 
 **When in doubt, write an ADR.** It's better to document too much than too little.
+
+> **⚠️ Planning Requirement:** When creating implementation plans for changes that require ADRs, the plan MUST include a step to create the ADR document. This should be a separate, trackable todo item in the plan (e.g., "Create ADR 016 in `docs/adr/016-feature-name.md`"). The ADR should be created as part of the implementation, not as an afterthought.
 
 ```markdown
 # ADR [NUMBER]: [TITLE]
@@ -674,12 +725,13 @@ test('user can add a new item', async ({ page }) => {
 4. Create Resource transformer
 5. Create Controller with proper authorization
 6. Add routes to `routes/api.php`
-7. Add TypeScript types
-8. Add API service methods
+7. **⚠️ Update TypeScript types** in `frontend/src/types/index.ts` - **MANDATORY** (API contract)
+8. Add API service methods in `frontend/src/services/api.ts`
 9. Register Policy in `AuthServiceProvider` (if not auto-discovered)
 10. **⚠️ Write Pest feature tests** (`backend/tests/Feature/`) - **MANDATORY**
 11. **⚠️ Write frontend tests** if UI components added - **MANDATORY**
-12. **⚠️ Create ADR** if introducing new patterns - **MANDATORY if significant**
+12. **⚠️ Create ADR** in `docs/adr/` if introducing new patterns - **MANDATORY if significant** (see [ADR Requirements](#2-adrs-are-required-for-significant-changes))
+13. **⚠️ Update API documentation** if endpoints changed - **MANDATORY if API contract changed**
 
 ### Adding a New Frontend Page
 
@@ -692,10 +744,11 @@ test('user can add a new item', async ({ page }) => {
 2. Add route in `frontend/src/App.tsx`
 3. Add navigation link in `frontend/src/components/Layout.tsx`
 4. Create API methods in `frontend/src/services/api.ts`
-5. Update types in `frontend/src/types/index.ts`
+5. **⚠️ Update TypeScript types** in `frontend/src/types/index.ts` if API response changed - **MANDATORY** (API contract)
 6. **⚠️ Write page tests** (`frontend/src/pages/__tests__/`) - **MANDATORY**
 7. **⚠️ Write E2E tests** (`frontend/e2e/`) - **MANDATORY**
-8. Add `HelpTooltip` for contextual help where appropriate
+8. **⚠️ Create ADR** in `docs/adr/` if introducing new navigation/route patterns - **MANDATORY if significant** (see [ADR Requirements](#2-adrs-are-required-for-significant-changes))
+9. Add `HelpTooltip` for contextual help where appropriate
 
 ### Adding a New Component
 
@@ -707,7 +760,7 @@ test('user can add a new item', async ({ page }) => {
 1. Create component in `frontend/src/components/`
 2. Export from index file if in `/ui/`
 3. **⚠️ Write component tests** (`frontend/src/components/ui/__tests__/`) - **MANDATORY**
-4. Document props with JSDoc comments
+4. **⚠️ Document props with JSDoc comments** - **MANDATORY** (documentation requirement)
 
 ### Adding a Field to Existing Resource
 
@@ -720,7 +773,7 @@ test('user can add a new item', async ({ page }) => {
 2. Model: Add to `$fillable`, add cast if needed
 3. Resource: Add to `toArray()` return
 4. Request: Add validation rule
-5. TypeScript: Update interface - **⚠️ MANDATORY** (API contract)
+5. **⚠️ Update TypeScript types** in `frontend/src/types/index.ts` - **MANDATORY** (API contract)
 6. Frontend: Update forms/displays
 7. **⚠️ Update existing tests** to cover new field - **MANDATORY**
 

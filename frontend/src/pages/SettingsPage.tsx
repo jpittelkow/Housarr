@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useReducer, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { household, users, categories, locations, auth, backup, settings, type StorageSettings, type EmailSettings, type AISettings } from '@/services/api'
+import { household, users, categories, auth, backup, settings, type StorageSettings, type EmailSettings, type AISettings } from '@/services/api'
 import type { Location, Category, User, Household } from '@/types'
 import { AIAgentCard } from '@/components/settings/AIAgentCard'
 import { useAuthStore } from '@/stores/authStore'
@@ -190,8 +190,6 @@ export default function SettingsPage() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isItemCategoryModalOpen, setIsItemCategoryModalOpen] = useState(false)
   const [isVendorCategoryModalOpen, setIsVendorCategoryModalOpen] = useState(false)
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
-  const [editingLocation, setEditingLocation] = useState<{ id: number; name: string; icon: string; images?: unknown[]; featured_image?: unknown } | null>(null)
   const [showAIPrompts, setShowAIPrompts] = useState(false)
   const [inviteData, setInviteData] = useState({
     name: '',
@@ -202,7 +200,6 @@ export default function SettingsPage() {
   })
   const [itemCategoryData, setItemCategoryData] = useState({ name: '', icon: '', color: '#7F56D9' })
   const [vendorCategoryData, setVendorCategoryData] = useState({ name: '', icon: '', color: '#7F56D9' })
-  const [locationData, setLocationData] = useState({ name: '', icon: '' })
   const [editingUser, setEditingUser] = useState<{ id: number; name: string; email: string; role: 'admin' | 'member' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isExporting, setIsExporting] = useState(false)
@@ -239,10 +236,6 @@ export default function SettingsPage() {
     queryFn: () => categories.list('vendor'),
   })
 
-  const { data: locationsData } = useQuery({
-    queryKey: ['locations'],
-    queryFn: () => locations.list(),
-  })
 
   const { data: settingsData } = useQuery({
     queryKey: ['settings'],
@@ -471,74 +464,6 @@ export default function SettingsPage() {
     },
   })
 
-  const createLocationMutation = useMutation({
-    mutationFn: (data: typeof locationData) => locations.create(data),
-    onSuccess: (response) => {
-      // Immediately update cache with new location
-      queryClient.setQueryData(['locations'], (old: { locations: Location[] } | undefined) => ({
-        locations: [...(old?.locations || []), response.location],
-      }))
-      setIsLocationModalOpen(false)
-      setLocationData({ name: '', icon: '' })
-      toast.success('Location created')
-    },
-  })
-
-  const updateLocationMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: typeof locationData }) => locations.update(id, data),
-    onMutate: async ({ id, data }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['locations'] })
-      // Snapshot previous value
-      const previousLocations = queryClient.getQueryData(['locations'])
-      // Optimistically update cache
-      queryClient.setQueryData(['locations'], (old: { locations: Location[] } | undefined) => ({
-        locations: (old?.locations || []).map((loc) =>
-          loc.id === id ? { ...loc, ...data } : loc
-        ),
-      }))
-      return { previousLocations }
-    },
-    onSuccess: (response) => {
-      // Update with actual server response
-      queryClient.setQueryData(['locations'], (old: { locations: Location[] } | undefined) => ({
-        locations: (old?.locations || []).map((loc) =>
-          loc.id === response.location.id ? response.location : loc
-        ),
-      }))
-      setEditingLocation(null)
-      toast.success('Location updated')
-    },
-    onError: (error, _vars, context) => {
-      // Rollback on error
-      if (context?.previousLocations) {
-        queryClient.setQueryData(['locations'], context.previousLocations)
-      }
-      toast.error(getApiErrorMessage(error, 'Failed to update location'))
-    },
-  })
-
-  const deleteLocationMutation = useMutation({
-    mutationFn: (id: number) => locations.delete(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['locations'] })
-      const previousLocations = queryClient.getQueryData(['locations'])
-      // Optimistically remove from cache
-      queryClient.setQueryData(['locations'], (old: { locations: Location[] } | undefined) => ({
-        locations: (old?.locations || []).filter((loc) => loc.id !== id),
-      }))
-      return { previousLocations }
-    },
-    onSuccess: () => {
-      toast.success('Location deleted')
-    },
-    onError: (error, _id, context) => {
-      if (context?.previousLocations) {
-        queryClient.setQueryData(['locations'], context.previousLocations)
-      }
-      toast.error(getApiErrorMessage(error, 'Cannot delete location'))
-    },
-  })
 
   const importBackupMutation = useMutation({
     mutationFn: (file: File) => backup.import(file),
@@ -664,7 +589,6 @@ export default function SettingsPage() {
   const customVendorCategories = allVendorCategories.filter((c) => c.household_id !== null)
   const systemVendorCategories = allVendorCategories.filter((c) => c.household_id === null)
 
-  const allLocations = locationsData?.locations || []
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -965,79 +889,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {/* Locations */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center">
-                    <Icon icon={MapPin} size="sm" className="text-gray-700 dark:text-gray-300" />
-                  </div>
-                  <div>
-                    <CardTitle>Locations</CardTitle>
-                    <CardDescription>Define locations for your items</CardDescription>
-                  </div>
-                </div>
-                <Button onClick={() => setIsLocationModalOpen(true)} size="sm">
-                  <Icon icon={Plus} size="xs" /> Add
-                </Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                {allLocations.length === 0 ? (
-                  <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                    No locations yet. Add your first location.
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {allLocations.map((loc) => {
-                      const LocationIcon = loc.icon ? getIconByName(loc.icon) : null
-                      return (
-                      <li key={loc.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          {loc.featured_image ? (
-                            <img
-                              src={loc.featured_image.url}
-                              alt={loc.name}
-                              className="w-9 h-9 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                              <Icon icon={LocationIcon || MapPin} size="sm" className="text-gray-600 dark:text-gray-400" />
-                            </div>
-                          )}
-                          <div>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">{loc.name}</span>
-                            {loc.items_count !== undefined && loc.items_count > 0 && (
-                              <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">({loc.items_count} items)</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingLocation({ id: loc.id, name: loc.name, icon: loc.icon || '', images: loc.images, featured_image: loc.featured_image })}
-                          >
-                            <Icon icon={Pencil} size="xs" className="text-gray-400" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm('Delete this location?')) {
-                                deleteLocationMutation.mutate(loc.id)
-                              }
-                            }}
-                          >
-                            <Icon icon={Trash2} size="xs" className="text-gray-400" />
-                          </Button>
-                        </div>
-                      </li>
-                    )})}
-                    
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
           </>
         )}
 
@@ -1688,100 +1539,6 @@ export default function SettingsPage() {
             </Button>
             <Button type="submit" isLoading={createVendorCategoryMutation.isPending}>
               Create
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Location Modal - Create */}
-      <Modal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} title="Add Location">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            createLocationMutation.mutate(locationData)
-          }}
-          className="p-6 space-y-4"
-        >
-          <Input
-            label="Name"
-            value={locationData.name}
-            onChange={(e) => setLocationData({ ...locationData, name: e.target.value })}
-            placeholder="e.g., Garage, Kitchen, Basement"
-            required
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Icon (optional)
-            </label>
-            <IconPicker
-              value={locationData.icon}
-              onChange={(icon) => setLocationData({ ...locationData, icon })}
-              placeholder="Select an icon"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button type="button" variant="secondary" onClick={() => setIsLocationModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={createLocationMutation.isPending}>
-              Create
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Location Modal - Edit */}
-      <Modal isOpen={!!editingLocation} onClose={() => setEditingLocation(null)} title="Edit Location">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (editingLocation) {
-              updateLocationMutation.mutate({
-                id: editingLocation.id,
-                data: { name: editingLocation.name, icon: editingLocation.icon },
-              })
-            }
-          }}
-          className="p-6 space-y-4"
-        >
-          <Input
-            label="Name"
-            value={editingLocation?.name || ''}
-            onChange={(e) => setEditingLocation(prev => prev ? { ...prev, name: e.target.value } : null)}
-            placeholder="e.g., Garage, Kitchen, Basement"
-            required
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Icon (optional)
-            </label>
-            <IconPicker
-              value={editingLocation?.icon || ''}
-              onChange={(icon) => setEditingLocation(prev => prev ? { ...prev, icon } : null)}
-              placeholder="Select an icon"
-            />
-          </div>
-
-          {editingLocation && (
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Location Images</label>
-              <ImageUpload
-                fileableType="location"
-                fileableId={editingLocation.id}
-                existingImages={(editingLocation.images as []) || []}
-                featuredImage={editingLocation.featured_image as undefined}
-                invalidateQueries={[['locations']]}
-                label="Upload location images"
-              />
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button type="button" variant="secondary" onClick={() => setEditingLocation(null)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={updateLocationMutation.isPending}>
-              Save
             </Button>
           </div>
         </form>

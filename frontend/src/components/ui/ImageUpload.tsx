@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { files } from '@/services/api'
 import { cn, isMobileDevice } from '@/lib/utils'
+import { toast } from 'sonner'
 import { Button } from './Button'
 import { Icon, Camera } from './Icon'
 import type { FileRecord, FileableType } from '@/types'
@@ -53,6 +54,19 @@ export function ImageUpload({
       })
       onUploadComplete?.(data.file)
     },
+    onError: (error: any) => {
+      console.error('Image upload error:', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to upload image'
+      const validationErrors = error?.response?.data?.errors || {}
+      console.error('Error details:', {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        errors: validationErrors,
+        fileableType,
+        fileableId,
+      })
+      toast.error(errorMessage)
+    },
   })
 
   const deleteMutation = useMutation({
@@ -91,6 +105,11 @@ export function ImageUpload({
       e.stopPropagation()
       setDragActive(false)
 
+      if (!fileableId || fileableId <= 0) {
+        console.error('Cannot upload: fileableId is invalid', fileableId)
+        return
+      }
+
       const droppedFiles = Array.from(e.dataTransfer.files).filter((file) =>
         file.type.startsWith('image/')
       )
@@ -107,11 +126,15 @@ export function ImageUpload({
         }
       }
     },
-    [avatarMode, existingImages.length, featuredImage, multiple, uploadMutation]
+    [avatarMode, existingImages.length, featuredImage, multiple, uploadMutation, fileableId]
   )
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!fileableId || fileableId <= 0) {
+        console.error('Cannot upload: fileableId is invalid', fileableId)
+        return
+      }
       const selectedFiles = Array.from(e.target.files || [])
       if (selectedFiles.length > 0) {
         // For avatar mode, always set as featured. Otherwise, only the first image when no existing
@@ -128,7 +151,7 @@ export function ImageUpload({
         fileInputRef.current.value = ''
       }
     },
-    [avatarMode, existingImages.length, featuredImage, multiple, uploadMutation]
+    [avatarMode, existingImages.length, featuredImage, multiple, uploadMutation, fileableId]
   )
 
   // Memoize to prevent array recreation on every render

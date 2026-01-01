@@ -35,6 +35,14 @@ class FileController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // Convert FormData boolean strings to actual booleans before validation
+        if ($request->has('is_featured')) {
+            $isFeaturedValue = $request->input('is_featured');
+            if (is_string($isFeaturedValue)) {
+                $request->merge(['is_featured' => in_array(strtolower($isFeaturedValue), ['1', 'true', 'yes', 'on'], true)]);
+            }
+        }
+
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:51200', 'mimes:pdf,jpg,jpeg,png,gif,webp'],
             'fileable_type' => ['required', 'string', Rule::in(array_keys($this->fileableTypes))],
@@ -50,6 +58,7 @@ class FileController extends Controller
             'maintenance_log', 'part' => $fileableClass::with('item')->findOrFail($validated['fileable_id']),
             default => $fileableClass::findOrFail($validated['fileable_id']),
         };
+
 
         // Get household ID based on fileable type
         $householdId = $this->getHouseholdId($validated['fileable_type'], $fileable, $request);

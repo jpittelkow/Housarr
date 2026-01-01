@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { dashboard } from '@/services/api'
+import { dashboard, locations } from '@/services/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -13,6 +13,9 @@ import {
   Calendar,
   Circle,
   HelpTooltip,
+  Home,
+  MapPin,
+  getIconByName,
 } from '@/components/ui'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDate } from '@/lib/utils'
@@ -32,11 +35,17 @@ export default function DashboardPage() {
     queryFn: () => dashboard.get(),
   })
 
+  const { data: roomsData } = useQuery({
+    queryKey: ['locations'],
+    queryFn: () => locations.list(),
+  })
+
   const itemsCount = dashboardData?.items_count ?? 0
   const upcomingReminders = dashboardData?.upcoming_reminders ?? []
   const overdueReminders = dashboardData?.overdue_reminders ?? []
   const incompleteTodos = dashboardData?.incomplete_todos ?? []
   const incompleteTodosCount = dashboardData?.incomplete_todos_count ?? 0
+  const allRooms = roomsData?.locations || []
 
   return (
     <div className="space-y-8">
@@ -302,6 +311,59 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Rooms Section */}
+      {allRooms.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <CardTitle>Rooms</CardTitle>
+              <Badge variant="gray" size="sm">{allRooms.length}</Badge>
+            </div>
+            <Link to="/rooms">
+              <Button variant="link" size="sm" className="text-sm font-semibold">
+                View all
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 p-6">
+              {allRooms.slice(0, 6).map((room) => {
+                const RoomIcon = room.icon ? getIconByName(room.icon) : null
+                return (
+                  <Link
+                    key={room.id}
+                    to={`/rooms/${room.id}`}
+                    className="group flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                      {room.featured_image ? (
+                        <img
+                          src={room.featured_image.url}
+                          alt={room.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <Icon icon={RoomIcon || MapPin} size="md" className="text-gray-400 dark:text-gray-500" />
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-50 truncate max-w-[80px]">
+                        {room.name}
+                      </p>
+                      {room.items_count !== undefined && room.items_count > 0 && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {room.items_count} {room.items_count === 1 ? 'item' : 'items'}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

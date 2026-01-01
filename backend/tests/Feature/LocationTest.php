@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Models\Household;
 use App\Models\Location;
+use App\Models\File;
 
 beforeEach(function () {
     $this->household = Household::factory()->create();
@@ -34,6 +35,47 @@ describe('locations index', function () {
         $response->assertOk()
             ->assertJsonCount(1, 'locations');
     });
+
+    it('includes images in location index', function () {
+        $location = Location::factory()->create([
+            'household_id' => $this->household->id,
+        ]);
+
+        File::factory()->create([
+            'household_id' => $this->household->id,
+            'fileable_type' => Location::class,
+            'fileable_id' => $location->id,
+            'mime_type' => 'image/jpeg',
+            'is_featured' => false,
+        ]);
+
+        File::factory()->create([
+            'household_id' => $this->household->id,
+            'fileable_type' => Location::class,
+            'fileable_id' => $location->id,
+            'mime_type' => 'image/jpeg',
+            'is_featured' => true,
+        ]);
+
+        $response = $this->getJson('/api/locations');
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'locations' => [
+                    '*' => [
+                        'id',
+                        'name',
+                        'images',
+                        'featured_image',
+                    ],
+                ],
+            ]);
+
+        $locationData = collect($response->json('locations'))->firstWhere('id', $location->id);
+        expect($locationData)->not->toBeNull();
+        expect($locationData['images'])->toBeArray();
+        expect($locationData['featured_image'])->not->toBeNull();
+    });
 });
 
 describe('locations store', function () {
@@ -47,6 +89,20 @@ describe('locations store', function () {
             ->assertJsonPath('location.name', 'Kitchen');
 
         expect(Location::where('name', 'Kitchen')->exists())->toBeTrue();
+    });
+
+    it('creates a location with notes', function () {
+        $response = $this->postJson('/api/locations', [
+            'name' => 'Living Room',
+            'notes' => 'Main gathering space with fireplace',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('location.name', 'Living Room')
+            ->assertJsonPath('location.notes', 'Main gathering space with fireplace');
+
+        $location = Location::where('name', 'Living Room')->first();
+        expect($location->notes)->toBe('Main gathering space with fireplace');
     });
 
     it('assigns location to user household', function () {
@@ -102,12 +158,29 @@ describe('locations update', function () {
             'name' => 'Old Name',
         ]);
 
-        $response = $this->putJson("/api/locations/{$location->id}", [
+        $response = $this->patchJson("/api/locations/{$location->id}", [
             'name' => 'New Name',
         ]);
 
         $response->assertOk()
             ->assertJsonPath('location.name', 'New Name');
+    });
+
+    it('updates location notes', function () {
+        $location = Location::factory()->create([
+            'household_id' => $this->household->id,
+            'name' => 'Bedroom',
+        ]);
+
+        $response = $this->patchJson("/api/locations/{$location->id}", [
+            'notes' => 'Master bedroom with ensuite',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('location.notes', 'Master bedroom with ensuite');
+
+        $location->refresh();
+        expect($location->notes)->toBe('Master bedroom with ensuite');
     });
 
     it('prevents updating other household locations', function () {
@@ -116,11 +189,51 @@ describe('locations update', function () {
             'household_id' => $otherHousehold->id,
         ]);
 
-        $response = $this->putJson("/api/locations/{$location->id}", [
+        $response = $this->patchJson("/api/locations/{$location->id}", [
             'name' => 'Hacked',
         ]);
 
         $response->assertForbidden();
+    });
+});
+
+describe('locations show', function () {
+    it('returns location with images', function () {
+        $location = Location::factory()->create([
+            'household_id' => $this->household->id,
+        ]);
+
+        File::factory()->create([
+            'household_id' => $this->household->id,
+            'fileable_type' => Location::class,
+            'fileable_id' => $location->id,
+            'mime_type' => 'image/jpeg',
+            'is_featured' => false,
+        ]);
+
+        File::factory()->create([
+            'household_id' => $this->household->id,
+            'fileable_type' => Location::class,
+            'fileable_id' => $location->id,
+            'mime_type' => 'image/jpeg',
+            'is_featured' => true,
+        ]);
+
+        $response = $this->getJson("/api/locations/{$location->id}");
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'location' => [
+                    'id',
+                    'name',
+                    'images',
+                    'featured_image',
+                ],
+            ]);
+
+        $locationData = $response->json('location');
+        expect($locationData['images'])->toBeArray();
+        expect($locationData['featured_image'])->not->toBeNull();
     });
 });
 

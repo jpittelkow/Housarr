@@ -1,10 +1,11 @@
-import axios from 'axios'
+import axios, { AxiosRequestConfig } from 'axios'
 import type {
   User,
   Household,
   Category,
   Vendor,
   Location,
+  PaintColor,
   Item,
   Part,
   MaintenanceLog,
@@ -37,6 +38,8 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+    // Note: 429 (rate limiting) errors are handled in individual components/pages
+    // to show user-friendly notifications with the error message from the API
     return Promise.reject(error)
   }
 )
@@ -84,8 +87,12 @@ export const auth = {
   },
 
   login: async (data: { email: string; password: string }): Promise<AuthResponse> => {
-    const response = await api.post('/auth/login', data)
-    return response.data
+    try {
+      const response = await api.post('/auth/login', data)
+      return response.data
+    } catch (error: any) {
+      throw error
+    }
   },
 
   logout: async (): Promise<void> => {
@@ -194,6 +201,71 @@ export const locations = {
   },
 }
 
+// Paint Colors
+export const paintColors = {
+  list: async (locationId: number): Promise<{ paint_colors: PaintColor[] }> => {
+    const response = await api.get(`/locations/${locationId}/paint-colors`)
+    return response.data
+  },
+
+  create: async (locationId: number, data: Partial<PaintColor>): Promise<{ paint_color: PaintColor }> => {
+    const response = await api.post(`/locations/${locationId}/paint-colors`, data)
+    return response.data
+  },
+
+  update: async (locationId: number, id: number, data: Partial<PaintColor>): Promise<{ paint_color: PaintColor }> => {
+    const response = await api.patch(`/locations/${locationId}/paint-colors/${id}`, data)
+    return response.data
+  },
+
+  delete: async (locationId: number, id: number): Promise<void> => {
+    await api.delete(`/locations/${locationId}/paint-colors/${id}`)
+  },
+
+  analyzeWallColor: async (locationId: number, fileId?: number, file?: File): Promise<{
+    success: boolean
+    paint_colors: Array<{
+      brand: string | null
+      color_name: string
+      hex_code: string | null
+      rgb_r: number | null
+      rgb_g: number | null
+      rgb_b: number | null
+      purchase_url: string | null
+      product_url: string | null
+      confidence: number
+    }>
+    agents_used?: string[]
+    agents_succeeded?: number
+    agent_details?: Record<string, unknown>
+    agent_errors?: Record<string, string>
+    primary_agent?: string
+    total_duration_ms?: number
+    message?: string
+  }> => {
+    if (fileId) {
+      // Use existing file
+      const response = await api.post(`/locations/${locationId}/analyze-wall-color`, { file_id: fileId }, {
+        timeout: 120000, // 2 minutes for AI analysis
+      })
+      return response.data
+    } else if (file) {
+      // Upload new file
+      const formData = new FormData()
+      formData.append('image', file)
+      const response = await api.post(`/locations/${locationId}/analyze-wall-color`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // 2 minutes for AI analysis
+      })
+      return response.data
+    } else {
+      throw new Error('Either fileId or file must be provided')
+    }
+  },
+}
+
 // Vendor Search Result (from AI)
 export interface VendorSearchResult {
   name: string
@@ -295,7 +367,7 @@ export interface AnalyzeImageResponse {
 
 // Items
 export const items = {
-  list: async (params?: { category_id?: number; search?: string }): Promise<{ items: Item[] }> => {
+  list: async (params?: { category_id?: number; location_id?: number; search?: string }): Promise<{ items: Item[] }> => {
     const response = await api.get('/items', { params })
     return response.data
   },
@@ -635,12 +707,14 @@ export const files = {
     formData.append('file', file)
     formData.append('fileable_type', fileableType)
     formData.append('fileable_id', fileableId.toString())
-    if (isFeatured !== undefined) {
-      formData.append('is_featured', isFeatured ? '1' : '0')
+    if (isFeatured !== undefined && isFeatured) {
+      formData.append('is_featured', '1')
     }
     if (displayName) {
       formData.append('display_name', displayName)
     }
+    
+    // Use explicit multipart/form-data like other working upload endpoints in this codebase
     const response = await api.post('/files', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
@@ -987,3 +1061,4 @@ export const address = {
 }
 
 export default api
+

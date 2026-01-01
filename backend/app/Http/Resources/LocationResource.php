@@ -13,9 +13,11 @@ class LocationResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'icon' => $this->icon,
+            'notes' => $this->notes,
             'items_count' => $this->whenCounted('items'),
             'images' => FileResource::collection($this->whenLoaded('images')),
             'featured_image' => new FileResource($this->whenLoaded('featuredImage')),
+            'paint_colors' => PaintColorResource::collection($this->whenLoaded('paintColors')),
         ];
     }
 }

@@ -14,7 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 
 class AuthController extends Controller
 {
@@ -49,23 +48,13 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $key = 'login:' . $request->ip();
-
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            $seconds = RateLimiter::availableIn($key);
-            return response()->json([
-                'message' => "Too many login attempts. Please try again in {$seconds} seconds.",
-            ], 429);
-        }
 
         if (!Auth::attempt($validated)) {
-            RateLimiter::hit($key, 60);
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
         }
 
-        RateLimiter::clear($key);
         $request->session()->regenerate();
         $user = $request->user();
 

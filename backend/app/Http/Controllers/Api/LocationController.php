@@ -15,7 +15,7 @@ class LocationController extends Controller
     {
         $locations = Location::where('household_id', $request->user()->household_id)
             ->withCount('items')
-            ->with('featuredImage')
+            ->with(['featuredImage', 'images'])
             ->orderBy('name')
             ->get();
 
@@ -29,6 +29,7 @@ class LocationController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:50'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         $location = Location::create([
@@ -46,7 +47,7 @@ class LocationController extends Controller
         Gate::authorize('view', $location);
 
         return response()->json([
-            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage'])),
+            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage', 'paintColors'])),
         ]);
     }
 
@@ -57,12 +58,13 @@ class LocationController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:50'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         $location->update($validated);
 
         return response()->json([
-            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage'])),
+            'location' => new LocationResource($location->loadCount('items')->load(['images', 'featuredImage', 'paintColors'])),
         ]);
     }
 

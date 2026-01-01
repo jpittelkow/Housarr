@@ -59,9 +59,30 @@ export interface Location {
   household_id: number
   name: string
   icon: string | null
+  notes: string | null
   items_count?: number
   images?: FileRecord[]
   featured_image?: FileRecord
+  paint_colors?: PaintColor[]
+  created_at: string
+  updated_at: string
+}
+
+export interface PaintColor {
+  id: number
+  location_id: number
+  brand: string | null
+  color_name: string
+  hex_code: string | null
+  rgb_r: number | null
+  rgb_g: number | null
+  rgb_b: number | null
+  cmyk_c: number | null
+  cmyk_m: number | null
+  cmyk_y: number | null
+  cmyk_k: number | null
+  purchase_url: string | null
+  product_url: string | null
   created_at: string
   updated_at: string
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,17 +18,96 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
+    trigger,
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+    shouldUseNativeValidation: false,
   })
+
+  // Watch all form fields to detect password manager auto-fills
+  const householdNameValue = watch('household_name')
+  const nameValue = watch('name')
+  const emailValue = watch('email')
+  const passwordValue = watch('password')
+  const passwordConfirmationValue = watch('password_confirmation')
+
+  // Trigger validation when household_name changes
+  // Only validate if field has a value
+  useEffect(() => {
+    if (householdNameValue !== undefined && householdNameValue !== '') {
+      trigger('household_name')
+    }
+  }, [householdNameValue, trigger])
+
+  // Trigger validation when name changes
+  // Only validate if field has a value
+  useEffect(() => {
+    if (nameValue !== undefined && nameValue !== '') {
+      trigger('name')
+    }
+  }, [nameValue, trigger])
+
+  // Trigger validation when email changes
+  // Only validate if field has a value
+  useEffect(() => {
+    if (emailValue !== undefined && emailValue !== '') {
+      trigger('email')
+    }
+  }, [emailValue, trigger])
+
+  // Trigger validation when password changes - also validate password_confirmation
+  // Only validate if field has a value
+  useEffect(() => {
+    if (passwordValue !== undefined && passwordValue !== '') {
+      trigger('password')
+      // Also trigger password_confirmation validation since it depends on password
+      // Only if password_confirmation has a value
+      if (passwordConfirmationValue !== undefined && passwordConfirmationValue !== '') {
+        trigger('password_confirmation')
+      }
+    }
+  }, [passwordValue, passwordConfirmationValue, trigger])
+
+  // Trigger validation when password_confirmation changes - also validate password
+  // Only validate if field has a value
+  useEffect(() => {
+    if (passwordConfirmationValue !== undefined && passwordConfirmationValue !== '') {
+      trigger('password_confirmation')
+      // Also trigger password validation to ensure the refinement rule runs
+      // Only if password has a value
+      if (passwordValue !== undefined && passwordValue !== '') {
+        trigger('password')
+      }
+    }
+  }, [passwordConfirmationValue, passwordValue, trigger])
 
   const onSubmit = async (data: RegisterInput) => {
     setIsLoading(true)
     try {
       await registerUser(data)
       navigate('/')
-    } catch {
-      toast.error('Failed to create account. Please try again.')
+    } catch (error: any) {
+      // Check for rate limiting error (429)
+      if (error?.response?.status === 429) {
+        const message = error?.response?.data?.message || 'Too many registration attempts. Please try again later.'
+        toast.error(message)
+      } else if (error?.response?.status === 422) {
+        // Validation errors
+        const validationErrors = error?.response?.data?.errors
+        if (validationErrors) {
+          // Show first validation error
+          const firstError = Object.values(validationErrors)[0]
+          const message = Array.isArray(firstError) ? firstError[0] : firstError
+          toast.error(message || 'Please check your input and try again.')
+        } else {
+          toast.error(error?.response?.data?.message || 'Validation failed. Please check your input.')
+        }
+      } else {
+        toast.error(error?.response?.data?.message || 'Failed to create account. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }

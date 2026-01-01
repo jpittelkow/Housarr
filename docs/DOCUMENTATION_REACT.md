@@ -165,6 +165,59 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 - Test connections
 - Backup/restore
 
+### RoomsPage (`src/pages/RoomsPage.tsx`)
+
+**Purpose**: Manage rooms and track paint colors
+
+**Features**:
+- List rooms with featured images
+- Create room
+- Edit room with inline image upload
+- Delete room
+- Upload room photos (using ImageUpload component)
+- Add/edit paint colors using PaintColorForm component
+- Real-time color picker with hex/RGB/CMYK sync
+- Analyze wall colors from photos using AI
+- Navigate to room detail page by clicking room card
+
+**Photo Management**:
+- Photos are uploaded using the ImageUpload component with `fileableType="location"`
+- Photos are displayed in the room cards using `featured_image`
+- All room images are loaded via the `images` relationship
+- Photo uploads invalidate both `['locations']` and `['locations', id]` queries
+
+**Paint Color Management**:
+- Uses PaintColorForm component for consistent form handling
+- ColorPicker component for real-time hex/RGB/CMYK synchronization
+- CMYK support for professional paint matching
+
+### RoomDetailPage (`src/pages/RoomDetailPage.tsx`)
+
+**Purpose**: Detailed view of a single room showing room information, photos, paint colors, and items in that room
+
+**Features**:
+- Room header with name, icon, featured image, items count, and edit/delete buttons
+- Edit room modal for updating name, icon, and notes
+- Room photos gallery with ImageUpload component for uploading/managing photos
+- Paint colors section with:
+  - Color swatches showing hex/RGB values
+  - Add/edit paint colors using PaintColorForm component
+  - AI-powered wall color analysis from uploaded photos
+  - Delete paint colors
+- Items in this room section with:
+  - Cards view (grid layout similar to ItemsPage)
+  - List view (compact list similar to ItemsPage)
+  - View toggle (grid/list buttons)
+  - Links to each item's detail page
+- Back button to rooms list
+- Filters items by `location_id` using `items.list({ location_id: roomId })`
+
+**Component Reuse**:
+- Reuses `ImageUpload` component from Items for photo management
+- Reuses `PaintColorForm` component for consistent paint color handling
+- Reuses card/list view patterns from `ItemsPage.tsx`
+- Reuses `ItemCard` and `ItemList` components for consistent styling
+
 ### ProfilePage (`src/pages/ProfilePage.tsx`)
 
 **Purpose**: User profile management
@@ -216,6 +269,7 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 - Dashboard (/)
 - Items (/items)
 - Smart Add (/smart-add) - AI-powered product identification with image gallery import and try again feature
+- Rooms (/rooms) - Room management and paint color tracking
 - Vendors (/vendors)
 - Reminders (/reminders)
 - Todos (/todos)
@@ -225,6 +279,23 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 ### ErrorBoundary (`src/components/ErrorBoundary.tsx`)
 
 **Purpose**: Catches React errors and displays fallback UI
+
+### PaintColorForm (`src/components/PaintColorForm.tsx`)
+
+**Purpose**: Reusable form component for adding/editing paint colors
+
+**Features**:
+- Form state management
+- All paint color fields (brand, name, hex, RGB, CMYK, URLs)
+- Integration with ColorPicker component
+- Create and update modes
+- Consistent UI across RoomsPage and RoomDetailPage
+
+**Props**:
+- `paintColor?: PaintColor | null` - Existing paint color for edit mode
+- `onSubmit: (data: Partial<PaintColor>) => void` - Submit handler
+- `onCancel: () => void` - Cancel handler
+- `isLoading?: boolean` - Loading state for submit button
 
 ### UI Components (`src/components/ui/`)
 
@@ -273,8 +344,21 @@ All UI components follow a consistent design system (Untitled UI style).
 
 #### ImageUpload (`ImageUpload.tsx`)
 - Image upload component
-- Preview
+- Drag and drop support
+- Preview gallery
 - Featured image support
+- Camera button on mobile
+- Multiple file upload
+- Query invalidation on upload
+
+#### ColorPicker (`ColorPicker.tsx`)
+- Real-time color selection
+- Hex code input with validation
+- RGB inputs (R, G, B) with 0-255 range
+- CMYK inputs (C, M, Y, K) with 0-100% range
+- Bidirectional synchronization between all color formats
+- Native HTML color picker integration
+- Color swatch preview
 
 #### Input (`Input.tsx`)
 - Text input
@@ -395,8 +479,8 @@ All UI components follow a consistent design system (Untitled UI style).
 - `categories.delete(id)`: Deletes category
 
 #### Locations
-- `locations.list()`: Lists locations
-- `locations.get(id)`: Gets location
+- `locations.list()`: Lists locations (with images and featured_image)
+- `locations.get(id)`: Gets location (with images, featured_image, paint_colors)
 - `locations.create(data)`: Creates location
 - `locations.update(id, data)`: Updates location
 - `locations.delete(id)`: Deletes location
@@ -409,7 +493,7 @@ All UI components follow a consistent design system (Untitled UI style).
 - `vendors.delete(id)`: Deletes vendor
 
 #### Items
-- `items.list(params?)`: Lists items (category_id, search filters)
+- `items.list(params?)`: Lists items (category_id, location_id, search filters)
 - `items.listMinimal()`: Lightweight list (id, name only)
 - `items.get(id)`: Gets item
 - `items.create(data)`: Creates item
@@ -554,9 +638,11 @@ interface Location {
   household_id: number
   name: string
   icon: string | null
+  notes: string | null
   items_count?: number
   images?: FileRecord[]
   featured_image?: FileRecord
+  paint_colors?: PaintColor[]
   created_at: string
   updated_at: string
 }
@@ -726,6 +812,8 @@ interface FileRecord {
 - `/items`: ItemsPage
 - `/items/:id`: ItemDetailPage
 - `/smart-add`: SmartAddPage
+- `/rooms`: RoomsPage
+- `/rooms/:id`: RoomDetailPage
 - `/vendors`: VendorsPage
 - `/reminders`: RemindersPage
 - `/todos`: TodosPage

@@ -33,6 +33,7 @@ class ItemController extends Controller
             'category_id' => ['nullable', 'integer', Rule::exists('categories', 'id')->where(function ($query) use ($householdId) {
                 $query->where('household_id', $householdId)->orWhereNull('household_id');
             })],
+            'location_id' => ['nullable', 'integer', Rule::exists('locations', 'id')->where('household_id', $householdId)],
             'search' => ['nullable', 'string', 'max:255'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -56,6 +57,10 @@ class ItemController extends Controller
 
         if (!empty($validated['category_id'])) {
             $query->where('category_id', $validated['category_id']);
+        }
+
+        if (!empty($validated['location_id'])) {
+            $query->where('location_id', $validated['location_id']);
         }
 
         if (!empty($validated['search'])) {

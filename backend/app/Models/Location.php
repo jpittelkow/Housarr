@@ -17,6 +17,7 @@ class Location extends Model
         'household_id',
         'name',
         'icon',
+        'notes',
     ];
 
     public function household(): BelongsTo
@@ -45,5 +46,10 @@ class Location extends Model
         return $this->morphOne(File::class, 'fileable')
             ->where('is_featured', true)
             ->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+    }
+
+    public function paintColors(): HasMany
+    {
+        return $this->hasMany(PaintColor::class);
     }
 }

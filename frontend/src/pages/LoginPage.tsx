@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,17 +18,48 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
+    trigger,
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+    shouldUseNativeValidation: false,
   })
+
+  // Watch email and password fields to detect password manager auto-fills
+  const emailValue = watch('email')
+  const passwordValue = watch('password')
+
+  // Trigger validation when email changes (catches password manager fills)
+  // Only validate if field has a value or has been touched
+  useEffect(() => {
+    if (emailValue !== undefined && emailValue !== '') {
+      trigger('email')
+    }
+  }, [emailValue, trigger])
+
+  // Trigger validation when password changes (catches password manager fills)
+  // Only validate if field has a value or has been touched
+  useEffect(() => {
+    if (passwordValue !== undefined && passwordValue !== '') {
+      trigger('password')
+    }
+  }, [passwordValue, trigger])
 
   const onSubmit = async (data: LoginInput) => {
     setIsLoading(true)
     try {
       await login(data.email, data.password)
       navigate('/')
-    } catch {
-      toast.error('Invalid email or password')
+    } catch (error: any) {
+      // Check for rate limiting error (429)
+      if (error?.response?.status === 429) {
+        const message = error?.response?.data?.message || 'Too many login attempts. Please try again later.'
+        toast.error(message)
+      } else {
+        toast.error('Invalid email or password')
+      }
     } finally {
       setIsLoading(false)
     }
