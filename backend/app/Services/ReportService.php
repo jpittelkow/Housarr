@@ -158,37 +158,142 @@ class ReportService
             'items' => [
                 'description' => 'All household items with their details, categories, locations, and relationships',
                 'endpoint' => '/api/reports/data/items',
-                'fields' => ['id', 'name', 'make', 'model', 'category', 'location', 'vendor', 'install_date', 'warranty_years', 'maintenance_interval_months'],
+                'response_key' => 'items', // The JSON response will have { "items": [...] }
+                'fields' => [
+                    'id' => 'number - Unique item identifier',
+                    'name' => 'string - Item name (e.g., "Refrigerator", "HVAC System")',
+                    'make' => 'string | null - Manufacturer name (e.g., "Samsung", "Lennox")',
+                    'model' => 'string | null - Model number',
+                    'serial_number' => 'string | null - Serial number',
+                    'install_date' => 'string | null - Installation date in YYYY-MM-DD format',
+                    'warranty_years' => 'number | null - Warranty period in years',
+                    'maintenance_interval_months' => 'number | null - Recommended maintenance interval in months',
+                    'typical_lifespan_years' => 'number | null - Expected lifespan in years',
+                    'location' => 'string | null - Location name (legacy field)',
+                    'location_id' => 'number | null - Location ID',
+                    'location_obj' => 'object | null - Full location object with name, icon, etc.',
+                    'category' => 'object | null - Category object with id, name, icon, color',
+                    'vendor' => 'object | null - Vendor object with id, name, contact info',
+                    'notes' => 'string | null - Additional notes',
+                    'parts' => 'array - List of parts (replacement and consumable)',
+                    'maintenanceLogs' => 'array - Maintenance history records',
+                    'reminders' => 'array - Associated reminders',
+                ],
+                'calculations' => [
+                    'warranty_expiration_date' => 'If install_date and warranty_years are both present: new Date(install_date) + (warranty_years * 365 days). Format as YYYY-MM-DD.',
+                    'warranty_days_remaining' => 'If warranty_expiration_date exists: Math.ceil((new Date(warranty_expiration_date) - new Date()) / (1000 * 60 * 60 * 24)). Can be negative if expired.',
+                    'warranty_status' => 'If warranty_days_remaining > 0: "Active", if warranty_days_remaining <= 0: "Expired", if warranty_years is null: "No warranty info"',
+                ],
+                'example' => [
+                    'id' => 1,
+                    'name' => 'Refrigerator',
+                    'make' => 'Samsung',
+                    'model' => 'RF28R7351SG',
+                    'serial_number' => 'SN123456',
+                    'install_date' => '2022-01-15',
+                    'warranty_years' => 5,
+                    'maintenance_interval_months' => 6,
+                    'typical_lifespan_years' => 15,
+                    'location' => 'Kitchen',
+                    'location_obj' => ['id' => 1, 'name' => 'Kitchen', 'icon' => 'chef-hat'],
+                    'category' => ['id' => 1, 'name' => 'Appliances', 'icon' => 'refrigerator'],
+                    'vendor' => ['id' => 1, 'name' => 'Best Buy', 'phone' => '555-1234'],
+                ],
             ],
             'reminders' => [
                 'description' => 'All reminders with due dates, status, and associated items',
                 'endpoint' => '/api/reports/data/reminders',
-                'fields' => ['id', 'title', 'description', 'due_date', 'status', 'item', 'user'],
+                'response_key' => 'reminders',
+                'fields' => [
+                    'id' => 'number - Unique reminder identifier',
+                    'title' => 'string - Reminder title',
+                    'description' => 'string | null - Reminder description',
+                    'due_date' => 'string - Due date in YYYY-MM-DD format',
+                    'status' => 'string - Status: "pending" or "completed"',
+                    'item' => 'object | null - Associated item object',
+                    'user' => 'object | null - User who created the reminder',
+                ],
+                'calculations' => [
+                    'is_overdue' => 'due_date < today AND status === "pending"',
+                    'days_until_due' => 'Math.ceil((new Date(due_date) - new Date()) / (1000 * 60 * 60 * 24))',
+                    'days_overdue' => 'If is_overdue: Math.abs(days_until_due), else 0',
+                ],
             ],
             'todos' => [
                 'description' => 'All todos with priorities, due dates, and completion status',
                 'endpoint' => '/api/reports/data/todos',
-                'fields' => ['id', 'title', 'description', 'priority', 'due_date', 'completed_at', 'item', 'user'],
+                'response_key' => 'todos',
+                'fields' => [
+                    'id' => 'number - Unique todo identifier',
+                    'title' => 'string - Todo title',
+                    'description' => 'string | null - Todo description',
+                    'priority' => 'string - Priority: "low", "medium", or "high"',
+                    'due_date' => 'string | null - Due date in YYYY-MM-DD format',
+                    'completed_at' => 'string | null - Completion date in ISO format, null if incomplete',
+                    'item' => 'object | null - Associated item object',
+                    'user' => 'object | null - User who created the todo',
+                ],
+                'calculations' => [
+                    'is_complete' => 'completed_at !== null',
+                    'is_overdue' => 'due_date !== null && completed_at === null && new Date(due_date) < new Date()',
+                ],
             ],
             'maintenance_logs' => [
                 'description' => 'All maintenance and service history records',
                 'endpoint' => '/api/reports/data/maintenance-logs',
-                'fields' => ['id', 'item', 'type', 'date', 'cost', 'vendor', 'notes', 'parts'],
+                'response_key' => 'maintenance_logs',
+                'fields' => [
+                    'id' => 'number - Unique log identifier',
+                    'item' => 'object - Associated item object',
+                    'type' => 'string - Type of maintenance (e.g., "repair", "service", "inspection")',
+                    'date' => 'string - Date in YYYY-MM-DD format',
+                    'cost' => 'number | null - Cost in dollars',
+                    'vendor' => 'object | null - Vendor who performed the work',
+                    'notes' => 'string | null - Additional notes',
+                    'parts' => 'array - Parts used/replaced',
+                ],
             ],
             'vendors' => [
                 'description' => 'All vendors with contact information and categories',
                 'endpoint' => '/api/reports/data/vendors',
-                'fields' => ['id', 'name', 'category', 'phone', 'email', 'website', 'address'],
+                'response_key' => 'vendors',
+                'fields' => [
+                    'id' => 'number - Unique vendor identifier',
+                    'name' => 'string - Vendor name',
+                    'category' => 'object | null - Vendor category',
+                    'phone' => 'string | null - Phone number',
+                    'email' => 'string | null - Email address',
+                    'website' => 'string | null - Website URL',
+                    'address' => 'string | null - Physical address',
+                ],
             ],
             'locations' => [
                 'description' => 'All locations/rooms with paint colors and details',
                 'endpoint' => '/api/reports/data/locations',
-                'fields' => ['id', 'name', 'type', 'paint_colors', 'images'],
+                'response_key' => 'locations',
+                'fields' => [
+                    'id' => 'number - Unique location identifier',
+                    'name' => 'string - Location name (e.g., "Kitchen", "Living Room")',
+                    'icon' => 'string | null - Icon identifier',
+                    'notes' => 'string | null - Additional notes',
+                    'items_count' => 'number - Number of items in this location',
+                    'paint_colors' => 'array - Paint colors used in this location',
+                    'images' => 'array - Location images',
+                ],
             ],
             'dashboard' => [
                 'description' => 'Dashboard summary with counts and overview statistics',
                 'endpoint' => '/api/reports/data/dashboard',
-                'fields' => ['items_count', 'upcoming_reminders', 'overdue_reminders', 'incomplete_todos_count'],
+                'response_key' => 'dashboard',
+                'fields' => [
+                    'items_count' => 'number - Total number of items',
+                    'upcoming_reminders' => 'array - Reminders due in next 7 days',
+                    'upcoming_reminders_count' => 'number - Count of upcoming reminders',
+                    'overdue_reminders' => 'array - Overdue reminders',
+                    'overdue_reminders_count' => 'number - Count of overdue reminders',
+                    'incomplete_todos' => 'array - Incomplete todos',
+                    'incomplete_todos_count' => 'number - Count of incomplete todos',
+                ],
             ],
         ];
     }
@@ -235,11 +340,46 @@ The application uses Tailwind CSS with the following color palette and design to
 **Spacing:** Use Tailwind spacing scale (4px grid: 1=4px, 2=8px, 3=12px, 4=16px, 6=24px, 8=32px)
 
 === AVAILABLE DATA ===
+IMPORTANT: The user's actual data is available via API endpoints. You MUST fetch this data and use it in your report. Do NOT create empty templates or ask the user for data - the data already exists in the system.
+
 The following data types are available via API endpoints:
 
 {$dataTypesJson}
 
-Each endpoint returns JSON data. Use fetch() to retrieve data from these endpoints.
+**How to fetch data:**
+1. Use fetch('/api/reports/data/{dataType}') where {dataType} is one of: items, reminders, todos, maintenance-logs, vendors, locations, or dashboard
+2. The response will be JSON with a key matching the data type (e.g., { "items": [...] } or { "reminders": [...] })
+3. Parse the JSON and use the actual data in your report
+4. Handle loading states while fetching
+5. Handle errors gracefully
+
+**Example fetch code:**
+```javascript
+const [data, setData] = React.useState(null);
+const [loading, setLoading] = React.useState(true);
+const [error, setError] = React.useState(null);
+
+React.useEffect(() => {
+  fetch('/api/reports/data/items')
+    .then(res => res.json())
+    .then(result => {
+      setData(result.items); // Note: response key is 'items'
+      setLoading(false);
+    })
+    .catch(err => {
+      setError(err.message);
+      setLoading(false);
+    });
+}, []);
+```
+
+**Calculated Fields:**
+For items, you can calculate warranty expiration:
+- warranty_expiration_date = install_date + (warranty_years * 365 days)
+- warranty_days_remaining = (warranty_expiration_date - today) in days
+- warranty_status = "Active" if days_remaining > 0, "Expired" if <= 0, "No warranty info" if warranty_years is null
+
+**CRITICAL:** Always use the actual data from the API. Never create placeholder templates or ask users to fill in data manually.
 
 === REQUIREMENTS ===
 1. Create a complete HTML file with embedded React (use CDN: https://unpkg.com/react@18/umd/react.production.min.js and https://unpkg.com/react-dom@18/umd/react-dom.production.min.js)
@@ -302,11 +442,17 @@ PROMPT;
             $prompt .= "{$role}: {$entry['content']}\n\n";
         }
         
-        $prompt .= "\n=== INSTRUCTIONS ===\n";
-        $prompt .= "Generate the complete HTML file for the report requested above. ";
-        $prompt .= "Make sure to use the correct API endpoints and design system. ";
-        $prompt .= "The report should be functional, visually appealing, and match the app's design.\n\n";
-        $prompt .= "Output the HTML code now:";
+        $prompt .= "\n=== CRITICAL INSTRUCTIONS ===\n";
+        $prompt .= "1. The user's data ALREADY EXISTS in the system. You MUST fetch it from the API endpoints.\n";
+        $prompt .= "2. DO NOT create empty templates, placeholder tables, or ask the user to fill in data.\n";
+        $prompt .= "3. DO NOT respond conversationally - generate ONLY the HTML code for the report.\n";
+        $prompt .= "4. Use fetch() to get data from /api/reports/data/{dataType} endpoints.\n";
+        $prompt .= "5. Calculate derived fields (like warranty expiration) using the formulas provided.\n";
+        $prompt .= "6. Display the ACTUAL data from the API response.\n";
+        $prompt .= "7. If the user asks for warranty information, calculate warranty_expiration_date from install_date + warranty_years.\n";
+        $prompt .= "8. If the user asks for 'how much warranty is left', calculate warranty_days_remaining.\n";
+        $prompt .= "9. The report should be functional, visually appealing, and match the app's design.\n\n";
+        $prompt .= "Generate the complete HTML file now. Output ONLY the HTML code, no explanations:";
         
         return $prompt;
     }

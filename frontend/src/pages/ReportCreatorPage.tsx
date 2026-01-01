@@ -13,7 +13,26 @@ import { toast } from 'sonner'
 
 export default function ReportCreatorPage() {
   const navigate = useNavigate()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: 'assistant',
+      content: "Hello! I'm here to help you create a custom report for your home management data.\n\n" +
+        "I can generate reports showing:\n" +
+        "• All your items with details (warranty info, installation dates, etc.)\n" +
+        "• Reminders and their status\n" +
+        "• Todos and completion status\n" +
+        "• Maintenance history\n" +
+        "• Vendors and contact information\n" +
+        "• Locations/rooms\n" +
+        "• Dashboard summaries\n\n" +
+        "When you're ready, I'll generate a report that fetches your actual data from the system. " +
+        "Just describe what you'd like to see in the report, and I'll create it for you!\n\n" +
+        "For example, you could ask:\n" +
+        "• 'Create a report of all items with their warranty expiration dates'\n" +
+        "• 'Show me a maintenance schedule for the next 3 months'\n" +
+        "• 'Generate a report of all overdue reminders'"
+    }
+  ])
   const [isLoading, setIsLoading] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [reportName, setReportName] = useState('')
@@ -68,12 +87,7 @@ export default function ReportCreatorPage() {
   }
 
   const handleGenerateReport = () => {
-    if (messages.length === 0) {
-      toast.error('Please have a conversation with Claude first to describe what report you want')
-      return
-    }
-
-    // Check if we have at least one user message
+    // Check if we have at least one user message (excluding the initial assistant message)
     const hasUserMessage = messages.some(m => m.role === 'user')
     if (!hasUserMessage) {
       toast.error('Please describe what report you want to create')
