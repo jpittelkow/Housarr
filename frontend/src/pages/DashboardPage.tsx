@@ -13,7 +13,6 @@ import {
   Calendar,
   Circle,
   HelpTooltip,
-  Home,
   MapPin,
   getIconByName,
 } from '@/components/ui'

@@ -185,28 +185,6 @@ export default function RoomsPage() {
     })
   }
 
-  const handlePaintColorSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingRoom) return
-
-    const data: Partial<PaintColor> = {
-      brand: paintColorData.brand || null,
-      color_name: paintColorData.color_name || '',
-      hex_code: paintColorData.hex_code || null,
-      rgb_r: paintColorData.rgb_r ?? null,
-      rgb_g: paintColorData.rgb_g ?? null,
-      rgb_b: paintColorData.rgb_b ?? null,
-      purchase_url: paintColorData.purchase_url || null,
-      product_url: paintColorData.product_url || null,
-    }
-
-    if (editingPaintColor) {
-      updatePaintColorMutation.mutate({ locationId: editingRoom.id, id: editingPaintColor.id, data })
-    } else {
-      createPaintColorMutation.mutate({ locationId: editingRoom.id, data })
-    }
-  }
-
   const handleAnalyze = () => {
     if (!editingRoom || !selectedImageId) return
     analyzeMutation.mutate({ locationId: editingRoom.id, fileId: selectedImageId })
@@ -438,7 +416,7 @@ export default function RoomsPage() {
                 fileableId={editingRoom.id}
                 existingImages={currentRoom?.images || []}
                 featuredImage={currentRoom?.featured_image}
-                invalidateQueries={[['locations'], ['locations', editingRoom.id]]}
+                invalidateQueries={[['locations'], ['locations', String(editingRoom.id)]]}
                 label="Upload room photos"
               />
             </div>

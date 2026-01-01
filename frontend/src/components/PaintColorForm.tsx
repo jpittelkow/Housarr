@@ -103,13 +103,13 @@ export function PaintColorForm({ paintColor, onSubmit, onCancel, isLoading }: Pa
 
       <ColorPicker
         hexCode={formData.hex_code || '#000000'}
-        rgbR={formData.rgb_r}
-        rgbG={formData.rgb_g}
-        rgbB={formData.rgb_b}
-        cmykC={formData.cmyk_c}
-        cmykM={formData.cmyk_m}
-        cmykY={formData.cmyk_y}
-        cmykK={formData.cmyk_k}
+        rgbR={formData.rgb_r ?? null}
+        rgbG={formData.rgb_g ?? null}
+        rgbB={formData.rgb_b ?? null}
+        cmykC={formData.cmyk_c ?? null}
+        cmykM={formData.cmyk_m ?? null}
+        cmykY={formData.cmyk_y ?? null}
+        cmykK={formData.cmyk_k ?? null}
         onHexChange={(hex) => setFormData({ ...formData, hex_code: hex })}
         onRgbChange={(r, g, b) => setFormData({ ...formData, rgb_r: r, rgb_g: g, rgb_b: b })}
         onCmykChange={(c, m, y, k) => setFormData({ ...formData, cmyk_c: c, cmyk_m: m, cmyk_y: y, cmyk_k: k })}

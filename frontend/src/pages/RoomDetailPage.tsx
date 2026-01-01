@@ -440,7 +440,7 @@ export default function RoomDetailPage() {
                 fileableId={room.id}
                 existingImages={room.images || []}
                 featuredImage={room.featured_image}
-                invalidateQueries={[['locations'], ['locations', room.id]]}
+                invalidateQueries={[['locations'], ['locations', String(room.id)]]}
                 label="Upload room photos"
               />
             </CardContent>
