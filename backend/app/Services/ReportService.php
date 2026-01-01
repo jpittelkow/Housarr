@@ -9,6 +9,7 @@ use App\Models\MaintenanceLog;
 use App\Models\Reminder;
 use App\Models\Todo;
 use App\Models\Vendor;
+use App\Services\StorageService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -136,9 +137,9 @@ class ReportService
     }
 
     /**
-     * Get the content of a report file.
+     * Get the content of a report file with data injected.
      */
-    public function getReportFileContent(string $filePath): ?string
+    public function getReportFileContent(string $filePath, array $allData = []): ?string
     {
         $disk = StorageService::getDiskForHousehold($this->householdId);
         
@@ -146,7 +147,188 @@ class ReportService
             return null;
         }
         
-        return $disk->get($filePath);
+        $html = $disk->get($filePath);
+        
+        // Inject data as a JSON script tag if data is provided
+        if (!empty($allData)) {
+            $dataJson = json_encode($allData, JSON_PRETTY_PRINT);
+            $dataScript = "<script id=\"report-data\" type=\"application/json\">{$dataJson}</script>";
+            
+            // Inject before the closing </head> or at the start of <body>
+            if (stripos($html, '</head>') !== false) {
+                $html = str_ireplace('</head>', "{$dataScript}\n</head>", $html);
+            } elseif (stripos($html, '<body') !== false) {
+                $html = preg_replace('/(<body[^>]*>)/i', "$1\n{$dataScript}", $html);
+            } else {
+                // If no head or body, inject at the start
+                $html = $dataScript . "\n" . $html;
+            }
+        }
+        
+        return $html;
+    }
+    
+    /**
+     * Get all report data for a household.
+     */
+    public function getAllReportData(int $householdId): array
+    {
+        $items = Item::where('household_id', $householdId)
+            ->with(['category', 'vendor', 'location', 'featuredImage', 'parts', 'maintenanceLogs', 'reminders'])
+            ->orderBy('name')
+            ->get();
+        
+        $reminders = Reminder::where('household_id', $householdId)
+            ->with(['item:id,name', 'user:id,name'])
+            ->orderBy('due_date')
+            ->get();
+        
+        $todos = Todo::where('household_id', $householdId)
+            ->with(['item:id,name', 'user:id,name'])
+            ->orderBy('due_date')
+            ->get();
+        
+        $maintenanceLogs = MaintenanceLog::whereHas('item', function ($query) use ($householdId) {
+            $query->where('household_id', $householdId);
+        })
+            ->with(['item:id,name', 'vendor', 'parts'])
+            ->orderBy('date', 'desc')
+            ->get();
+        
+        $vendors = Vendor::where('household_id', $householdId)
+            ->orderBy('name')
+            ->get();
+        
+        $locations = Location::where('household_id', $householdId)
+            ->with(['paintColors', 'featuredImage'])
+            ->orderBy('name')
+            ->get();
+        
+        $itemsCount = $items->count();
+        $upcomingReminders = $reminders->where('status', 'pending')
+            ->filter(function ($r) {
+                return $r->due_date && $r->due_date <= now()->addDays(7);
+            })
+            ->take(10)
+            ->values();
+        $overdueReminders = $reminders->where('status', 'pending')
+            ->filter(function ($r) {
+                return $r->due_date && $r->due_date < now();
+            })
+            ->take(10)
+            ->values();
+        $incompleteTodosCount = $todos->whereNull('completed_at')->count();
+        
+        return [
+            'items' => $items->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'make' => $item->make,
+                    'model' => $item->model,
+                    'serial_number' => $item->serial_number,
+                    'install_date' => $item->install_date?->toDateString(),
+                    'warranty_years' => $item->warranty_years,
+                    'maintenance_interval_months' => $item->maintenance_interval_months,
+                    'typical_lifespan_years' => $item->typical_lifespan_years,
+                    'location' => $item->location,
+                    'location_id' => $item->location_id,
+                    'location_obj' => $item->location ? [
+                        'id' => $item->location->id,
+                        'name' => $item->location->name,
+                        'icon' => $item->location->icon,
+                    ] : null,
+                    'category' => $item->category ? [
+                        'id' => $item->category->id,
+                        'name' => $item->category->name,
+                        'icon' => $item->category->icon,
+                        'color' => $item->category->color,
+                    ] : null,
+                    'vendor' => $item->vendor ? [
+                        'id' => $item->vendor->id,
+                        'name' => $item->vendor->name,
+                        'phone' => $item->vendor->phone,
+                        'email' => $item->vendor->email,
+                    ] : null,
+                    'notes' => $item->notes,
+                ];
+            })->values()->all(),
+            'reminders' => $reminders->map(function ($reminder) {
+                return [
+                    'id' => $reminder->id,
+                    'title' => $reminder->title,
+                    'description' => $reminder->description,
+                    'due_date' => $reminder->due_date?->toDateString(),
+                    'status' => $reminder->status,
+                    'item' => $reminder->item ? ['id' => $reminder->item->id, 'name' => $reminder->item->name] : null,
+                    'user' => $reminder->user ? ['id' => $reminder->user->id, 'name' => $reminder->user->name] : null,
+                ];
+            })->values()->all(),
+            'todos' => $todos->map(function ($todo) {
+                return [
+                    'id' => $todo->id,
+                    'title' => $todo->title,
+                    'description' => $todo->description,
+                    'priority' => $todo->priority,
+                    'due_date' => $todo->due_date?->toDateString(),
+                    'completed_at' => $todo->completed_at?->toISOString(),
+                    'item' => $todo->item ? ['id' => $todo->item->id, 'name' => $todo->item->name] : null,
+                    'user' => $todo->user ? ['id' => $todo->user->id, 'name' => $todo->user->name] : null,
+                ];
+            })->values()->all(),
+            'maintenance_logs' => $maintenanceLogs->map(function ($log) {
+                return [
+                    'id' => $log->id,
+                    'item' => ['id' => $log->item->id, 'name' => $log->item->name],
+                    'type' => $log->type,
+                    'date' => $log->date?->toDateString(),
+                    'cost' => $log->cost,
+                    'vendor' => $log->vendor ? ['id' => $log->vendor->id, 'name' => $log->vendor->name] : null,
+                    'notes' => $log->notes,
+                ];
+            })->values()->all(),
+            'vendors' => $vendors->map(function ($vendor) {
+                return [
+                    'id' => $vendor->id,
+                    'name' => $vendor->name,
+                    'phone' => $vendor->phone,
+                    'email' => $vendor->email,
+                    'website' => $vendor->website,
+                    'address' => $vendor->address,
+                ];
+            })->values()->all(),
+            'locations' => $locations->map(function ($location) {
+                return [
+                    'id' => $location->id,
+                    'name' => $location->name,
+                    'icon' => $location->icon,
+                    'notes' => $location->notes,
+                    'items_count' => $location->items_count ?? 0,
+                ];
+            })->values()->all(),
+            'dashboard' => [
+                'items_count' => $itemsCount,
+                'upcoming_reminders' => $upcomingReminders->map(function ($r) {
+                    return [
+                        'id' => $r->id,
+                        'title' => $r->title,
+                        'due_date' => $r->due_date?->toDateString(),
+                        'item' => $r->item ? ['id' => $r->item->id, 'name' => $r->item->name] : null,
+                    ];
+                })->values()->all(),
+                'upcoming_reminders_count' => $upcomingReminders->count(),
+                'overdue_reminders' => $overdueReminders->map(function ($r) {
+                    return [
+                        'id' => $r->id,
+                        'title' => $r->title,
+                        'due_date' => $r->due_date?->toDateString(),
+                        'item' => $r->item ? ['id' => $r->item->id, 'name' => $r->item->name] : null,
+                    ];
+                })->values()->all(),
+                'overdue_reminders_count' => $overdueReminders->count(),
+                'incomplete_todos_count' => $incompleteTodosCount,
+            ],
+        ];
     }
 
     /**
@@ -340,37 +522,74 @@ The application uses Tailwind CSS with the following color palette and design to
 **Spacing:** Use Tailwind spacing scale (4px grid: 1=4px, 2=8px, 3=12px, 4=16px, 6=24px, 8=32px)
 
 === AVAILABLE DATA ===
-IMPORTANT: The user's actual data is available via API endpoints. You MUST fetch this data and use it in your report. Do NOT create empty templates or ask the user for data - the data already exists in the system.
+IMPORTANT: The user's actual data is PRE-INJECTED into the HTML. You MUST use this data in your report. Do NOT create empty templates or ask the user for data - the data already exists in the system.
 
-The following data types are available via API endpoints:
+**How to access data:**
+The data is available in a script tag with id="report-data". Access it like this:
+
+```javascript
+// Get the pre-injected data
+const dataScript = document.getElementById('report-data');
+const allData = dataScript ? JSON.parse(dataScript.textContent) : {};
+
+// Access specific data types:
+const items = allData.items || [];
+const reminders = allData.reminders || [];
+const todos = allData.todos || [];
+const maintenance_logs = allData.maintenance_logs || [];
+const vendors = allData.vendors || [];
+const locations = allData.locations || [];
+const dashboard = allData.dashboard || {};
+```
+
+**Data Structure:**
+The following data types are available in the pre-injected data:
 
 {$dataTypesJson}
 
-**How to fetch data:**
-1. Use fetch('/api/reports/data/{dataType}') where {dataType} is one of: items, reminders, todos, maintenance-logs, vendors, locations, or dashboard
-2. The response will be JSON with a key matching the data type (e.g., { "items": [...] } or { "reminders": [...] })
-3. Parse the JSON and use the actual data in your report
-4. Handle loading states while fetching
-5. Handle errors gracefully
-
-**Example fetch code:**
+**Example usage:**
 ```javascript
-const [data, setData] = React.useState(null);
-const [loading, setLoading] = React.useState(true);
-const [error, setError] = React.useState(null);
+const { useState, useEffect } = React;
 
-React.useEffect(() => {
-  fetch('/api/reports/data/items')
-    .then(res => res.json())
-    .then(result => {
-      setData(result.items); // Note: response key is 'items'
-      setLoading(false);
-    })
-    .catch(err => {
-      setError(err.message);
-      setLoading(false);
-    });
-}, []);
+function ReportComponent() {
+  // Get pre-injected data (no fetch needed!)
+  const dataScript = document.getElementById('report-data');
+  const allData = dataScript ? JSON.parse(dataScript.textContent) : {};
+  const items = allData.items || [];
+  
+  // Calculate warranty expiration for items
+  const itemsWithWarranty = items.map(item => {
+    if (item.install_date && item.warranty_years) {
+      const installDate = new Date(item.install_date);
+      const expirationDate = new Date(installDate);
+      expirationDate.setFullYear(expirationDate.getFullYear() + item.warranty_years);
+      const daysRemaining = Math.ceil((expirationDate - new Date()) / (1000 * 60 * 60 * 24));
+      
+      return {
+        ...item,
+        warranty_expiration_date: expirationDate.toISOString().split('T')[0],
+        warranty_days_remaining: daysRemaining,
+        warranty_status: daysRemaining > 0 ? 'Active' : (daysRemaining <= 0 ? 'Expired' : 'No warranty info')
+      };
+    }
+    return { ...item, warranty_status: 'No warranty info' };
+  });
+  
+  return (
+    <div className="p-6">
+      <h1 className="text-display-sm font-semibold text-gray-900 mb-4">Items Report</h1>
+      {itemsWithWarranty.map(item => (
+        <div key={item.id} className="card p-4 mb-4">
+          <h2 className="text-lg font-medium">{item.name}</h2>
+          <p>Warranty Status: {item.warranty_status}</p>
+          {item.warranty_expiration_date && (
+            <p>Expires: {item.warranty_expiration_date} ({item.warranty_days_remaining} days remaining)</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 ```
 
 **Calculated Fields:**
@@ -379,7 +598,11 @@ For items, you can calculate warranty expiration:
 - warranty_days_remaining = (warranty_expiration_date - today) in days
 - warranty_status = "Active" if days_remaining > 0, "Expired" if <= 0, "No warranty info" if warranty_years is null
 
-**CRITICAL:** Always use the actual data from the API. Never create placeholder templates or ask users to fill in data manually.
+**CRITICAL:** 
+1. The data is ALREADY in the HTML - do NOT use fetch() or make API calls
+2. Always use the actual data from the pre-injected script tag
+3. Never create placeholder templates or ask users to fill in data manually
+4. The data is available immediately - no loading states needed for data fetching
 
 === REQUIREMENTS ===
 1. Create a complete HTML file with embedded React (use CDN: https://unpkg.com/react@18/umd/react.production.min.js and https://unpkg.com/react-dom@18/umd/react-dom.production.min.js)
@@ -443,15 +666,17 @@ PROMPT;
         }
         
         $prompt .= "\n=== CRITICAL INSTRUCTIONS ===\n";
-        $prompt .= "1. The user's data ALREADY EXISTS in the system. You MUST fetch it from the API endpoints.\n";
-        $prompt .= "2. DO NOT create empty templates, placeholder tables, or ask the user to fill in data.\n";
-        $prompt .= "3. DO NOT respond conversationally - generate ONLY the HTML code for the report.\n";
-        $prompt .= "4. Use fetch() to get data from /api/reports/data/{dataType} endpoints.\n";
-        $prompt .= "5. Calculate derived fields (like warranty expiration) using the formulas provided.\n";
-        $prompt .= "6. Display the ACTUAL data from the API response.\n";
-        $prompt .= "7. If the user asks for warranty information, calculate warranty_expiration_date from install_date + warranty_years.\n";
-        $prompt .= "8. If the user asks for 'how much warranty is left', calculate warranty_days_remaining.\n";
-        $prompt .= "9. The report should be functional, visually appealing, and match the app's design.\n\n";
+        $prompt .= "1. The user's data is PRE-INJECTED into the HTML in a script tag with id='report-data'.\n";
+        $prompt .= "2. DO NOT use fetch() or make API calls - the data is already available in the page.\n";
+        $prompt .= "3. Access data using: const allData = JSON.parse(document.getElementById('report-data').textContent);\n";
+        $prompt .= "4. DO NOT create empty templates, placeholder tables, or ask the user to fill in data.\n";
+        $prompt .= "5. DO NOT respond conversationally - generate ONLY the HTML code for the report.\n";
+        $prompt .= "6. Calculate derived fields (like warranty expiration) using the formulas provided.\n";
+        $prompt .= "7. Display the ACTUAL data from the pre-injected data object.\n";
+        $prompt .= "8. If the user asks for warranty information, calculate warranty_expiration_date from install_date + warranty_years.\n";
+        $prompt .= "9. If the user asks for 'how much warranty is left', calculate warranty_days_remaining.\n";
+        $prompt .= "10. The data is available immediately - no loading states needed for data fetching.\n";
+        $prompt .= "11. The report should be functional, visually appealing, and match the app's design.\n\n";
         $prompt .= "Generate the complete HTML file now. Output ONLY the HTML code, no explanations:";
         
         return $prompt;

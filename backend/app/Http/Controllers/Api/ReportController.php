@@ -124,9 +124,9 @@ class ReportController extends Controller
     }
 
     /**
-     * Get the HTML content of a report.
+     * Get the HTML content of a report with data injected.
      */
-    public function view(Request $request, Report $report): JsonResponse
+    public function view(Request $request, Report $report)
     {
         // Ensure report belongs to user's household
         if ($report->household_id !== $request->user()->household_id) {
@@ -142,7 +142,12 @@ class ReportController extends Controller
         }
 
         $reportService = ReportService::forHousehold($report->household_id);
-        $html = $reportService->getReportFileContent($report->file_path);
+        
+        // Fetch all data for the household
+        $allData = $reportService->getAllReportData($report->household_id);
+        
+        // Get HTML and inject data
+        $html = $reportService->getReportFileContent($report->file_path, $allData);
 
         if (!$html) {
             return response()->json([
