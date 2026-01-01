@@ -18,14 +18,11 @@ describe('AIAgentOrchestrator initialization', function () {
 
     it('loads agents from settings', function () {
         // Create some AI settings for the household
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'ai_openai_enabled',
-            'value' => 'true',
-        ]);
+        Setting::set('ai_agent_openai_enabled', '1', $this->household->id);
+        Setting::set('openai_api_key', 'test-key', $this->household->id);
 
         $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $agents = $orchestrator->getAgents();
+        $agents = $orchestrator->getAllAgentsStatus();
 
         expect($agents)->toBeArray();
     });
@@ -34,7 +31,7 @@ describe('AIAgentOrchestrator initialization', function () {
 describe('AIAgentOrchestrator agent management', function () {
     it('returns available agents', function () {
         $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $agents = $orchestrator->getAgents();
+        $agents = $orchestrator->getAllAgentsStatus();
 
         expect($agents)->toBeArray();
         // Each agent should have required properties
@@ -43,13 +40,15 @@ describe('AIAgentOrchestrator agent management', function () {
         }
     });
 
-    it('returns only enabled agents', function () {
+    it('returns only active agents', function () {
+        Setting::set('ai_agent_openai_enabled', '1', $this->household->id);
+        Setting::set('openai_api_key', 'test-key', $this->household->id);
+        
         $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $enabledAgents = $orchestrator->getEnabledAgents();
+        $activeAgents = $orchestrator->getActiveAgents();
 
-        foreach ($enabledAgents as $agent) {
-            expect($agent['enabled'])->toBeTrue();
-        }
+        expect($activeAgents)->toBeArray();
+        expect($activeAgents)->toContain('openai');
     });
 
     it('identifies primary agent', function () {
@@ -57,11 +56,30 @@ describe('AIAgentOrchestrator agent management', function () {
         $primary = $orchestrator->getPrimaryAgent();
 
         // May be null if no agents configured
-        expect($primary === null || is_array($primary))->toBeTrue();
+        expect($primary === null || is_string($primary))->toBeTrue();
+    });
+
+    it('can set primary agent', function () {
+        $orchestrator = new AIAgentOrchestrator($this->household->id);
+        $orchestrator->setPrimaryAgent('claude');
+
+        expect($orchestrator->getPrimaryAgent())->toBe('claude');
+    });
+
+    it('can enable and disable agents', function () {
+        $orchestrator = new AIAgentOrchestrator($this->household->id);
+        
+        $orchestrator->setAgentEnabled('openai', true);
+        $agentStatus = $orchestrator->getAgentStatus('openai');
+        expect($agentStatus->enabled)->toBeTrue();
+
+        $orchestrator->setAgentEnabled('openai', false);
+        $agentStatus = $orchestrator->getAgentStatus('openai');
+        expect($agentStatus->enabled)->toBeFalse();
     });
 });
 
-describe('AIAgentOrchestrator query execution', function () {
+describe('AIAgentOrchestrator call execution', function () {
     it('handles no configured agents gracefully', function () {
         // Clear all AI settings
         Setting::where('household_id', $this->household->id)
@@ -70,71 +88,57 @@ describe('AIAgentOrchestrator query execution', function () {
 
         $orchestrator = new AIAgentOrchestrator($this->household->id);
         
-        // Should not throw, should return empty or error result
-        $result = $orchestrator->query('Test prompt');
+        expect($orchestrator->isAvailable())->toBeFalse();
+    });
+
+    it('calls a specific agent', function () {
+        Setting::set('ai_agent_claude_enabled', '1', $this->household->id);
+        Setting::set('anthropic_api_key', 'test-key', $this->household->id);
         
-        expect($result)->toBeArray();
-        expect($result)->toHaveKey('success');
+        $orchestrator = new AIAgentOrchestrator($this->household->id);
+        $result = $orchestrator->callAgent('claude', 'Test prompt');
+
+        expect($result)->toHaveKeys(['agent', 'success', 'response', 'error', 'duration_ms']);
+        expect($result['agent'])->toBe('claude');
     });
 
-    it('tracks query metadata', function () {
+    it('returns error for unavailable agent', function () {
         $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $result = $orchestrator->query('Test prompt');
+        $result = $orchestrator->callAgent('claude', 'Test prompt');
 
-        expect($result)->toHaveKeys(['success', 'agents_used', 'total_duration_ms']);
-    });
-
-    it('returns agent details in response', function () {
-        $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $result = $orchestrator->query('Test prompt');
-
-        if (isset($result['agent_details'])) {
-            expect($result['agent_details'])->toBeArray();
-        }
-    });
-});
-
-describe('AIAgentOrchestrator synthesis', function () {
-    it('identifies synthesis agent', function () {
-        $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $result = $orchestrator->query('Test prompt');
-
-        // May have synthesis_agent key
-        if (isset($result['synthesis_agent'])) {
-            expect($result['synthesis_agent'])->toBeString();
-        }
-    });
-
-    it('aggregates results from multiple agents', function () {
-        $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $result = $orchestrator->query('Test prompt');
-
-        expect($result)->toHaveKey('agents_succeeded');
-        expect($result['agents_succeeded'])->toBeInt();
-    });
-});
-
-describe('AIAgentOrchestrator error handling', function () {
-    it('handles invalid prompts', function () {
-        $orchestrator = new AIAgentOrchestrator($this->household->id);
-        
-        $result = $orchestrator->query('');
-        
         expect($result['success'])->toBeFalse();
+        expect($result['error'])->toContain('disabled');
     });
 
-    it('includes error message on failure', function () {
-        // Clear all AI configuration to force failure
-        Setting::where('household_id', $this->household->id)
-            ->where('key', 'like', 'ai_%')
-            ->delete();
-
+    it('returns error for unknown agent', function () {
         $orchestrator = new AIAgentOrchestrator($this->household->id);
-        $result = $orchestrator->query('Test');
+        $result = $orchestrator->callAgent('unknown', 'Test prompt');
 
-        if (!$result['success']) {
-            expect($result)->toHaveKey('error');
-        }
+        expect($result['success'])->toBeFalse();
+        expect($result['error'])->toContain('Unknown agent');
+    });
+});
+
+describe('AIAgentOrchestrator multi-agent calls', function () {
+    it('calls all active agents', function () {
+        $orchestrator = new AIAgentOrchestrator($this->household->id);
+        $result = $orchestrator->callActiveAgents('Test prompt');
+
+        expect($result)->toHaveKeys(['agents', 'primary']);
+        expect($result['agents'])->toBeArray();
+    });
+
+    it('reports primary agent in result when set', function () {
+        // Create orchestrator and set primary agent
+        $orchestrator = new AIAgentOrchestrator($this->household->id);
+        $orchestrator->setPrimaryAgent('claude');
+        
+        // Verify the primary agent is set
+        expect($orchestrator->getPrimaryAgent())->toBe('claude');
+        
+        // callActiveAgents includes the primary in the result
+        $result = $orchestrator->callActiveAgents('Test prompt');
+        expect($result)->toHaveKey('primary');
     });
 });
 
@@ -147,6 +151,8 @@ describe('AIAgent value object', function () {
             configured: true,
             available: true,
             model: 'gpt-4',
+            lastSuccessAt: null,
+            lastTestResult: null,
             isPrimary: true
         );
 
@@ -164,12 +170,30 @@ describe('AIAgent value object', function () {
             configured: true,
             available: true,
             model: 'claude-3',
+            lastSuccessAt: '2024-01-01T00:00:00Z',
+            lastTestResult: ['success' => true],
             isPrimary: false
         );
 
         $array = $agent->toArray();
 
         expect($array)->toBeArray();
-        expect($array)->toHaveKeys(['name', 'display_name', 'enabled', 'configured']);
+        expect($array)->toHaveKeys(['name', 'display_name', 'enabled', 'configured', 'available', 'model', 'is_primary']);
+    });
+
+    it('creates from settings', function () {
+        $settings = [
+            'ai_agent_openai_enabled' => '1',
+            'ai_agent_openai_model' => 'gpt-4-turbo',
+            'openai_api_key' => 'test-key',
+        ];
+
+        $agent = AIAgent::fromSettings('openai', $settings, 'openai');
+
+        expect($agent->name)->toBe('openai');
+        expect($agent->enabled)->toBeTrue();
+        expect($agent->configured)->toBeTrue();
+        expect($agent->model)->toBe('gpt-4-turbo');
+        expect($agent->isPrimary)->toBeTrue();
     });
 });

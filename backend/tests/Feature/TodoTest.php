@@ -36,20 +36,32 @@ describe('todos index', function () {
             ->assertJsonCount(1, 'todos');
     });
 
-    it('filters by status', function () {
-        Todo::factory()->count(2)->create([
+    it('filters by completion status - incomplete', function () {
+        Todo::factory()->count(2)->incomplete()->create([
             'household_id' => $this->household->id,
-            'completed' => false,
         ]);
-        Todo::factory()->create([
+        Todo::factory()->completed()->create([
             'household_id' => $this->household->id,
-            'completed' => true,
         ]);
 
-        $response = $this->getJson('/api/todos?completed=false');
+        $response = $this->getJson('/api/todos?incomplete=1');
 
         $response->assertOk()
             ->assertJsonCount(2, 'todos');
+    });
+
+    it('filters by completion status - completed', function () {
+        Todo::factory()->count(2)->incomplete()->create([
+            'household_id' => $this->household->id,
+        ]);
+        Todo::factory()->completed()->create([
+            'household_id' => $this->household->id,
+        ]);
+
+        $response = $this->getJson('/api/todos?completed=1');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'todos');
     });
 });
 
@@ -95,8 +107,14 @@ describe('todos store', function () {
             'item_id' => $item->id,
         ]);
 
-        $response->assertCreated()
-            ->assertJsonPath('todo.item_id', $item->id);
+        $response->assertCreated();
+        
+        // Verify the todo was created with the item
+        $todo = Todo::where('title', 'Fix item')->first();
+        expect($todo->item_id)->toBe($item->id);
+        
+        // The response includes the item relation if loaded
+        $response->assertJsonPath('todo.item.id', $item->id);
     });
 });
 
@@ -127,19 +145,35 @@ describe('todos update', function () {
 
         $response->assertForbidden();
     });
+});
 
-    it('toggles completion status', function () {
-        $todo = Todo::factory()->create([
+describe('todos complete', function () {
+    it('marks todo as complete', function () {
+        $todo = Todo::factory()->incomplete()->create([
             'household_id' => $this->household->id,
-            'completed' => false,
         ]);
 
-        $response = $this->putJson("/api/todos/{$todo->id}", [
-            'completed' => true,
-        ]);
+        $response = $this->postJson("/api/todos/{$todo->id}/complete");
 
         $response->assertOk()
-            ->assertJsonPath('todo.completed', true);
+            ->assertJsonPath('message', 'Todo completed successfully');
+        
+        $todo->refresh();
+        expect($todo->completed_at)->not->toBeNull();
+    });
+
+    it('toggles completion status back to incomplete', function () {
+        $todo = Todo::factory()->completed()->create([
+            'household_id' => $this->household->id,
+        ]);
+
+        $response = $this->postJson("/api/todos/{$todo->id}/complete");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Todo marked as incomplete');
+        
+        $todo->refresh();
+        expect($todo->completed_at)->toBeNull();
     });
 });
 
@@ -151,7 +185,8 @@ describe('todos destroy', function () {
 
         $response = $this->deleteJson("/api/todos/{$todo->id}");
 
-        $response->assertNoContent();
+        $response->assertOk()
+            ->assertJsonPath('message', 'Todo deleted successfully');
         expect(Todo::find($todo->id))->toBeNull();
     });
 

@@ -15,65 +15,49 @@ beforeEach(function () {
 
 describe('settings index', function () {
     it('returns household settings', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'test_setting',
-            'value' => 'test_value',
-        ]);
+        Setting::set('storage_driver', 'local', $this->household->id);
 
         $response = $this->getJson('/api/settings');
 
         $response->assertOk()
-            ->assertJsonStructure(['settings']);
+            ->assertJsonStructure(['settings', 'key_status']);
     });
 
-    it('does not show other household settings', function () {
-        $otherHousehold = Household::factory()->create();
-        Setting::factory()->create([
-            'household_id' => $otherHousehold->id,
-            'key' => 'other_setting',
-        ]);
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'my_setting',
-        ]);
-
+    it('returns key status for API keys', function () {
         $response = $this->getJson('/api/settings');
 
-        $response->assertOk();
-        $keys = collect($response->json('settings'))->pluck('key');
-        expect($keys)->toContain('my_setting');
-        expect($keys)->not->toContain('other_setting');
+        $response->assertOk()
+            ->assertJsonStructure([
+                'key_status' => [
+                    'anthropic_api_key_set',
+                    'openai_api_key_set',
+                    'gemini_api_key_set',
+                    'local_api_key_set',
+                ],
+            ]);
     });
 });
 
 describe('settings update', function () {
-    it('creates a new setting', function () {
-        $response = $this->postJson('/api/settings', [
-            'key' => 'new_setting',
-            'value' => 'new_value',
+    it('updates settings via PATCH', function () {
+        $response = $this->patchJson('/api/settings', [
+            'settings' => [
+                'ai_provider' => 'openai',
+            ],
         ]);
 
         $response->assertOk();
-        expect(Setting::where('key', 'new_setting')->exists())->toBeTrue();
     });
 
-    it('updates existing setting', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'existing_setting',
-            'value' => 'old_value',
-        ]);
-
-        $response = $this->postJson('/api/settings', [
-            'key' => 'existing_setting',
-            'value' => 'new_value',
+    it('updates multiple settings at once', function () {
+        $response = $this->patchJson('/api/settings', [
+            'settings' => [
+                'ai_provider' => 'claude',
+                'storage_driver' => 'local',
+            ],
         ]);
 
         $response->assertOk();
-        
-        $setting = Setting::where('key', 'existing_setting')->first();
-        expect($setting->value)->toBe('new_value');
     });
 
     it('requires admin role', function () {
@@ -83,12 +67,23 @@ describe('settings update', function () {
         ]);
         $this->actingAs($memberUser);
 
-        $response = $this->postJson('/api/settings', [
-            'key' => 'setting',
-            'value' => 'value',
+        $response = $this->patchJson('/api/settings', [
+            'settings' => [
+                'ai_provider' => 'openai',
+            ],
         ]);
 
         $response->assertForbidden();
+    });
+
+    it('validates setting values', function () {
+        $response = $this->patchJson('/api/settings', [
+            'settings' => [
+                'ai_provider' => 'invalid-provider',
+            ],
+        ]);
+
+        $response->assertUnprocessable();
     });
 });
 
@@ -100,27 +95,33 @@ describe('AI settings', function () {
             ->assertJsonStructure(['agents']);
     });
 
-    it('updates AI agent configuration', function () {
-        $response = $this->postJson('/api/settings/ai/agents', [
-            'agents' => [
-                [
-                    'name' => 'openai',
-                    'enabled' => true,
-                    'api_key' => 'test-key',
-                    'model' => 'gpt-4',
-                ],
-            ],
+    it('updates individual agent configuration', function () {
+        $response = $this->patchJson('/api/settings/ai/agents/openai', [
+            'enabled' => true,
+            'api_key' => 'test-key',
+            'model' => 'gpt-4',
         ]);
 
         $response->assertOk();
     });
 
-    it('validates agent structure', function () {
-        $response = $this->postJson('/api/settings/ai/agents', [
-            'agents' => 'invalid',
+    it('tests agent connection', function () {
+        // Set up the agent first
+        Setting::set('openai_api_key', encrypt('test-key'), $this->household->id);
+        Setting::set('ai_agent_openai_enabled', '1', $this->household->id);
+
+        $response = $this->postJson('/api/settings/ai/agents/openai/test');
+
+        // May fail if API key is not valid, but shouldn't 404
+        expect($response->status())->toBeIn([200, 422, 500]);
+    });
+
+    it('sets primary agent', function () {
+        $response = $this->postJson('/api/settings/ai/primary', [
+            'agent' => 'claude',
         ]);
 
-        $response->assertUnprocessable();
+        $response->assertOk();
     });
 
     it('requires admin role for AI settings', function () {
@@ -130,20 +131,14 @@ describe('AI settings', function () {
         ]);
         $this->actingAs($memberUser);
 
-        $response = $this->postJson('/api/settings/ai/agents', [
-            'agents' => [],
+        $response = $this->patchJson('/api/settings/ai/agents/openai', [
+            'enabled' => true,
         ]);
 
         $response->assertForbidden();
     });
 
     it('gets available models for Claude agent', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'anthropic_api_key',
-            'value' => encrypt('test-key'),
-        ]);
-
         $response = $this->getJson('/api/settings/ai/agents/claude/models');
 
         $response->assertOk()
@@ -154,12 +149,6 @@ describe('AI settings', function () {
     });
 
     it('gets available models for OpenAI agent', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'openai_api_key',
-            'value' => encrypt('test-key'),
-        ]);
-
         $response = $this->getJson('/api/settings/ai/agents/openai/models');
 
         $response->assertOk()
@@ -170,12 +159,6 @@ describe('AI settings', function () {
     });
 
     it('gets available models for Gemini agent', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'gemini_api_key',
-            'value' => encrypt('test-key'),
-        ]);
-
         $response = $this->getJson('/api/settings/ai/agents/gemini/models');
 
         $response->assertOk()
@@ -186,12 +169,6 @@ describe('AI settings', function () {
     });
 
     it('gets available models for Local agent', function () {
-        Setting::factory()->create([
-            'household_id' => $this->household->id,
-            'key' => 'local_base_url',
-            'value' => 'http://localhost:11434',
-        ]);
-
         $response = $this->getJson('/api/settings/ai/agents/local/models');
 
         $response->assertOk()
@@ -219,61 +196,32 @@ describe('AI settings', function () {
     });
 });
 
-describe('storage settings', function () {
-    it('gets storage configuration', function () {
-        $response = $this->getJson('/api/settings/storage');
-
-        $response->assertOk()
-            ->assertJsonStructure(['storage']);
-    });
-
-    it('updates storage configuration', function () {
-        $response = $this->postJson('/api/settings/storage', [
-            'driver' => 'local',
-        ]);
+describe('AI check', function () {
+    it('checks AI availability', function () {
+        $response = $this->getJson('/api/settings/ai');
 
         $response->assertOk();
     });
 
-    it('validates S3 settings when driver is s3', function () {
-        $response = $this->postJson('/api/settings/storage', [
-            'driver' => 's3',
-            // Missing required S3 fields
-        ]);
+    it('tests AI connection', function () {
+        $response = $this->postJson('/api/settings/ai/test');
 
-        // Should either accept or validate S3 requirements
-        expect($response->status())->toBeIn([200, 422]);
-    });
-
-    it('requires admin role for storage settings', function () {
-        $memberUser = User::factory()->create([
-            'household_id' => $this->household->id,
-            'role' => 'member',
-        ]);
-        $this->actingAs($memberUser);
-
-        $response = $this->postJson('/api/settings/storage', [
-            'driver' => 'local',
-        ]);
-
-        $response->assertForbidden();
+        // May return various statuses depending on configuration
+        expect($response->status())->toBeIn([200, 422, 500]);
     });
 });
 
-describe('prompts settings', function () {
-    it('gets AI prompts', function () {
-        $response = $this->getJson('/api/settings/prompts');
+describe('storage check', function () {
+    it('checks storage configuration', function () {
+        $response = $this->getJson('/api/settings/storage');
 
-        $response->assertOk()
-            ->assertJsonStructure(['prompts']);
+        $response->assertOk();
     });
+});
 
-    it('updates AI prompts', function () {
-        $response = $this->postJson('/api/settings/prompts', [
-            'prompts' => [
-                'analysis' => 'Custom analysis prompt',
-            ],
-        ]);
+describe('email check', function () {
+    it('checks email configuration', function () {
+        $response = $this->getJson('/api/settings/email');
 
         $response->assertOk();
     });

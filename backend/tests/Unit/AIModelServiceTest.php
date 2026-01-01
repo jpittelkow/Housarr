@@ -80,15 +80,17 @@ describe('AIModelService - OpenAI models', function () {
         Http::fake([
             'custom-api.com/v1/models' => Http::response([
                 'data' => [
-                    ['id' => 'custom-model'],
+                    ['id' => 'gpt-4o'],
+                    ['id' => 'gpt-custom'], // Not gpt-* prefix, will be filtered
                 ],
             ], 200),
         ]);
 
         $models = $this->service->getOpenAIModels('test-key', 'https://custom-api.com/v1');
 
+        // Only gpt-* models are included from API, plus defaults
         expect($models)->toBeArray()
-            ->toContain('custom-model');
+            ->toContain('gpt-4o');
     });
 });
 

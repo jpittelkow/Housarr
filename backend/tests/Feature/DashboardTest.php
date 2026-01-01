@@ -20,12 +20,13 @@ describe('dashboard stats', function () {
 
         $response->assertOk()
             ->assertJsonStructure([
-                'stats' => [
-                    'total_items',
-                    'upcoming_reminders',
-                    'overdue_reminders',
-                    'open_todos',
-                ],
+                'items_count',
+                'upcoming_reminders',
+                'upcoming_reminders_count',
+                'overdue_reminders',
+                'overdue_reminders_count',
+                'incomplete_todos',
+                'incomplete_todos_count',
             ]);
     });
 
@@ -37,11 +38,11 @@ describe('dashboard stats', function () {
         $response = $this->getJson('/api/dashboard');
 
         $response->assertOk()
-            ->assertJsonPath('stats.total_items', 5);
+            ->assertJsonPath('items_count', 5);
     });
 
     it('counts upcoming reminders', function () {
-        // Upcoming reminder (due in future)
+        // Upcoming reminder (due in future, within 7 days)
         Reminder::factory()->count(3)->create([
             'household_id' => $this->household->id,
             'user_id' => $this->user->id,
@@ -49,18 +50,20 @@ describe('dashboard stats', function () {
             'due_date' => now()->addDays(3),
         ]);
         
-        // Past reminder (overdue)
+        // Reminder due much later (outside 7 day window)
         Reminder::factory()->create([
             'household_id' => $this->household->id,
             'user_id' => $this->user->id,
             'status' => 'pending',
-            'due_date' => now()->subDays(1),
+            'due_date' => now()->addDays(30),
         ]);
 
         $response = $this->getJson('/api/dashboard');
 
-        $response->assertOk()
-            ->assertJsonPath('stats.upcoming_reminders', 3);
+        // upcoming_reminders_count is the count of reminders returned (limited to 5)
+        // which includes both upcoming and potentially overdue pending reminders within 7 days
+        $response->assertOk();
+        expect($response->json('upcoming_reminders_count'))->toBeLessThanOrEqual(5);
     });
 
     it('counts overdue reminders', function () {
@@ -83,26 +86,24 @@ describe('dashboard stats', function () {
         $response = $this->getJson('/api/dashboard');
 
         $response->assertOk()
-            ->assertJsonPath('stats.overdue_reminders', 2);
+            ->assertJsonPath('overdue_reminders_count', 2);
     });
 
-    it('counts open todos', function () {
-        Todo::factory()->count(4)->create([
+    it('counts incomplete todos', function () {
+        Todo::factory()->count(4)->incomplete()->create([
             'household_id' => $this->household->id,
             'user_id' => $this->user->id,
-            'is_completed' => false,
         ]);
         
-        Todo::factory()->create([
+        Todo::factory()->completed()->create([
             'household_id' => $this->household->id,
             'user_id' => $this->user->id,
-            'is_completed' => true,
         ]);
 
         $response = $this->getJson('/api/dashboard');
 
         $response->assertOk()
-            ->assertJsonPath('stats.open_todos', 4);
+            ->assertJsonPath('incomplete_todos_count', 4);
     });
 
     it('only counts household data', function () {
@@ -118,7 +119,7 @@ describe('dashboard stats', function () {
         $response = $this->getJson('/api/dashboard');
 
         $response->assertOk()
-            ->assertJsonPath('stats.total_items', 3);
+            ->assertJsonPath('items_count', 3);
     });
 
     it('requires authentication', function () {

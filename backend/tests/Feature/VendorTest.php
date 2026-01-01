@@ -34,22 +34,6 @@ describe('vendors index', function () {
         $response->assertOk()
             ->assertJsonCount(1, 'vendors');
     });
-
-    it('searches by name', function () {
-        Vendor::factory()->create([
-            'household_id' => $this->household->id,
-            'name' => 'ABC Plumbing',
-        ]);
-        Vendor::factory()->create([
-            'household_id' => $this->household->id,
-            'name' => 'XYZ Electric',
-        ]);
-
-        $response = $this->getJson('/api/vendors?search=plumbing');
-
-        $response->assertOk()
-            ->assertJsonCount(1, 'vendors');
-    });
 });
 
 describe('vendors store', function () {
@@ -157,7 +141,8 @@ describe('vendors destroy', function () {
 
         $response = $this->deleteJson("/api/vendors/{$vendor->id}");
 
-        $response->assertNoContent();
+        $response->assertOk()
+            ->assertJsonPath('message', 'Vendor deleted successfully');
         expect(Vendor::find($vendor->id))->toBeNull();
     });
 

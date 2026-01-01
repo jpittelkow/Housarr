@@ -25,7 +25,9 @@ describe('Tabs', () => {
       const tab1 = screen.getByRole('button', { name: /tab 1/i })
       const tab2 = screen.getByRole('button', { name: /tab 2/i })
       
-      expect(tab1).toHaveAttribute('aria-current', undefined)
+      // Inactive tab should NOT have aria-current attribute
+      expect(tab1).not.toHaveAttribute('aria-current')
+      // Active tab should have aria-current="page"
       expect(tab2).toHaveAttribute('aria-current', 'page')
     })
 
@@ -59,19 +61,67 @@ describe('Tabs', () => {
       expect(handleChange).toHaveBeenCalledWith('tab2')
     })
 
-    it('updates aria-current attribute', () => {
+    it('updates aria-current attribute on tab change', () => {
       const { rerender } = render(<Tabs tabs={mockTabs} activeTab="tab1" onTabChange={vi.fn()} />)
       
       const tab1 = screen.getByRole('button', { name: /tab 1/i })
       const tab2 = screen.getByRole('button', { name: /tab 2/i })
       
       expect(tab1).toHaveAttribute('aria-current', 'page')
-      expect(tab2).toHaveAttribute('aria-current', undefined)
+      expect(tab2).not.toHaveAttribute('aria-current')
       
       rerender(<Tabs tabs={mockTabs} activeTab="tab2" onTabChange={vi.fn()} />)
       
-      expect(tab1).toHaveAttribute('aria-current', undefined)
+      expect(tab1).not.toHaveAttribute('aria-current')
       expect(tab2).toHaveAttribute('aria-current', 'page')
+    })
+  })
+
+  describe('styling', () => {
+    it('applies active tab styles', () => {
+      render(<Tabs tabs={mockTabs} activeTab="tab1" onTabChange={vi.fn()} />)
+      
+      const activeTab = screen.getByRole('button', { name: /tab 1/i })
+      expect(activeTab).toHaveClass('border-primary-500', 'text-primary-600')
+    })
+
+    it('applies inactive tab styles', () => {
+      render(<Tabs tabs={mockTabs} activeTab="tab1" onTabChange={vi.fn()} />)
+      
+      const inactiveTab = screen.getByRole('button', { name: /tab 2/i })
+      expect(inactiveTab).toHaveClass('border-transparent', 'text-gray-500')
+    })
+  })
+
+  describe('icons and badges', () => {
+    it('renders badge when provided', () => {
+      const tabsWithBadge: Tab[] = [
+        { id: 'tab1', label: 'Tab 1', badge: 5 },
+        { id: 'tab2', label: 'Tab 2' },
+      ]
+      
+      render(<Tabs tabs={tabsWithBadge} activeTab="tab1" onTabChange={vi.fn()} />)
+      
+      expect(screen.getByText('5')).toBeInTheDocument()
+    })
+  })
+
+  describe('custom className', () => {
+    it('applies custom className', () => {
+      const { container } = render(
+        <Tabs tabs={mockTabs} activeTab="tab1" onTabChange={vi.fn()} className="custom-class" />
+      )
+      
+      expect(container.firstChild).toHaveClass('custom-class')
+    })
+  })
+
+  describe('accessibility', () => {
+    it('has nav with aria-label', () => {
+      render(<Tabs tabs={mockTabs} activeTab="tab1" onTabChange={vi.fn()} />)
+      
+      const nav = screen.getByRole('navigation', { name: /tabs/i })
+      expect(nav).toBeInTheDocument()
     })
   })
 })

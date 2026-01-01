@@ -22,7 +22,7 @@ describe('chat send message', function () {
         expect($response->status())->toBeIn([200, 422, 500]);
 
         if ($response->status() === 200) {
-            $response->assertJsonStructure(['response']);
+            $response->assertJsonStructure(['success', 'response']);
         }
     });
 
@@ -52,9 +52,8 @@ describe('chat with item context', function () {
             'model' => 'Infinity',
         ]);
 
-        $response = $this->postJson('/api/chat', [
+        $response = $this->postJson("/api/items/{$item->id}/chat", [
             'message' => 'How often should I service this?',
-            'item_id' => $item->id,
         ]);
 
         // Chat may succeed or fail depending on AI configuration
@@ -67,53 +66,41 @@ describe('chat with item context', function () {
             'household_id' => $otherHousehold->id,
         ]);
 
-        $response = $this->postJson('/api/chat', [
+        $response = $this->postJson("/api/items/{$otherItem->id}/chat", [
             'message' => 'Tell me about this item',
-            'item_id' => $otherItem->id,
         ]);
 
         $response->assertForbidden();
     });
 
-    it('validates item exists', function () {
-        $response = $this->postJson('/api/chat', [
+    it('returns 404 for non-existent item', function () {
+        $response = $this->postJson('/api/items/99999/chat', [
             'message' => 'Tell me about this item',
-            'item_id' => 99999,
         ]);
 
-        expect($response->status())->toBeIn([404, 422]);
+        $response->assertNotFound();
     });
 });
 
-describe('chat history', function () {
-    it('returns empty history initially', function () {
-        $response = $this->getJson('/api/chat/history');
+describe('chat availability', function () {
+    it('checks if chat is available', function () {
+        $response = $this->getJson('/api/chat/available');
 
         $response->assertOk()
-            ->assertJson(['messages' => []]);
-    });
-
-    it('clears chat history', function () {
-        $response = $this->deleteJson('/api/chat/history');
-
-        $response->assertNoContent();
+            ->assertJsonStructure(['available']);
     });
 });
 
-describe('chat with manual context', function () {
-    it('can include manual_ids in request', function () {
+describe('chat suggested questions', function () {
+    it('gets suggested questions for an item', function () {
         $item = Item::factory()->create([
             'household_id' => $this->household->id,
         ]);
 
-        $response = $this->postJson('/api/chat', [
-            'message' => 'What does the manual say about maintenance?',
-            'item_id' => $item->id,
-            'manual_ids' => [], // Empty but valid
-        ]);
+        $response = $this->getJson("/api/items/{$item->id}/chat/suggestions");
 
-        // Should accept the request structure
-        expect($response->status())->toBeIn([200, 422, 500]);
+        $response->assertOk()
+            ->assertJsonStructure(['suggestions']);
     });
 });
 

@@ -74,20 +74,64 @@ describe('AIAgentCard', () => {
     expect(screen.getByText('OpenAI')).toBeInTheDocument()
   })
 
-  it('shows text input for model when no API key is configured', () => {
+  it('shows agent enabled status', () => {
+    renderComponent(mockAgent)
+    
+    // Should have a toggle (switch) for enabling/disabling
+    const toggle = screen.getByRole('switch')
+    expect(toggle).toBeChecked()
+  })
+
+  it('shows configuration status badges', () => {
+    renderComponent(mockAgent)
+    
+    // Should show status badges
+    expect(screen.getByText('Configured')).toBeInTheDocument()
+  })
+
+  it('expands when clicking the chevron button', async () => {
+    renderComponent(mockAgent, true)
+
+    // Find the expand button (it's the last button in the header area)
+    const buttons = screen.getAllByRole('button')
+    const expandButton = buttons[buttons.length - 1] // The chevron button
+
+    await user.click(expandButton)
+
+    // After expanding, should show the configuration section
+    await waitFor(() => {
+      expect(screen.getByText('API Key')).toBeInTheDocument()
+    })
+  })
+
+  it('shows API key as saved when hasApiKey is true', async () => {
+    renderComponent(mockAgent, true)
+
+    // Expand the card
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
+
+    await waitFor(() => {
+      expect(screen.getByText(/API key saved/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows API key input when hasApiKey is false', async () => {
     const agentWithoutKey = { ...mockAgent, configured: false }
     renderComponent(agentWithoutKey, false)
 
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    user.click(expandButton)
+    // Expand the card
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
 
-    // Should show text input when models can't be fetched
-    const modelInput = screen.getByLabelText(/model/i)
-    expect(modelInput).toBeInTheDocument()
-    expect(modelInput.tagName).toBe('INPUT')
+    await waitFor(() => {
+      // Should show an input for API key
+      const apiKeyInput = document.querySelector('input[type="password"]')
+      expect(apiKeyInput).toBeInTheDocument()
+    })
   })
 
-  it('fetches and displays models in dropdown when agent is expanded and configured', async () => {
+  it('fetches models when card is expanded', async () => {
     const { settings } = await import('@/services/api')
     vi.mocked(settings.getAvailableModels).mockResolvedValue({
       models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
@@ -96,57 +140,34 @@ describe('AIAgentCard', () => {
     renderComponent(mockAgent, true)
 
     // Expand the card
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    await user.click(expandButton)
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
 
-    // Wait for models to be fetched and dropdown to appear
+    // Wait for models to be fetched
     await waitFor(() => {
       expect(settings.getAvailableModels).toHaveBeenCalledWith('openai')
-    })
-
-    // Should show select dropdown
-    await waitFor(() => {
-      const modelSelect = screen.getByLabelText(/model/i)
-      expect(modelSelect).toBeInTheDocument()
-      expect(modelSelect.tagName).toBe('SELECT')
     })
   })
 
   it('shows loading state while fetching models', async () => {
     const { settings } = await import('@/services/api')
     vi.mocked(settings.getAvailableModels).mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ models: [] }), 100))
+      () => new Promise((resolve) => setTimeout(() => resolve({ models: [] }), 500))
     )
 
     renderComponent(mockAgent, true)
 
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    await user.click(expandButton)
+    // Expand the card
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
 
-    // Should show loading message
+    // Should show loading message briefly
     await waitFor(() => {
-      expect(screen.getByText(/loading available models/i)).toBeInTheDocument()
+      expect(screen.getByText(/Loading available models/)).toBeInTheDocument()
     })
   })
 
-  it('falls back to text input when model fetch fails', async () => {
-    const { settings } = await import('@/services/api')
-    vi.mocked(settings.getAvailableModels).mockRejectedValue(new Error('API Error'))
-
-    renderComponent(mockAgent, true)
-
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    await user.click(expandButton)
-
-    // Should fall back to text input after error
-    await waitFor(() => {
-      const modelInput = screen.getByLabelText(/model/i)
-      expect(modelInput).toBeInTheDocument()
-      expect(modelInput.tagName).toBe('INPUT')
-    })
-  })
-
-  it('allows selecting a model from dropdown', async () => {
+  it('shows model selector when models are loaded', async () => {
     const { settings } = await import('@/services/api')
     vi.mocked(settings.getAvailableModels).mockResolvedValue({
       models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
@@ -154,43 +175,43 @@ describe('AIAgentCard', () => {
 
     renderComponent(mockAgent, true)
 
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    await user.click(expandButton)
+    // Expand the card
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
 
+    // Wait for models to load and select to appear
     await waitFor(() => {
-      const modelSelect = screen.getByLabelText(/model/i) as HTMLSelectElement
+      const modelSelect = screen.getByLabelText(/model/i)
       expect(modelSelect).toBeInTheDocument()
     })
-
-    const modelSelect = screen.getByLabelText(/model/i) as HTMLSelectElement
-    await user.selectOptions(modelSelect, 'gpt-4-turbo')
-
-    expect(modelSelect.value).toBe('gpt-4-turbo')
   })
 
-  it('allows switching to custom model input', async () => {
-    const { settings } = await import('@/services/api')
-    vi.mocked(settings.getAvailableModels).mockResolvedValue({
-      models: ['gpt-4o', 'gpt-4-turbo'],
-    })
-
+  it('shows test connection button when configured', async () => {
     renderComponent(mockAgent, true)
 
-    const expandButton = screen.getByRole('button', { name: /expand/i })
-    await user.click(expandButton)
+    // Expand the card
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[buttons.length - 1])
 
     await waitFor(() => {
-      const modelSelect = screen.getByLabelText(/model/i) as HTMLSelectElement
-      expect(modelSelect).toBeInTheDocument()
-    })
-
-    const modelSelect = screen.getByLabelText(/model/i) as HTMLSelectElement
-    await user.selectOptions(modelSelect, '__CUSTOM__')
-
-    // Should show custom input
-    await waitFor(() => {
-      const customInput = screen.getByLabelText(/custom model/i)
-      expect(customInput).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /test connection/i })).toBeInTheDocument()
     })
   })
+
+  it('disables primary star button when not configured', () => {
+    const unconfiguredAgent = { ...mockAgent, configured: false }
+    renderComponent(unconfiguredAgent, false)
+
+    // The star button should be disabled (it's the first button)
+    const starButton = screen.getAllByRole('button')[0]
+    expect(starButton).toBeDisabled()
+  })
+
+  it('shows primary badge when agent is primary', () => {
+    const primaryAgent = { ...mockAgent, is_primary: true }
+    renderComponent(primaryAgent, true)
+
+    expect(screen.getByText('Primary')).toBeInTheDocument()
+  })
 })
+

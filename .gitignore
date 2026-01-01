@@ -38,3 +38,8 @@ frontend/dist/
 # Logs
 *.log
 npm-debug.log*
+
+# Test artifacts
+frontend/test-results/
+frontend/playwright-report/
+backend/.phpunit.cache/
