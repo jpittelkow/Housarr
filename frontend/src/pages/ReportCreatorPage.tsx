@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Modal } from '@/components/ui/Modal'
 import { ChatWindow } from '@/components/Chat/ChatWindow'
-import { Icon, ArrowLeft, Sparkles, FileText, CheckCircle, AlertCircle } from '@/components/ui'
+import { Icon, ArrowLeft, Sparkles, FileText, AlertCircle } from '@/components/ui'
 import { toast } from 'sonner'
 
 export default function ReportCreatorPage() {
