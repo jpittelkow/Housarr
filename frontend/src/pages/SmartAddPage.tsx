@@ -316,6 +316,7 @@ export default function SmartAddPage() {
     }
 
     try {
+      console.log('[SSE] Starting streaming analysis...')
       const response = await fetch('/api/items/analyze-image-stream', {
         method: 'POST',
         body: formData,
@@ -325,7 +326,12 @@ export default function SmartAddPage() {
         credentials: 'include', // Use cookie-based auth
       })
 
+      console.log('[SSE] Response status:', response.status, response.statusText)
+      console.log('[SSE] Response headers:', Object.fromEntries(response.headers.entries()))
+
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[SSE] Response not ok:', errorText)
         throw new Error('Failed to start analysis')
       }
 
@@ -337,11 +343,17 @@ export default function SmartAddPage() {
       const decoder = new TextDecoder()
       let buffer = ''
 
+      console.log('[SSE] Starting to read stream...')
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log('[SSE] Stream done')
+          break
+        }
 
-        buffer += decoder.decode(value, { stream: true })
+        const chunk = decoder.decode(value, { stream: true })
+        console.log('[SSE] Received chunk:', chunk)
+        buffer += chunk
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
@@ -351,8 +363,10 @@ export default function SmartAddPage() {
         for (const line of lines) {
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim()
+            console.log('[SSE] Event:', currentEvent)
           } else if (line.startsWith('data: ')) {
             currentData = line.slice(6)
+            console.log('[SSE] Data:', currentData)
             
             try {
               const data = JSON.parse(currentData)
