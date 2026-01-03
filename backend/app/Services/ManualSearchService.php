@@ -49,7 +49,8 @@ class ManualSearchService
         }
 
         // Strategy 3: DuckDuckGo search with multiple query formats
-        $searchUrls = $this->searchWithDuckDuckGo($make, $model);
+        $searchResult = $this->searchWithDuckDuckGo($make, $model);
+        $searchUrls = $searchResult['urls'] ?? [];
         $allUrls = array_merge($allUrls, $searchUrls);
 
         // Remove duplicates and prioritize
