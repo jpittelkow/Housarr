@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToGroup('api', \App\Http\Middleware\DebugTiming::class);
         $middleware->appendToGroup('api', EnsureFrontendRequestsAreStateful::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\AddCacheHeaders::class);
+        
+        // Exclude SSE streaming endpoint from CSRF (already protected by Sanctum auth)
+        $middleware->validateCsrfTokens(except: [
+            'api/items/analyze-image-stream',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Handle authentication exceptions for API requests
