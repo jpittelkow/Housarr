@@ -117,9 +117,27 @@ All pages are lazy-loaded for code splitting. Located in `src/pages/`.
 
 **Features**:
 - Upload image or enter search query
-- AI-powered product identification
+- AI-powered product identification using multiple agents (Claude, OpenAI, Gemini, Local)
 - Category suggestions
 - Quick item creation from AI results
+- Photo confirmation modal with optional context input
+- Live SSE streaming progress showing per-agent status
+- Automatic fallback to non-streaming endpoint if SSE fails
+- Try Again button with editable context for refined searches
+- Product image gallery import when creating items
+
+**Photo Search Flow**:
+1. User uploads/takes photo
+2. Modal appears with photo preview and optional context input
+3. User clicks "Search" to start analysis
+4. Progress UI shows each AI agent's status in real-time
+5. Results displayed with product images and confidence scores
+
+**Progress Tracking**:
+- Per-agent progress (pending → running → complete/error)
+- Overall progress bar
+- Duration display for each agent
+- Synthesis indicator when combining results
 
 ### ReportsPage (`src/pages/ReportsPage.tsx`)
 

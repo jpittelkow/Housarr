@@ -31,6 +31,12 @@ The [adr/](adr/) folder contains Architecture Decision Records documenting signi
 | [009](adr/009-zip-backup-with-files.md) | ZIP Backup with Files |
 | [010](adr/010-ai-chatbot-manual-extraction.md) | AI Chatbot & Manual Extraction |
 | [011](adr/011-comprehensive-testing-strategy.md) | Comprehensive Testing Strategy |
+| [012](adr/012-docker-self-hosted-deployment.md) | Docker Self-Hosted Deployment |
+| [013](adr/013-vendor-search-address-features.md) | Vendor Search & Address Features |
+| [014](adr/014-smart-add-product-image-search.md) | Smart Add Product Image Search |
+| [015](adr/015-separate-item-vendor-categories.md) | Separate Item/Vendor Categories |
+| [016](adr/016-room-detail-page-and-image-upload.md) | Room Detail Page & Image Upload |
+| [017](adr/017-ai-report-creator.md) | AI Report Creator |
 
 ## Quick Links
 

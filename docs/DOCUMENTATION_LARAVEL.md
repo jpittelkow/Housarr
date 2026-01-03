@@ -612,6 +612,7 @@ All API routes are defined in `routes/api.php`.
 
 **Items**:
 - `POST /api/items/analyze-image` - Analyzes uploaded image using AI
+- `POST /api/items/analyze-image-stream` - SSE streaming version with real-time progress (excluded from CSRF)
 - `POST /api/items/search-product-image` - Searches for product images (make, model, type)
 - `GET /api/items`
 - `POST /api/items`

@@ -269,3 +269,167 @@ User enters context (optional) → Clicks "Search" → Analysis starts
 - Context input preserves value when retrying
 - Reset clears both `userPrompt` and `searchQuery`
 - Text searches don't show photo confirmation step
+
+## Photo Confirmation Modal (2025-01-02)
+
+### Context
+
+On mobile devices, the photo confirmation step (showing photo preview + context input) was displayed inline on the page. This could cause layout issues and wasn't optimal for small screens where overlaying content provides a better UX.
+
+### Decision
+
+Moved the photo confirmation UI into a **Modal** component for better mobile experience:
+
+- Photo preview and context input now appear in a centered modal overlay
+- Modal ensures the confirmation step is always visible on top of other content
+- Consistent with mobile UI patterns (bottom sheets, dialogs)
+- Cancel and Search buttons in modal footer
+
+### Implementation
+
+```tsx
+<Modal
+  isOpen={showPhotoConfirmation}
+  onClose={() => setShowPhotoConfirmation(false)}
+  title="Confirm Photo"
+>
+  {/* Photo preview */}
+  <img src={previewUrl} alt="Preview" />
+  
+  {/* Context input */}
+  <Input
+    label="Add context (optional)"
+    value={userPrompt}
+    onChange={(e) => setUserPrompt(e.target.value)}
+    placeholder="e.g., Model number on back, kitchen appliance..."
+  />
+  
+  <ModalFooter>
+    <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
+    <Button onClick={handleConfirmPhotoSearch}>Search</Button>
+  </ModalFooter>
+</Modal>
+```
+
+## Live AI Agent Progress (2025-01-02)
+
+### Context
+
+When Smart Add analyzes a photo, it uses multiple AI agents in parallel (Claude, OpenAI, Gemini, Local). Previously, users only saw a generic loading spinner with no indication of progress, making it unclear whether the search was working or how long to wait.
+
+### Decision
+
+Implemented **Server-Sent Events (SSE)** streaming to provide real-time progress updates during analysis:
+
+1. **Backend SSE Endpoint**: New `/api/items/analyze-image-stream` endpoint streams progress events
+2. **Per-Agent Progress**: Shows each AI agent's status (pending, running, complete, error)
+3. **Overall Progress Bar**: Visual indicator of how many agents have completed
+4. **Duration Display**: Shows how long each agent took to respond
+5. **Graceful Fallback**: If SSE fails, automatically falls back to non-streaming endpoint
+
+### Implementation
+
+**Backend (ItemController.php):**
+```php
+public function analyzeImageStream(Request $request): StreamedResponse
+{
+    return response()->stream(function () {
+        // Send init event with agent list
+        $this->sendSSE('init', ['agents' => $activeAgents, 'total' => count($activeAgents)]);
+        
+        // Progress callback for each agent
+        $onAgentComplete = function ($agent, $result, $completed, $total) {
+            $this->sendSSE('agent_complete', [
+                'agent' => $agent,
+                'success' => $result['success'],
+                'duration_ms' => $result['duration_ms'],
+                'completed' => $completed,
+                'total' => $total,
+            ]);
+        };
+        
+        // Call AI agents with progress callback
+        $response = $orchestrator->analyzeImageWithAllAgentsStreaming(..., $onAgentComplete);
+        
+        // Send synthesis and complete events
+        $this->sendSSE('synthesis_start', []);
+        $this->sendSSE('complete', ['results' => $results]);
+    }, 200, $this->getSSEHeaders());
+}
+```
+
+**Frontend (SmartAddPage.tsx):**
+```tsx
+// State for progress tracking
+const [agentProgress, setAgentProgress] = useState<AgentProgress[]>([])
+const [overallProgress, setOverallProgress] = useState({ completed: 0, total: 0 })
+const [isSynthesizing, setIsSynthesizing] = useState(false)
+
+// SSE streaming with fetch API
+const response = await fetch('/api/items/analyze-image-stream', {
+  method: 'POST',
+  body: formData,
+  credentials: 'include',
+})
+
+const reader = response.body?.getReader()
+// Parse SSE events and update state...
+```
+
+**Progress UI:**
+```
+┌─────────────────────────────────────────┐
+│ Analyzing... (2/4 agents complete)       │
+│ [████████████░░░░░░░░░░░░] 50%          │
+│                                          │
+│ ✓ Claude         (1.2s)                 │
+│ ✓ OpenAI         (0.8s)                 │
+│ ◌ Gemini         running...             │
+│ ◌ Local          pending                │
+│                                          │
+│ Synthesizing results...                  │
+└─────────────────────────────────────────┘
+```
+
+### Infrastructure Configuration
+
+SSE requires specific nginx and PHP configuration to work properly:
+
+**nginx.conf:**
+```nginx
+location = /api/items/analyze-image-stream {
+    # Disable buffering for real-time streaming
+    fastcgi_buffering off;
+    fastcgi_request_buffering off;
+    gzip off;
+    fastcgi_read_timeout 300s;
+    chunked_transfer_encoding on;
+}
+```
+
+**php.ini:**
+```ini
+output_buffering = Off
+implicit_flush = On
+zlib.output_compression = Off
+```
+
+**CSRF Exception (bootstrap/app.php):**
+```php
+$middleware->validateCsrfTokens(except: [
+    'api/items/analyze-image-stream',
+]);
+```
+
+### Consequences
+
+**Positive:**
+- Users see real-time progress during AI analysis
+- Clear indication that the system is working
+- Per-agent timing helps identify slow providers
+- Graceful degradation if SSE unavailable
+
+**Negative:**
+- Additional infrastructure complexity (nginx/PHP config)
+- CSRF exception required for streaming endpoint
+- More state management in frontend
