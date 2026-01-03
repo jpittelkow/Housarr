@@ -126,6 +126,7 @@ export default function SmartAddPage() {
   const [agentProgress, setAgentProgress] = useState<AgentProgress[]>([])
   const [overallProgress, setOverallProgress] = useState({ completed: 0, total: 0 })
   const [isSynthesizing, setIsSynthesizing] = useState(false)
+  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState(false)
   
   // Lazy-loaded product images for search results
   const [productImages, setProductImages] = useState<Record<number, string | null>>({})
@@ -218,50 +219,6 @@ export default function SmartAddPage() {
     })
   }, [results])
 
-  // Analyze image mutation
-  const analyzeMutation = useMutation({
-    mutationFn: ({ file, query }: { file?: File; query?: string }) =>
-      items.analyzeImage(file, query, allCategories.map(c => c.name)),
-    onSuccess: (data) => {
-      // Store agent metadata
-      setAgentMetadata({
-        agents_used: data.agents_used || [],
-        agents_succeeded: data.agents_succeeded || 0,
-        agent_details: data.agent_details || {},
-        agent_errors: data.agent_errors || {},
-        primary_agent: data.primary_agent || null,
-        synthesis_agent: data.synthesis_agent || null,
-        synthesis_error: data.synthesis_error || null,
-        consensus: data.consensus || null,
-        total_duration_ms: data.total_duration_ms || 0,
-        parse_source: data.parse_source || null,
-        debug: data.debug || undefined,
-      })
-
-      if (data.results && data.results.length > 0) {
-        setResults(data.results)
-        setAnalysisState('results')
-      } else {
-        // Build detailed error message
-        const errors = Object.entries(data.agent_errors || {})
-        let errorMsg = 'Could not identify the product.'
-        if (errors.length > 0) {
-          errorMsg += ' Agent errors: ' + errors.map(([agent, err]) => `${AGENT_DISPLAY_NAMES[agent] || agent}: ${err}`).join('; ')
-        } else if (data.agents_succeeded === 0) {
-          errorMsg += ' No AI agents responded successfully.'
-        } else {
-          errorMsg += ' Try a different search or clearer photo.'
-        }
-        setErrorMessage(errorMsg)
-        setAnalysisState('error')
-      }
-    },
-    onError: (error: Error) => {
-      setErrorMessage(error.message)
-      setAnalysisState('error')
-    },
-  })
-
   // Create item mutation
   const createMutation = useMutation({
     mutationFn: (data: Partial<Item>) => items.create(data),
@@ -348,6 +305,7 @@ export default function SmartAddPage() {
     setAgentProgress([])
     setOverallProgress({ completed: 0, total: 0 })
     setIsSynthesizing(false)
+    setIsStreamingAnalysis(true)
     setAnalysisState('analyzing')
 
     const formData = new FormData()
@@ -447,6 +405,7 @@ export default function SmartAddPage() {
                 case 'complete':
                   // Final results
                   setIsSynthesizing(false)
+                  setIsStreamingAnalysis(false)
                   setAgentMetadata({
                     agents_used: data.agents_used || [],
                     agents_succeeded: data.agents_succeeded || 0,
@@ -479,6 +438,7 @@ export default function SmartAddPage() {
                   break
 
                 case 'error':
+                  setIsStreamingAnalysis(false)
                   setErrorMessage(data.message || 'Analysis failed')
                   setAnalysisState('error')
                   break
@@ -493,6 +453,7 @@ export default function SmartAddPage() {
       }
     } catch (error) {
       console.error('Streaming analysis error:', error)
+      setIsStreamingAnalysis(false)
       setErrorMessage(error instanceof Error ? error.message : 'Analysis failed')
       setAnalysisState('error')
     }
@@ -728,7 +689,7 @@ export default function SmartAddPage() {
                       className="pl-10"
                     />
                   </div>
-                  <Button type="submit" isLoading={analysisState === 'analyzing'}>
+                  <Button type="submit" isLoading={isStreamingAnalysis}>
                     Search
                   </Button>
                 </form>
@@ -1340,10 +1301,10 @@ export default function SmartAddPage() {
                         size="sm"
                         className="w-full"
                         onClick={handleTryAgainWithFeedback}
-                        disabled={analysisState === 'analyzing'}
+                        disabled={isStreamingAnalysis}
                       >
                         <Icon icon={RefreshCw} size="xs" />
-                        {analysisState === 'analyzing' ? 'Searching...' : 'Try Again'}
+                        {isStreamingAnalysis ? 'Searching...' : 'Try Again'}
                       </Button>
                     </div>
                   )}
