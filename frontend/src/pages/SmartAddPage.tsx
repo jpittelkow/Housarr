@@ -452,10 +452,48 @@ export default function SmartAddPage() {
         }
       }
     } catch (error) {
-      console.error('Streaming analysis error:', error)
-      setIsStreamingAnalysis(false)
-      setErrorMessage(error instanceof Error ? error.message : 'Analysis failed')
-      setAnalysisState('error')
+      console.error('Streaming analysis error, falling back to standard endpoint:', error)
+      
+      // Fallback to non-streaming endpoint
+      try {
+        const data = await items.analyzeImage(file, query, allCategories.map(c => c.name))
+        
+        setIsStreamingAnalysis(false)
+        setAgentMetadata({
+          agents_used: data.agents_used || [],
+          agents_succeeded: data.agents_succeeded || 0,
+          agent_details: data.agent_details || {},
+          agent_errors: data.agent_errors || {},
+          primary_agent: data.primary_agent || null,
+          synthesis_agent: data.synthesis_agent || null,
+          synthesis_error: data.synthesis_error || null,
+          consensus: data.consensus || null,
+          total_duration_ms: data.total_duration_ms || 0,
+          parse_source: data.parse_source || null,
+        })
+
+        if (data.results && data.results.length > 0) {
+          setResults(data.results)
+          setAnalysisState('results')
+        } else {
+          const errors = Object.entries(data.agent_errors || {})
+          let errorMsg = 'Could not identify the product.'
+          if (errors.length > 0) {
+            errorMsg += ' Agent errors: ' + errors.map(([agent, err]) => `${AGENT_DISPLAY_NAMES[agent] || agent}: ${err}`).join('; ')
+          } else if (data.agents_succeeded === 0) {
+            errorMsg += ' No AI agents responded successfully.'
+          } else {
+            errorMsg += ' Try a different search or clearer photo.'
+          }
+          setErrorMessage(errorMsg)
+          setAnalysisState('error')
+        }
+      } catch (fallbackError) {
+        console.error('Fallback analysis also failed:', fallbackError)
+        setIsStreamingAnalysis(false)
+        setErrorMessage(fallbackError instanceof Error ? fallbackError.message : 'Analysis failed')
+        setAnalysisState('error')
+      }
     }
   }, [allCategories])
 
