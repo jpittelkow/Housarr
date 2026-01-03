@@ -321,8 +321,8 @@ export default function SmartAddPage() {
         body: formData,
         headers: {
           'Accept': 'text/event-stream',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
+        credentials: 'include', // Use cookie-based auth
       })
 
       if (!response.ok) {
