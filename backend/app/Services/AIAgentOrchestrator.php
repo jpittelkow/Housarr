@@ -414,6 +414,167 @@ class AIAgentOrchestrator
     }
 
     /**
+     * Analyze an image using ALL active agents with progress callbacks.
+     * Each callback is called when an agent completes its analysis.
+     *
+     * @param string $base64Image Base64 encoded image
+     * @param string $mimeType Image MIME type
+     * @param string $prompt Analysis prompt
+     * @param array $options Options for agent calls
+     * @param callable|null $onAgentComplete Callback: fn(string $agentName, array $result, int $completed, int $total)
+     * @return array Results with agent metadata
+     */
+    public function analyzeImageWithAllAgentsStreaming(
+        string $base64Image,
+        string $mimeType,
+        string $prompt,
+        array $options = [],
+        ?callable $onAgentComplete = null
+    ): array {
+        $activeAgents = $this->getActiveAgents();
+
+        if (empty($activeAgents)) {
+            return [
+                'agents' => [],
+                'primary' => null,
+                'total_duration_ms' => 0,
+            ];
+        }
+
+        $results = [];
+        $startTime = microtime(true);
+        $total = count($activeAgents);
+        $completed = 0;
+
+        // Call each agent with the image and report progress
+        foreach ($activeAgents as $agentName) {
+            $result = $this->analyzeImageWithAgent($agentName, $base64Image, $mimeType, $prompt, $options);
+            $results[$agentName] = $result;
+            $completed++;
+
+            // Call progress callback if provided
+            if ($onAgentComplete) {
+                $onAgentComplete($agentName, $result, $completed, $total);
+            }
+        }
+
+        return [
+            'agents' => $results,
+            'primary' => $this->primaryAgent,
+            'total_duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
+        ];
+    }
+
+    /**
+     * Call all active agents with progress callbacks.
+     *
+     * @param string $prompt The prompt to send to agents
+     * @param array $options Options for agent calls
+     * @param callable|null $onAgentComplete Callback: fn(string $agentName, array $result, int $completed, int $total)
+     * @return array Results with agent metadata
+     */
+    public function callActiveAgentsStreaming(
+        string $prompt,
+        array $options = [],
+        ?callable $onAgentComplete = null
+    ): array {
+        $activeAgents = $this->getActiveAgents();
+
+        if (empty($activeAgents)) {
+            return [
+                'agents' => [],
+                'primary' => null,
+            ];
+        }
+
+        $results = [];
+        $startTime = microtime(true);
+        $total = count($activeAgents);
+        $completed = 0;
+
+        // Call each agent and report progress
+        foreach ($activeAgents as $agentName) {
+            $result = $this->callAgent($agentName, $prompt, $options);
+            $results[$agentName] = $result;
+            $completed++;
+
+            // Call progress callback if provided
+            if ($onAgentComplete) {
+                $onAgentComplete($agentName, $result, $completed, $total);
+            }
+        }
+
+        return [
+            'agents' => $results,
+            'primary' => $this->primaryAgent,
+            'total_duration_ms' => (int) ((microtime(true) - $startTime) * 1000),
+        ];
+    }
+
+    /**
+     * Synthesize results from multiple agent responses.
+     * Separated from the main analysis for streaming support.
+     *
+     * @param array $response The response from analyzeImageWithAllAgentsStreaming or callActiveAgentsStreaming
+     * @param string $originalPrompt The original analysis prompt
+     * @param array $options Options for synthesis call
+     * @return array Updated response with synthesized results
+     */
+    public function synthesizeResults(array $response, string $originalPrompt, array $options = []): array
+    {
+        if (empty($response['agents'])) {
+            return $response;
+        }
+
+        // Get successful responses
+        $successfulResponses = array_filter(
+            $response['agents'],
+            fn($r) => $r['success'] && $r['response']
+        );
+
+        // If only one agent succeeded, use its response directly
+        if (count($successfulResponses) <= 1) {
+            $single = reset($successfulResponses);
+            $response['synthesized'] = $single['response'] ?? null;
+            $response['agents_succeeded'] = count($successfulResponses);
+            return $response;
+        }
+
+        // Get the primary agent for synthesis
+        $primary = $this->getPrimaryOrFirstAvailable();
+        if (!$primary) {
+            $response['synthesized'] = null;
+            $response['synthesis_error'] = 'No primary agent available for synthesis';
+            $response['agents_succeeded'] = count($successfulResponses);
+            return $response;
+        }
+
+        // Build synthesis prompt for product identification
+        $responsesText = '';
+        foreach ($successfulResponses as $agentName => $result) {
+            $responsesText .= "\n\n--- Response from {$agentName} ---\n{$result['response']}";
+        }
+
+        // Get synthesis prompt from settings or use default
+        $synthesisTemplate = \App\Actions\Items\AnalyzeItemImageAction::getSynthesisPrompt($this->householdId);
+
+        // Replace placeholders in the synthesis template
+        $synthesisPrompt = str_replace(
+            ['{original_prompt}', '{responses}'],
+            [$originalPrompt, $responsesText],
+            $synthesisTemplate
+        );
+
+        $synthesisResult = $this->callAgent($primary, $synthesisPrompt, array_merge($options, ['max_tokens' => 2048]));
+        $response['synthesized'] = $synthesisResult['response'];
+        $response['synthesis_error'] = $synthesisResult['error'];
+        $response['synthesis_agent'] = $primary;
+        $response['agents_succeeded'] = count($successfulResponses);
+
+        return $response;
+    }
+
+    /**
      * Analyze an image with all agents and synthesize results using the primary agent.
      */
     public function analyzeImageWithAllAgentsAndSynthesize(string $base64Image, string $mimeType, string $prompt, array $options = []): array

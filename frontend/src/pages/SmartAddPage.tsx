@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
 import {
   Icon,
   Sparkles,
@@ -26,6 +27,8 @@ import {
   HelpTooltip,
   Camera,
   ExternalLink,
+  Loader2,
+  Circle,
 } from '@/components/ui'
 import { toast } from 'sonner'
 import { cn, isMobileDevice } from '@/lib/utils'
@@ -77,6 +80,15 @@ interface AgentMetadata {
 
 type AnalysisState = 'idle' | 'uploading' | 'analyzing' | 'results' | 'error'
 
+// Type for tracking individual agent progress during streaming
+interface AgentProgress {
+  name: string
+  displayName: string
+  status: 'pending' | 'running' | 'complete' | 'error'
+  duration_ms?: number
+  error?: string | null
+}
+
 // Agent display names
 const AGENT_DISPLAY_NAMES: Record<string, string> = {
   claude: 'Claude',
@@ -109,6 +121,11 @@ export default function SmartAddPage() {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null) // Selected result's image
   const [userPrompt, setUserPrompt] = useState('') // User-provided context/context for AI analysis
   const [showPhotoConfirmation, setShowPhotoConfirmation] = useState(false) // Show confirmation step after photo upload
+  
+  // Streaming progress state
+  const [agentProgress, setAgentProgress] = useState<AgentProgress[]>([])
+  const [overallProgress, setOverallProgress] = useState({ completed: 0, total: 0 })
+  const [isSynthesizing, setIsSynthesizing] = useState(false)
   
   // Lazy-loaded product images for search results
   const [productImages, setProductImages] = useState<Record<number, string | null>>({})
@@ -315,6 +332,172 @@ export default function SmartAddPage() {
     },
   })
 
+  // Streaming analysis function using Server-Sent Events
+  const startStreamingAnalysis = useCallback(async (file?: File, query?: string) => {
+    // Reset state
+    setResults([])
+    setSelectedIndex(null)
+    setFormData({})
+    setErrorMessage(null)
+    setShowAllResults(false)
+    setAgentMetadata(null)
+    setShowAgentDetails(false)
+    setSelectedImageUrl(null)
+    setProductImages({})
+    setImageLoadingStates({})
+    setAgentProgress([])
+    setOverallProgress({ completed: 0, total: 0 })
+    setIsSynthesizing(false)
+    setAnalysisState('analyzing')
+
+    const formData = new FormData()
+    if (file) formData.append('image', file)
+    if (query?.trim()) formData.append('query', query.trim())
+    if (allCategories.length > 0) {
+      formData.append('categories', JSON.stringify(allCategories.map(c => c.name)))
+    }
+
+    try {
+      const response = await fetch('/api/items/analyze-image-stream', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'text/event-stream',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to start analysis')
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        let currentEvent = ''
+        let currentData = ''
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
+            currentData = line.slice(6)
+            
+            try {
+              const data = JSON.parse(currentData)
+              
+              switch (currentEvent) {
+                case 'init':
+                  // Initialize agent progress
+                  setAgentProgress(
+                    (data.agents as string[]).map((name: string) => ({
+                      name,
+                      displayName: AGENT_DISPLAY_NAMES[name] || name,
+                      status: 'pending' as const,
+                    }))
+                  )
+                  setOverallProgress({ completed: 0, total: data.total })
+                  break
+
+                case 'agent_start':
+                  // Mark agent as running
+                  setAgentProgress(prev => 
+                    prev.map(a => 
+                      a.name === data.agent 
+                        ? { ...a, status: 'running' as const }
+                        : a
+                    )
+                  )
+                  break
+
+                case 'agent_complete':
+                  // Update agent status
+                  setAgentProgress(prev => 
+                    prev.map(a => 
+                      a.name === data.agent 
+                        ? { 
+                            ...a, 
+                            status: data.success ? 'complete' as const : 'error' as const,
+                            duration_ms: data.duration_ms,
+                            error: data.error,
+                          }
+                        : a
+                    )
+                  )
+                  setOverallProgress({ completed: data.completed, total: data.total })
+                  break
+
+                case 'synthesis_start':
+                  setIsSynthesizing(true)
+                  break
+
+                case 'complete':
+                  // Final results
+                  setIsSynthesizing(false)
+                  setAgentMetadata({
+                    agents_used: data.agents_used || [],
+                    agents_succeeded: data.agents_succeeded || 0,
+                    agent_details: data.agent_details || {},
+                    agent_errors: data.agent_errors || {},
+                    primary_agent: data.primary_agent || null,
+                    synthesis_agent: data.synthesis_agent || null,
+                    synthesis_error: data.synthesis_error || null,
+                    consensus: data.consensus || null,
+                    total_duration_ms: data.total_duration_ms || 0,
+                    parse_source: data.parse_source || null,
+                  })
+
+                  if (data.results && data.results.length > 0) {
+                    setResults(data.results)
+                    setAnalysisState('results')
+                  } else {
+                    const errors = Object.entries(data.agent_errors || {})
+                    let errorMsg = 'Could not identify the product.'
+                    if (errors.length > 0) {
+                      errorMsg += ' Agent errors: ' + errors.map(([agent, err]) => `${AGENT_DISPLAY_NAMES[agent] || agent}: ${err}`).join('; ')
+                    } else if (data.agents_succeeded === 0) {
+                      errorMsg += ' No AI agents responded successfully.'
+                    } else {
+                      errorMsg += ' Try a different search or clearer photo.'
+                    }
+                    setErrorMessage(errorMsg)
+                    setAnalysisState('error')
+                  }
+                  break
+
+                case 'error':
+                  setErrorMessage(data.message || 'Analysis failed')
+                  setAnalysisState('error')
+                  break
+              }
+            } catch {
+              // Ignore parse errors for incomplete data
+            }
+            currentEvent = ''
+            currentData = ''
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Streaming analysis error:', error)
+      setErrorMessage(error instanceof Error ? error.message : 'Analysis failed')
+      setAnalysisState('error')
+    }
+  }, [allCategories])
+
   // Handle file selection
   const handleFileSelect = useCallback(
     (file: File) => {
@@ -354,11 +537,8 @@ export default function SmartAddPage() {
     }
 
     setShowPhotoConfirmation(false)
-    setAnalysisState('analyzing')
-    analyzeMutation.mutate({ 
-      file: uploadedImage, 
-      query: userPrompt.trim() || undefined 
-    })
+    setWasPhotoSearch(true)
+    startStreamingAnalysis(uploadedImage, userPrompt.trim() || undefined)
   }
 
   // Handle manual search trigger
@@ -385,17 +565,8 @@ export default function SmartAddPage() {
       setUserPrompt(queryValue)
     }
 
-    setResults([])
-    setSelectedIndex(null)
-    setFormData({})
-    setErrorMessage(null)
-    setShowAllResults(false)
-    setAgentMetadata(null)
-    setShowAgentDetails(false)
     setWasPhotoSearch(!!uploadedImage) // Track if this search used an uploaded photo
-    setSelectedImageUrl(null)
-    setAnalysisState('analyzing')
-    analyzeMutation.mutate({ file: uploadedImage || undefined, query: queryValue })
+    startStreamingAnalysis(uploadedImage || undefined, queryValue)
   }
 
   // Handle drag events
@@ -484,11 +655,7 @@ export default function SmartAddPage() {
 
   // Retry analysis
   const handleRetry = () => {
-    setErrorMessage(null)
-    setAgentMetadata(null)
-    setShowAgentDetails(false)
-    setAnalysisState('analyzing')
-    analyzeMutation.mutate({ file: uploadedImage || undefined, query: searchQuery })
+    startStreamingAnalysis(uploadedImage || undefined, searchQuery)
   }
 
   // Try again with feedback that previous results were incorrect
@@ -499,22 +666,7 @@ export default function SmartAddPage() {
       ? `${currentPrompt} - None of the previous results were correct. Please try again with different suggestions.`
       : 'None of the previous results were correct. Please try again with different suggestions.'
     
-    setResults([])
-    setSelectedIndex(null)
-    setFormData({})
-    setErrorMessage(null)
-    setShowAllResults(false)
-    setSelectedImageUrl(null)
-    setProductImages({})
-    setImageLoadingStates({})
-    setAgentMetadata(null)
-    setShowAgentDetails(false)
-    setAnalysisState('analyzing')
-    
-    analyzeMutation.mutate({ 
-      file: uploadedImage || undefined, 
-      query: feedbackQuery 
-    })
+    startStreamingAnalysis(uploadedImage || undefined, feedbackQuery)
   }
 
   // Get consensus badge variant and label
@@ -576,7 +728,7 @@ export default function SmartAddPage() {
                       className="pl-10"
                     />
                   </div>
-                  <Button type="submit" isLoading={analyzeMutation.isPending}>
+                  <Button type="submit" isLoading={analysisState === 'analyzing'}>
                     Search
                   </Button>
                 </form>
@@ -662,72 +814,65 @@ export default function SmartAddPage() {
           </div>
         )}
 
-        {/* Photo Confirmation Step */}
-        {showPhotoConfirmation && uploadedImage && imagePreview && (
-          <Card>
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                <div className="text-center">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-50 mb-2">
-                    Confirm Search
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Add any additional context to help AI identify the product
-                  </p>
-                </div>
-                
-                <div className="flex justify-center">
-                  <img
-                    src={imagePreview}
-                    alt="Uploaded"
-                    className="w-64 h-64 object-contain rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-                  />
-                </div>
+        {/* Photo Confirmation Modal */}
+        <Modal
+          isOpen={showPhotoConfirmation && !!uploadedImage && !!imagePreview}
+          onClose={() => {
+            setShowPhotoConfirmation(false)
+            setUploadedImage(null)
+            setImagePreview(null)
+            setUserPrompt('')
+          }}
+          title="Confirm Search"
+          description="Add any additional context to help AI identify the product"
+          size="md"
+        >
+          <div className="p-6 space-y-4">
+            <div className="flex justify-center">
+              <img
+                src={imagePreview || ''}
+                alt="Uploaded"
+                className="w-64 h-64 object-contain rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+              />
+            </div>
 
-                <div>
-                  <Textarea
-                    label="Additional context (optional)"
-                    value={userPrompt}
-                    onChange={(e) => setUserPrompt(e.target.value)}
-                    placeholder="e.g., This is a refrigerator in my kitchen, model number might be on the back..."
-                    rows={3}
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Provide any details that might help identify the product, such as location, visible features, or where to find the model number.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setShowPhotoConfirmation(false)
-                      setUploadedImage(null)
-                      setImagePreview(null)
-                      setUserPrompt('')
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleConfirmPhotoSearch}
-                    className="flex-1"
-                  >
-                    <Icon icon={Search} size="xs" />
-                    Search
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            <div>
+              <Textarea
+                label="Additional context (optional)"
+                value={userPrompt}
+                onChange={(e) => setUserPrompt(e.target.value)}
+                placeholder="e.g., This is a refrigerator in my kitchen, model number might be on the back..."
+                rows={3}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Provide any details that might help identify the product, such as location, visible features, or where to find the model number.
+              </p>
+            </div>
+          </div>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowPhotoConfirmation(false)
+                setUploadedImage(null)
+                setImagePreview(null)
+                setUserPrompt('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmPhotoSearch}>
+              <Icon icon={Search} size="xs" />
+              Search
+            </Button>
+          </ModalFooter>
+        </Modal>
 
         {/* Analyzing State */}
         {analysisState === 'analyzing' && !showPhotoConfirmation && (
           <Card>
             <CardContent className="p-8">
-              <div className="flex flex-col items-center gap-4">
+              <div className="flex flex-col items-center gap-6">
                 {imagePreview ? (
                   <img
                     src={imagePreview}
@@ -739,32 +884,121 @@ export default function SmartAddPage() {
                     <Icon icon={Search} size="xl" className="text-gray-400" />
                   </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <Icon icon={Sparkles} size="md" className="text-primary-600 dark:text-primary-400 animate-pulse" />
-                  <span className="text-lg font-medium text-gray-900 dark:text-gray-50">
-                    {uploadedImage ? 'Analyzing image...' : 'Searching for product...'}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {searchQuery ? `Searching for "${searchQuery}"` : 'AI is identifying the product'}
-                </p>
-                {/* Multi-agent progress indicator */}
-                <div className="flex flex-col items-center gap-2 mt-2">
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Icon icon={Users} size="xs" />
-                    <span>Querying multiple AI agents in parallel...</span>
+                
+                {/* Progress header */}
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-3 mb-2">
+                    <Icon icon={Sparkles} size="md" className="text-primary-600 dark:text-primary-400 animate-pulse" />
+                    <span className="text-lg font-medium text-gray-900 dark:text-gray-50">
+                      {isSynthesizing ? 'Synthesizing results...' : uploadedImage ? 'Analyzing image...' : 'Searching for product...'}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    {['claude', 'openai', 'gemini'].map((agent) => (
-                      <div
-                        key={agent}
-                        className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 animate-pulse"
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {searchQuery ? `Searching for "${searchQuery}"` : 'AI is identifying the product'}
+                  </p>
+                </div>
+
+                {/* Overall progress bar */}
+                {overallProgress.total > 0 && (
+                  <div className="w-full max-w-xs">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      <span>Progress</span>
+                      <span>{overallProgress.completed}/{overallProgress.total} agents complete</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                        style={{ width: `${(overallProgress.completed / overallProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Individual agent status */}
+                {agentProgress.length > 0 ? (
+                  <div className="w-full max-w-sm space-y-2">
+                    {agentProgress.map((agent) => (
+                      <div 
+                        key={agent.name} 
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-2.5 rounded-lg border transition-colors',
+                          agent.status === 'complete' && 'bg-success-50 dark:bg-success-900/20 border-success-200 dark:border-success-800',
+                          agent.status === 'error' && 'bg-error-50 dark:bg-error-900/20 border-error-200 dark:border-error-800',
+                          agent.status === 'running' && 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800',
+                          agent.status === 'pending' && 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                        )}
                       >
-                        {AGENT_DISPLAY_NAMES[agent]}
+                        {/* Status icon */}
+                        {agent.status === 'pending' && (
+                          <Icon icon={Circle} size="sm" className="text-gray-400" />
+                        )}
+                        {agent.status === 'running' && (
+                          <Icon icon={Loader2} size="sm" className="text-primary-500 animate-spin" />
+                        )}
+                        {agent.status === 'complete' && (
+                          <Icon icon={CheckCircle} size="sm" className="text-success-500" />
+                        )}
+                        {agent.status === 'error' && (
+                          <Icon icon={XCircle} size="sm" className="text-error-500" />
+                        )}
+                        
+                        {/* Agent name */}
+                        <span className={cn(
+                          'flex-1 font-medium',
+                          agent.status === 'complete' && 'text-success-700 dark:text-success-300',
+                          agent.status === 'error' && 'text-error-700 dark:text-error-300',
+                          agent.status === 'running' && 'text-primary-700 dark:text-primary-300',
+                          agent.status === 'pending' && 'text-gray-500 dark:text-gray-400'
+                        )}>
+                          {agent.displayName}
+                        </span>
+                        
+                        {/* Duration */}
+                        {agent.duration_ms !== undefined && agent.status !== 'pending' && (
+                          <span className="text-xs text-gray-400">
+                            {(agent.duration_ms / 1000).toFixed(1)}s
+                          </span>
+                        )}
+                        
+                        {/* Status text for running/error */}
+                        {agent.status === 'running' && (
+                          <span className="text-xs text-primary-500 animate-pulse">Analyzing...</span>
+                        )}
+                        {agent.status === 'error' && agent.error && (
+                          <span className="text-xs text-error-500 truncate max-w-[100px]" title={agent.error}>
+                            Failed
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
+                ) : (
+                  /* Fallback: show static agent placeholders if no progress yet */
+                  <div className="flex flex-col items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <Icon icon={Users} size="xs" />
+                      <span>Querying AI agents...</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {['claude', 'openai', 'gemini'].map((agent) => (
+                        <div
+                          key={agent}
+                          className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 animate-pulse"
+                        >
+                          {AGENT_DISPLAY_NAMES[agent]}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Synthesis indicator */}
+                {isSynthesizing && (
+                  <div className="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400">
+                    <Icon icon={Sparkles} size="sm" className="animate-pulse" />
+                    <span>Combining results from all agents...</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1106,10 +1340,10 @@ export default function SmartAddPage() {
                         size="sm"
                         className="w-full"
                         onClick={handleTryAgainWithFeedback}
-                        disabled={analyzeMutation.isPending}
+                        disabled={analysisState === 'analyzing'}
                       >
                         <Icon icon={RefreshCw} size="xs" />
-                        {analyzeMutation.isPending ? 'Searching...' : 'Try Again'}
+                        {analysisState === 'analyzing' ? 'Searching...' : 'Try Again'}
                       </Button>
                     </div>
                   )}

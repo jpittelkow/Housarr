@@ -250,6 +250,425 @@ class ItemController extends Controller
         }
     }
 
+    /**
+     * Analyze image with streaming progress updates via Server-Sent Events.
+     * Reports progress as each AI agent completes.
+     */
+    public function analyzeImageStream(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        // Custom validation: require either image OR non-empty query
+        $hasImage = $request->hasFile('image');
+        $hasQuery = $request->filled('query');
+
+        if (!$hasImage && !$hasQuery) {
+            return response()->stream(function () {
+                $this->sendSSE('error', ['message' => 'Please provide an image or search query.']);
+            }, 200, $this->getSSEHeaders());
+        }
+
+        // Validate image if provided
+        if ($hasImage) {
+            $request->validate([
+                'image' => ['file', 'mimes:jpeg,jpg,png,webp,gif', 'max:10240'],
+            ]);
+        }
+
+        // Validate query if provided
+        if ($hasQuery) {
+            $request->validate([
+                'query' => ['string', 'max:500'],
+            ]);
+        }
+
+        $request->validate([
+            'categories' => ['nullable', 'string'],
+        ]);
+
+        $categories = [];
+        if ($request->has('categories')) {
+            $categories = json_decode($request->input('categories'), true) ?? [];
+        }
+
+        $householdId = $request->user()->household_id;
+        $file = $request->file('image');
+        $query = $request->input('query');
+
+        return response()->stream(function () use ($file, $categories, $householdId, $query) {
+            // Disable output buffering for real-time streaming
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+
+            try {
+                $orchestrator = AIAgentOrchestrator::forHousehold($householdId);
+
+                if (!$orchestrator->isAvailable()) {
+                    $this->sendSSE('error', ['message' => 'AI is not configured. Please configure an AI provider in Settings.']);
+                    return;
+                }
+
+                $activeAgents = $orchestrator->getActiveAgents();
+                $total = count($activeAgents);
+
+                // Send initialization event
+                $this->sendSSE('init', [
+                    'agents' => $activeAgents,
+                    'total' => $total,
+                ]);
+
+                // Mark all agents as starting
+                foreach ($activeAgents as $agentName) {
+                    $this->sendSSE('agent_start', [
+                        'agent' => $agentName,
+                        'total' => $total,
+                    ]);
+                }
+
+                // Prepare image data
+                $base64Image = null;
+                $mimeType = null;
+
+                if ($file) {
+                    $base64Image = base64_encode(file_get_contents($file->getRealPath()));
+                    $mimeType = $file->getMimeType();
+                }
+
+                // Build the prompt using the same logic as AnalyzeItemImageAction
+                $prompt = $this->buildAnalysisPrompt($file, $query, $categories, $householdId);
+
+                // Progress callback
+                $onAgentComplete = function (string $agentName, array $result, int $completed, int $total) {
+                    $this->sendSSE('agent_complete', [
+                        'agent' => $agentName,
+                        'success' => $result['success'] ?? false,
+                        'duration_ms' => $result['duration_ms'] ?? 0,
+                        'error' => $result['error'] ?? null,
+                        'completed' => $completed,
+                        'total' => $total,
+                    ]);
+                };
+
+                // Run analysis with streaming callbacks
+                if ($base64Image) {
+                    $response = $orchestrator->analyzeImageWithAllAgentsStreaming(
+                        $base64Image,
+                        $mimeType,
+                        $prompt,
+                        ['max_tokens' => 2048, 'timeout' => 90],
+                        $onAgentComplete
+                    );
+                } else {
+                    $response = $orchestrator->callActiveAgentsStreaming(
+                        $prompt,
+                        ['max_tokens' => 2048, 'timeout' => 60],
+                        $onAgentComplete
+                    );
+                }
+
+                // Send synthesis start event
+                $this->sendSSE('synthesis_start', ['message' => 'Synthesizing results...']);
+
+                // Synthesize results
+                $response = $orchestrator->synthesizeResults($response, $prompt, ['max_tokens' => 2048]);
+
+                // Process results using the same logic as AnalyzeItemImageAction
+                $analysisResult = $this->processStreamingResponse($response, $orchestrator);
+
+                // Send final results
+                $this->sendSSE('complete', $analysisResult);
+
+            } catch (\Exception $e) {
+                Log::error('Streaming analysis failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => substr($e->getTraceAsString(), 0, 1000),
+                ]);
+                $this->sendSSE('error', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }, 200, $this->getSSEHeaders());
+    }
+
+    /**
+     * Get SSE response headers.
+     */
+    private function getSSEHeaders(): array
+    {
+        return [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no', // Disable nginx buffering
+        ];
+    }
+
+    /**
+     * Send a Server-Sent Event.
+     */
+    private function sendSSE(string $event, array $data): void
+    {
+        echo "event: {$event}\n";
+        echo "data: " . json_encode($data) . "\n\n";
+
+        if (ob_get_level()) {
+            ob_flush();
+        }
+        flush();
+    }
+
+    /**
+     * Build the analysis prompt for streaming endpoint.
+     * Uses the same logic as AnalyzeItemImageAction.
+     */
+    private function buildAnalysisPrompt($file, ?string $query, array $categories, ?int $householdId): string
+    {
+        $categoryList = !empty($categories)
+            ? "Available categories: " . implode(', ', $categories) . "\nChoose from these categories when possible, or suggest a new one if none fit."
+            : "Suggest an appropriate category for this product.";
+
+        $context = "";
+        if ($file && $query) {
+            $context = "Analyze this image and use the provided search text '$query' to help identify the product.";
+        } elseif ($file) {
+            $context = "Analyze this image of a home appliance, equipment, or product.";
+        } else {
+            $context = "Identify the product based on the following search text: '$query'.";
+        }
+
+        // Get custom prompt from settings or use default
+        $promptTemplate = \App\Models\Setting::get('ai_prompt_smart_add', $householdId, AnalyzeItemImageAction::DEFAULT_SMART_ADD_PROMPT);
+
+        // Replace placeholders in the template
+        return str_replace(
+            ['{context}', '{categories}'],
+            [$context, $categoryList],
+            $promptTemplate
+        );
+    }
+
+    /**
+     * Process the streaming response into final results.
+     * Uses the same logic as AnalyzeItemImageAction.
+     */
+    private function processStreamingResponse(array $response, AIAgentOrchestrator $orchestrator): array
+    {
+        $agentsUsed = [];
+        $agentDetails = [];
+        $agentsSucceeded = 0;
+        $agentErrors = [];
+
+        // Collect agent metadata
+        if (!empty($response['agents'])) {
+            foreach ($response['agents'] as $agentName => $agentResult) {
+                $agentsUsed[] = $agentName;
+                $success = $agentResult['success'] ?? false;
+                $agentDetails[$agentName] = [
+                    'success' => $success,
+                    'duration_ms' => $agentResult['duration_ms'] ?? 0,
+                    'error' => $agentResult['error'] ?? null,
+                    'has_response' => !empty($agentResult['response']),
+                ];
+                if ($success) {
+                    $agentsSucceeded++;
+                }
+                if (!empty($agentResult['error'])) {
+                    $agentErrors[$agentName] = $agentResult['error'];
+                }
+            }
+        }
+
+        // Get synthesized results
+        $synthesizedText = $response['synthesized'] ?? $response['summary'] ?? null;
+        $results = [];
+        $parseSource = null;
+
+        // Try to parse from synthesized response first
+        if ($synthesizedText) {
+            $results = $this->parseAnalysisResults($synthesizedText);
+            if (!empty($results)) {
+                $parseSource = 'synthesized';
+            }
+        }
+
+        // If synthesis failed, try to parse from individual agent responses
+        if (empty($results) && !empty($response['agents'])) {
+            $results = $this->extractResultsFromAgents($response['agents']);
+            if (!empty($results)) {
+                $parseSource = 'individual_agents';
+            }
+        }
+
+        // Normalize and sort results
+        $normalizedResults = $this->normalizeAnalysisResults($results ?? []);
+
+        // Calculate consensus
+        $consensus = $this->calculateAnalysisConsensus($response['agents'] ?? [], $normalizedResults);
+
+        return [
+            'results' => $normalizedResults,
+            'agents_used' => $agentsUsed,
+            'agents_succeeded' => $agentsSucceeded,
+            'agent_details' => $agentDetails,
+            'agent_errors' => $agentErrors,
+            'primary_agent' => $orchestrator->getPrimaryAgent(),
+            'synthesis_agent' => $response['synthesis_agent'] ?? null,
+            'synthesis_error' => $response['synthesis_error'] ?? null,
+            'consensus' => $consensus,
+            'total_duration_ms' => $response['total_duration_ms'] ?? 0,
+            'parse_source' => $parseSource,
+        ];
+    }
+
+    /**
+     * Parse JSON results from a response string.
+     */
+    private function parseAnalysisResults(?string $response): ?array
+    {
+        if (!$response) return null;
+
+        $response = trim($response);
+        $response = preg_replace('/^```(?:json)?\s*/i', '', $response);
+        $response = preg_replace('/\s*```$/i', '', $response);
+        $response = trim($response);
+
+        if (preg_match('/\[[\s\S]*?\]/', $response, $matches)) {
+            $parsed = json_decode($matches[0], true);
+            if (is_array($parsed)) {
+                return $parsed;
+            }
+        }
+
+        $parsed = json_decode($response, true);
+        if (is_array($parsed)) {
+            return $parsed;
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract results from individual agent responses.
+     */
+    private function extractResultsFromAgents(array $agents): ?array
+    {
+        $allResults = [];
+
+        foreach ($agents as $agentName => $agentData) {
+            if (($agentData['success'] ?? false) && !empty($agentData['response'])) {
+                $parsed = $this->parseAnalysisResults($agentData['response']);
+                if (is_array($parsed) && !empty($parsed)) {
+                    foreach ($parsed as $result) {
+                        $result['source_agent'] = $agentName;
+                        $allResults[] = $result;
+                    }
+                }
+            }
+        }
+
+        if (empty($allResults)) {
+            return null;
+        }
+
+        // Deduplicate by make+model, keeping highest confidence
+        $unique = [];
+        foreach ($allResults as $result) {
+            $key = strtolower(($result['make'] ?? '') . '|' . ($result['model'] ?? ''));
+            if (!isset($unique[$key]) || ($result['confidence'] ?? 0) > ($unique[$key]['confidence'] ?? 0)) {
+                $unique[$key] = $result;
+            }
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * Normalize and sort analysis results.
+     */
+    private function normalizeAnalysisResults(array $results): array
+    {
+        $normalizedResults = [];
+        $unknownValues = ['unknown', 'n/a', 'na', 'not visible', 'not available', 'unidentified', 'none', ''];
+
+        foreach ($results as $result) {
+            if (isset($result['make']) || isset($result['model']) || isset($result['type'])) {
+                $make = trim($result['make'] ?? '');
+                $model = trim($result['model'] ?? '');
+                $type = trim($result['type'] ?? '');
+
+                if (in_array(strtolower($make), $unknownValues)) {
+                    continue;
+                }
+
+                if (in_array(strtolower($model), $unknownValues)) {
+                    $model = '';
+                }
+
+                $normalized = [
+                    'make' => $make,
+                    'model' => $model,
+                    'type' => $type,
+                    'confidence' => (float) ($result['confidence'] ?? 0.5),
+                    'image_url' => $result['image_url'] ?? null,
+                ];
+
+                if (isset($result['agents_agreed'])) {
+                    $normalized['agents_agreed'] = (int) $result['agents_agreed'];
+                }
+
+                if (isset($result['source_agent'])) {
+                    $normalized['source_agent'] = $result['source_agent'];
+                }
+
+                $normalizedResults[] = $normalized;
+            }
+        }
+
+        usort($normalizedResults, fn($a, $b) => $b['confidence'] <=> $a['confidence']);
+
+        return $normalizedResults;
+    }
+
+    /**
+     * Calculate consensus from agent responses.
+     */
+    private function calculateAnalysisConsensus(array $agents, array $normalizedResults): array
+    {
+        if (empty($normalizedResults) || empty($agents)) {
+            return [
+                'level' => 'none',
+                'agents_agreeing' => 0,
+                'total_agents' => count($agents),
+            ];
+        }
+
+        $successfulAgents = array_filter($agents, fn($a) => $a['success'] ?? false);
+        $totalSuccessful = count($successfulAgents);
+
+        if ($totalSuccessful <= 1) {
+            return [
+                'level' => 'single',
+                'agents_agreeing' => $totalSuccessful,
+                'total_agents' => count($agents),
+            ];
+        }
+
+        $topResult = $normalizedResults[0] ?? [];
+        $agentsAgreed = $topResult['agents_agreed'] ?? $totalSuccessful;
+
+        $level = match (true) {
+            $agentsAgreed >= $totalSuccessful => 'full',
+            $agentsAgreed >= $totalSuccessful * 0.5 => 'majority',
+            $agentsAgreed >= 2 => 'partial',
+            default => 'low',
+        };
+
+        return [
+            'level' => $level,
+            'agents_agreeing' => $agentsAgreed,
+            'total_agents' => count($agents),
+        ];
+    }
+
     public function downloadManual(Request $request, Item $item, DownloadItemManualAction $downloadAction): JsonResponse
     {
         Gate::authorize('update', $item);
